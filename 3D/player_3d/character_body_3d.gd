@@ -1,5 +1,11 @@
 extends CharacterBody3D
 @onready var hold_anchor: Node3D = $Hold
+@onready var Entity: EntityBehavior3D = $Entity
+@onready var mesh_instance_3d: Array[MeshInstance3D] = [$Body/MeshInstance3D, $Appendages/Hand_Left/CollisionShape3D/MeshInstance3D, $Appendages/Hand_Right/CollisionShape3D/MeshInstance3D]
+
+@export var Properties: PlayerResource
+@export var Input_Handler: PlayerInputHandler3D
+
 var held_ball: RigidBody3D = null
 var original_ball_parent: Node = null
 var original_collision_layer: int = 0
@@ -9,8 +15,6 @@ var was_mouse_pressed: bool = false
 const THROW_FORCE = 10.0
 const UPWARD_FORCE = 3.0
 
-
-const SPEED = 5.0
 const JUMP_VELOCITY = 4.5
 const ROTATION_SPEED = 10.0
 
@@ -25,21 +29,36 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_VELOCITY
 
 	# Get the input direction and handle the movement/deceleration.
-	# For top-down fixed camera: input is in world space, not relative to player rotation
-	var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	var direction: Vector3 = Vector3(input_dir.x, 0, input_dir.y).normalized()
-	if direction:
-		velocity.x = direction.x * SPEED
-		velocity.z = direction.z * SPEED
-		
-		# Rotate player to face movement direction
-		var horizontal_velocity: Vector3 = Vector3(velocity.x, 0, velocity.z)
-		if horizontal_velocity.length() > 0.1:
-			var target_angle: float = atan2(horizontal_velocity.x, horizontal_velocity.z)
-			rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+	# Use Input_Handler if available, otherwise fall back to direct input
+	var direction: Vector3
+	if Input_Handler:
+		direction = Input_Handler.move_dir
 	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED)
-		velocity.z = move_toward(velocity.z, 0, SPEED)
+		# Fallback to direct input
+		var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+		direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
+	
+	if direction:
+		var speed: float = Entity.SPEED if Entity else 5.0
+		velocity.x = direction.x * speed
+		velocity.z = direction.z * speed
+		
+		# Rotate player to face movement direction (or look direction if available)
+		if Input_Handler and Input_Handler.look_dir.length() > 0.1:
+			# Face look direction
+			var look_dir: Vector3 = Input_Handler.look_dir
+			var target_angle: float = atan2(look_dir.x, look_dir.z)
+			rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+		else:
+			# Face movement direction
+			var horizontal_velocity: Vector3 = Vector3(velocity.x, 0, velocity.z)
+			if horizontal_velocity.length() > 0.1:
+				var target_angle: float = atan2(horizontal_velocity.x, horizontal_velocity.z)
+				rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+	else:
+		var speed: float = Entity.SPEED if Entity else 5.0
+		velocity.x = move_toward(velocity.x, 0, speed)
+		velocity.z = move_toward(velocity.z, 0, speed)
 
 	move_and_slide()
 	
@@ -69,12 +88,17 @@ func _physics_process(delta: float) -> void:
 			ball.global_position = hold_anchor.global_position
 			ball.reparent(hold_anchor)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# Handle throwing the ball on mouse click
 	var mouse_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 	if held_ball and mouse_pressed and not was_mouse_pressed:
 		throw_ball()
 	was_mouse_pressed = mouse_pressed
+	
+	# Handle targeting
+	if Input_Handler:
+		_handle_target()
+		_handle_rotation(delta)
 
 func throw_ball() -> void:
 	if not held_ball: return
@@ -108,3 +132,53 @@ func throw_ball() -> void:
 	# Clear held ball reference
 	held_ball = null
 	original_ball_parent = null
+
+func _ready() -> void:
+	# Initialize spawn position
+	if Entity:
+		Entity.spawn_pos = global_position
+		# Initialize Entity with Properties if available
+		if Properties:
+			Entity.reset(true)
+
+func _handle_target() -> void:
+	if not Input_Handler or not Entity:
+		return
+	
+	# Handle target scrolling (cycle through targets)
+	if Entity.target and Input_Handler.target_scroll:
+		Input_Handler.target_scroll = false
+		# Get nearest entity, excluding the current target if it's still valid
+		var exclude_target: Node3D = Entity.target if is_instance_valid(Entity.target) else null
+		var nearest := Global.get_nearest_3d(global_position, "Entity", INF, exclude_target)
+		if nearest.get("found", false):
+			Entity.target = nearest["inst"]
+	
+	# Handle target toggle (target nearest or clear current)
+	if Input_Handler.target_toggle:
+		Input_Handler.target_toggle = false
+		if Entity.target and is_instance_valid(Entity.target):
+			# Clear current target
+			Entity.target = null
+		else:
+			# Find nearest entity
+			var nearest := Global.get_nearest_3d(global_position, "Entity", INF)
+			if nearest.get("found", false):
+				Entity.target = nearest["inst"]
+
+func _handle_rotation(delta: float) -> void:
+	if not Entity:
+		return
+	
+	# Rotate to face target if locked
+	if Entity.target and is_instance_valid(Entity.target):
+		var direction: Vector3 = (Entity.target.global_position - global_position)
+		var horizontal_dir: Vector3 = Vector3(direction.x, 0, direction.z).normalized()
+		if horizontal_dir.length() > 0.1:
+			var target_angle: float = atan2(horizontal_dir.x, horizontal_dir.z)
+			rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+	elif Input_Handler and Input_Handler.look_dir.length() > 0.1:
+		# Face look direction
+		var look_dir: Vector3 = Input_Handler.look_dir
+		var target_angle: float = atan2(look_dir.x, look_dir.z)
+		rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)

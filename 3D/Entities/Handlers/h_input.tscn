@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c86ptcgtunn2l"]
+
+[ext_resource type="Script" uid="uid://b2rfniuc0n4kq" path="res://3D/Entities/Handlers/player_input_handler_3d.gd" id="1_y220j"]
+
+[node name="H_Input" type="Node"]
+script = ExtResource("1_y220j")

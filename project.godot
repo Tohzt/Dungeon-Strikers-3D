@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="DS2D"
+config/name="DS3D"
 run/main_scene="uid://c54eoe73yt4nh"
 config/features=PackedStringArray("4.5", "Forward Plus")
 boot_splash/bg_color=Color(0, 0, 0, 1)

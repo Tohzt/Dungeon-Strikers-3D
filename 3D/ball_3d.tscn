@@ -34,6 +34,9 @@ material = SubResource("StandardMaterial3D_cw31k")
 collision_mask = 3
 mass = 0.5
 physics_material_override = SubResource("PhysicsMaterial_5coap")
+continuous_cd = true
+contact_monitor = true
+max_contacts_reported = 5
 script = ExtResource("1_p1o42")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

@@ -1,9 +1,10 @@
-[gd_scene load_steps=15 format=3 uid="uid://c54eoe73yt4nh"]
+[gd_scene load_steps=16 format=3 uid="uid://c54eoe73yt4nh"]
 
 [ext_resource type="Script" uid="uid://c60lpak5bjaku" path="res://3D/camera_3d.gd" id="1_qgpjc"]
 [ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/game_3d.gd" id="1_sjtsc"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="1_v8n5r"]
 [ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="2_jrsk6"]
+[ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_k5r54"]
 [ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_uqeks"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="6_m836i"]
 
@@ -41,6 +42,8 @@ size = Vector3(1, 10, 30)
 
 [node name="Game3d" type="Node3D"]
 script = ExtResource("1_sjtsc")
+
+[node name="HUD" parent="." instance=ExtResource("2_k5r54")]
 
 [node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("target")]
 transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 8, 30, 30)
