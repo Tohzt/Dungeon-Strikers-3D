@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=4 format=3 uid="uid://dblh4y0bvtb18"]
+
+[ext_resource type="Script" uid="uid://dgec0wqpw5rdf" path="res://Items/Weapons/weapon_resource.gd" id="1_weapon"]
+[ext_resource type="Script" uid="uid://b3lkpkwkss7fv" path="res://Items/Weapons/_Controllers/weapon_shield_controller.gd" id="3_3qmwg"]
+[ext_resource type="Texture2D" uid="uid://c288swmvfqdd" path="res://Items/Weapons/Shield/shield_curved.png" id="3_70nuo"]
+
+[resource]
+script = ExtResource("1_weapon")
+weapon_name = "Shield"
+weapon_type = 1
+weapon_synergies = Array[int]([])
+weapon_hand = 1
+weapon_throw_style = 0
+weapon_sprite = Array[CompressedTexture2D]([ExtResource("3_70nuo")])
+weapon_sprite_offset = Vector2(20, 0)
+weapon_angle = 90.0
+weapon_col_radius = 10.0
+weapon_col_height = 80.0
+weapon_col_rotation = 0.0
+weapon_col_offset = Vector2(20, 0)
+weapon_damage = 2.0
+weapon_mod_damage = 0.0
+weapon_cooldown = 0.3
+weapon_duration = 0.5
+weapon_stamina_cost = 0.0
+weapon_mana_cost = 0.0
+weapon_cast_duration = 0.0
+weapon_arm_length = 0.0
+weapon_controller = ExtResource("3_3qmwg")
+metadata/_custom_type_script = "uid://dgec0wqpw5rdf"

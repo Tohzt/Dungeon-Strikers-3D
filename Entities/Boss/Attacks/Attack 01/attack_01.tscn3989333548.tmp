@@ -1,0 +1,39 @@
+[gd_scene load_steps=5 format=3 uid="uid://bbx2q6512o2aa"]
+
+[ext_resource type="Script" uid="uid://dp8q6v0w8tjbl" path="res://Boss/Attacks/Attack 01/attack_01.gd" id="1_bwwxv"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_jngrg"]
+radius = 56.1427
+
+[sub_resource type="Gradient" id="Gradient_bwwxv"]
+offsets = PackedFloat32Array(0.379257, 0.526316, 0.688406, 0.695652)
+colors = PackedColorArray(1, 0, 0, 1, 1, 0.188235, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_jngrg"]
+gradient = SubResource("Gradient_bwwxv")
+width = 120
+height = 120
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+
+[node name="Attack01" type="Area2D"]
+top_level = true
+script = ExtResource("1_bwwxv")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_jngrg")
+debug_color = Color(0.941176, 0.0980392, 0.196078, 0.396078)
+
+[node name="TextureRect" type="TextureRect" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -60.0
+offset_top = -60.0
+offset_right = 60.0
+offset_bottom = 60.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = SubResource("GradientTexture2D_jngrg")

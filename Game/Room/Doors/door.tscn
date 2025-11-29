@@ -1,0 +1,70 @@
+[gd_scene load_steps=6 format=3 uid="uid://b6tqbqvxpm0pi"]
+
+[ext_resource type="Script" uid="uid://cqfnxk6ba4jpe" path="res://Game/Room/Doors/door.gd" id="1_v6xrn"]
+[ext_resource type="Texture2D" uid="uid://dd5j74bg2syef" path="res://Game/Room/Doors/wall_damaged.png" id="2_0phs7"]
+[ext_resource type="Texture2D" uid="uid://d1dvtvpbks3jj" path="res://Game/Room/Doors/wall_demolished.png" id="3_0phs7"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_f0uf5"]
+size = Vector2(180, 40)
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_v6xrn"]
+properties/0/path = NodePath("Blocks/Block1:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath("Blocks/Block2:position")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath("Blocks/Block3:position")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath("Blocks/Block4:position")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+properties/4/path = NodePath("Blocks/Block5:position")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+properties/5/path = NodePath("Blocks/Block6:position")
+properties/5/spawn = true
+properties/5/replication_mode = 1
+
+[node name="Door" type="StaticBody2D"]
+collision_mask = 20
+script = ExtResource("1_v6xrn")
+
+[node name="Blocks" type="Node2D" parent="."]
+
+[node name="Block1" type="Sprite2D" parent="Blocks"]
+position = Vector2(-60, 10)
+texture = ExtResource("2_0phs7")
+
+[node name="Block2" type="Sprite2D" parent="Blocks"]
+position = Vector2(0, 10)
+texture = ExtResource("2_0phs7")
+
+[node name="Block3" type="Sprite2D" parent="Blocks"]
+position = Vector2(60, 10)
+texture = ExtResource("2_0phs7")
+
+[node name="Block4" type="Sprite2D" parent="Blocks"]
+position = Vector2(-60, 30)
+texture = ExtResource("2_0phs7")
+
+[node name="Block5" type="Sprite2D" parent="Blocks"]
+position = Vector2(0, 30)
+texture = ExtResource("2_0phs7")
+
+[node name="Block6" type="Sprite2D" parent="Blocks"]
+position = Vector2(60, 30)
+texture = ExtResource("2_0phs7")
+
+[node name="Broken" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(0, 40)
+scale = Vector2(3, 2)
+texture = ExtResource("3_0phs7")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_f0uf5")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_v6xrn")

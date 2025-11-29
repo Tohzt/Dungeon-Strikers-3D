@@ -1,0 +1,148 @@
+[gd_scene load_steps=8 format=3 uid="uid://cihs4nfo1pjvn"]
+
+[ext_resource type="Script" uid="uid://beqdrbp46pc36" path="res://Game/game.gd" id="1_rc60p"]
+[ext_resource type="PackedScene" uid="uid://ca18bdfs01cxc" path="res://Game/HUD/HUD.tscn" id="2_fwxkx"]
+[ext_resource type="Script" uid="uid://c71ixtnhvv15y" path="res://Game/host_ui.gd" id="2_kysc5"]
+[ext_resource type="PackedScene" uid="uid://du4p0gdnajtii" path="res://Entities/Boss/boss.tscn" id="3_7gi1t"]
+[ext_resource type="PackedScene" uid="uid://cgg53vkkel4lq" path="res://Entities/Ball/ball.tscn" id="4_oomkl"]
+[ext_resource type="PackedScene" uid="uid://ba2asl1rta0kr" path="res://Game/Arena/arena.tscn" id="4_qmv3x"]
+[ext_resource type="Script" uid="uid://b3axt5bvfo8o7" path="res://Game/spawn_points.gd" id="5_qmv3x"]
+
+[node name="Game" type="Node2D"]
+script = ExtResource("1_rc60p")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="Hud" parent="Camera2D" node_paths=PackedStringArray("game") instance=ExtResource("2_fwxkx")]
+game = NodePath("../..")
+
+[node name="Entities" type="Node2D" parent="." groups=["Entities"]]
+
+[node name="Boss" parent="Entities" instance=ExtResource("3_7gi1t")]
+position = Vector2(47, -948)
+
+[node name="Ball" parent="Entities" instance=ExtResource("4_oomkl")]
+position = Vector2(3, -16)
+
+[node name="Items" type="Node2D" parent="."]
+
+[node name="Rooms" type="Node" parent="."]
+
+[node name="Arena" parent="Rooms" instance=ExtResource("4_qmv3x")]
+z_index = -5
+
+[node name="Doors" type="Node" parent="."]
+
+[node name="Doors" type="Node2D" parent="Doors"]
+position = Vector2(-570, -330)
+
+[node name="Spawn Points" type="Node" parent="."]
+script = ExtResource("5_qmv3x")
+
+[node name="P1 Spawn" type="Marker2D" parent="Spawn Points"]
+position = Vector2(12, 1089)
+rotation = 1.5708
+
+[node name="P2 Spawn" type="Marker2D" parent="Spawn Points"]
+position = Vector2(0, -660)
+rotation = -1.5708
+
+[node name="Ball Spawn" type="Marker2D" parent="Spawn Points"]
+position = Vector2(3.05176e-05, 0)
+
+[node name="Host UI" type="CanvasLayer" parent="."]
+script = ExtResource("2_kysc5")
+
+[node name="MarginContainer" type="MarginContainer" parent="Host UI"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 192.0
+grow_horizontal = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Host UI/MarginContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="Play 1 Stats" type="VBoxContainer" parent="Host UI/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 6
+
+[node name="Label" type="Label" parent="Host UI/MarginContainer/HBoxContainer/Play 1 Stats"]
+layout_mode = 2
+text = "Player 1"
+horizontal_alignment = 1
+
+[node name="Btn P1_ResetPosition" type="Button" parent="Host UI/MarginContainer/HBoxContainer/Play 1 Stats"]
+layout_mode = 2
+text = "Reset Position"
+
+[node name="Host Container" type="VBoxContainer" parent="Host UI/MarginContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 41
+
+[node name="Label" type="Label" parent="Host UI/MarginContainer/HBoxContainer/Host Container"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 28
+text = "HOST MODE"
+horizontal_alignment = 1
+vertical_alignment = 1
+uppercase = true
+
+[node name="BTN Begin" type="Button" parent="Host UI/MarginContainer/HBoxContainer/Host Container"]
+layout_mode = 2
+text = "BEGIN"
+icon_alignment = 1
+
+[node name="Play 1 Stats2" type="VBoxContainer" parent="Host UI/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 6
+
+[node name="Label" type="Label" parent="Host UI/MarginContainer/HBoxContainer/Play 1 Stats2"]
+layout_mode = 2
+text = "Player 2"
+horizontal_alignment = 1
+
+[node name="Btn P2_ResetPosition" type="Button" parent="Host UI/MarginContainer/HBoxContainer/Play 1 Stats2"]
+layout_mode = 2
+text = "Reset Position"
+
+[node name="Loading" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="Loading"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -170.5
+offset_top = -19.5
+offset_right = 170.5
+offset_bottom = 19.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 28
+text = "Connecting to Host ..."
+horizontal_alignment = 1
+vertical_alignment = 1
+uppercase = true
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("uid://du4p0gdnajtii")
+spawn_path = NodePath("../Entities")
+spawn_limit = 16
+
+[connection signal="pressed" from="Host UI/MarginContainer/HBoxContainer/Play 1 Stats/Btn P1_ResetPosition" to="Host UI" method="_p1_reset_pos"]
+[connection signal="pressed" from="Host UI/MarginContainer/HBoxContainer/Host Container/BTN Begin" to="Host UI" method="_spawn_ball"]
+[connection signal="pressed" from="Host UI/MarginContainer/HBoxContainer/Play 1 Stats2/Btn P2_ResetPosition" to="Host UI" method="_p2_reset_pos"]

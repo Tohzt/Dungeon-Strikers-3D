@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=4 format=3 uid="uid://dk4b12m6125gh"]
+
+[ext_resource type="Script" uid="uid://dgec0wqpw5rdf" path="res://Items/Weapons/weapon_resource.gd" id="1_adfgk"]
+[ext_resource type="Script" uid="uid://dvo0r6wbi3nnv" path="res://Items/Weapons/_Controllers/weapon_spell_controller.gd" id="2_adfgk"]
+[ext_resource type="Texture2D" uid="uid://b7rkta1oht4hx" path="res://Items/Weapons/Staff/weapon_spell.png" id="3_adfgk"]
+
+[resource]
+script = ExtResource("1_adfgk")
+weapon_name = "Spell"
+weapon_type = 5
+weapon_synergies = Array[int]([])
+weapon_hand = 4
+weapon_throw_style = 1
+weapon_sprite = Array[CompressedTexture2D]([ExtResource("3_adfgk")])
+weapon_sprite_offset = Vector2(0, 0)
+weapon_angle = 0.0
+weapon_col_radius = 10.0
+weapon_col_height = 10.0
+weapon_col_rotation = 0.0
+weapon_col_offset = Vector2(0, 0)
+weapon_damage = 11.0
+weapon_mod_damage = 0.0
+weapon_cooldown = 0.0
+weapon_duration = 1.0
+weapon_stamina_cost = 3.0
+weapon_mana_cost = 5.0
+weapon_cast_duration = 0.0
+weapon_arm_length = 0.0
+weapon_controller = ExtResource("2_adfgk")
+metadata/_custom_type_script = "uid://dgec0wqpw5rdf"

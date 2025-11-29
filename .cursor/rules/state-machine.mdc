@@ -1,0 +1,46 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+[state_handler.gd](mdc:Boss/State Machine/state_handler.gd)
+[state_base.gd](mdc:Boss/State Machine/state_base.gd)
+[boss.tscn](mdc:Boss/boss.tscn)
+[boss_state_idle.gd](mdc:Boss/State Machine/boss_state_idle.gd)
+[boss_state_wander.gd](mdc:Boss/State Machine/boss_state_wander.gd)
+[boss_state_target.gd](mdc:Boss/State Machine/boss_state_target.gd)
+[boss_state_ball.gd](mdc:Boss/State Machine/boss_state_ball.gd)
+[boss_state_dead.gd](mdc:Boss/State Machine/boss_state_dead.gd)
+
+# State Machine Architecture
+
+## Core Components (Entity-Agnostic)
+- [state_handler.gd](mdc:Boss/State Machine/state_handler.gd) - Generic state machine controller
+  - Uses @export var Master: CharacterBody2D for dependency injection
+  - Should remain entity-agnostic for reuse with any entity type
+- [state_base.gd](mdc:Boss/State Machine/state_base.gd) - Abstract state class (StateClass)
+  - Base class for all states
+  - Should not make assumptions about parent entity
+  - Access parent entity through state_handler if needed
+
+## Boss-Specific State Implementations
+- [boss_state_idle.gd](mdc:Boss/State Machine/boss_state_idle.gd) - Idle behavior
+- [boss_state_wander.gd](mdc:Boss/State Machine/boss_state_wander.gd) - Random movement
+- [boss_state_target.gd](mdc:Boss/State Machine/boss_state_target.gd) - Player targeting
+- [boss_state_ball.gd](mdc:Boss/State Machine/boss_state_ball.gd) - Ball form behavior
+- [boss_state_dead.gd](mdc:Boss/State Machine/boss_state_dead.gd) - Death state
+
+## Current Implementation Example
+[boss.tscn](mdc:Boss/boss.tscn) shows how to integrate with an entity:
+- Boss (CharacterBody2D)
+  - State Handler (Node)
+    - Individual state nodes
+  - Input Handler
+  - Attack Handler
+  - Hands/Sprites/Collision
+
+## Design Philosophy
+- Core state machine (state_handler.gd + state_base.gd) should be reusable
+- Entity-specific logic belongs in individual state implementations
+- Use dependency injection to connect states to their parent entity
+- States can be mixed and matched for different entities

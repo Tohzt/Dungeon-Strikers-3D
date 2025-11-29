@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3 uid="uid://ca18bdfs01cxc"]
+
+[ext_resource type="Script" uid="uid://dget21ud3w8xu" path="res://Game/HUD/hud.gd" id="1_22nd0"]
+[ext_resource type="Texture2D" uid="uid://d1vg5ddc2gv5a" path="res://Game/HUD/Assets/HUD.png" id="2_5lrpt"]
+[ext_resource type="Texture2D" uid="uid://ttbsp48vq7eb" path="res://Game/HUD/Assets/HUD_Red.png" id="3_qprpc"]
+[ext_resource type="Texture2D" uid="uid://c8h0u6un7ryrw" path="res://Game/HUD/Assets/HUD_Green.png" id="4_0gfj1"]
+[ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Entities/Player/Assets/Skribble Character_Inner.png" id="4_u5h0k"]
+[ext_resource type="Texture2D" uid="uid://83ys3ad7isxp" path="res://Game/HUD/Assets/HUD_Blue.png" id="5_2b0ky"]
+
+[node name="Hud" type="CanvasLayer"]
+script = ExtResource("1_22nd0")
+
+[node name="TextureRect" type="TextureRect" parent="."]
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 280.0
+offset_bottom = 88.0
+texture = ExtResource("2_5lrpt")
+stretch_mode = 2
+
+[node name="HealthBar" type="TextureProgressBar" parent="."]
+custom_minimum_size = Vector2(0, 12)
+offset_left = 96.0
+offset_top = 30.0
+offset_right = 200.0
+offset_bottom = 42.0
+step = 0.01
+value = 45.0
+nine_patch_stretch = true
+texture_progress = ExtResource("3_qprpc")
+
+[node name="StaminaBar" type="TextureProgressBar" parent="."]
+custom_minimum_size = Vector2(0, 12)
+offset_left = 96.0
+offset_top = 50.0
+offset_right = 200.0
+offset_bottom = 62.0
+step = 0.01
+value = 45.0
+nine_patch_stretch = true
+texture_progress = ExtResource("4_0gfj1")
+
+[node name="ManaBar" type="TextureProgressBar" parent="."]
+custom_minimum_size = Vector2(0, 12)
+offset_left = 96.0
+offset_top = 70.0
+offset_right = 200.0
+offset_bottom = 82.0
+step = 0.01
+value = 45.0
+nine_patch_stretch = true
+texture_progress = ExtResource("5_2b0ky")
+
+[node name="PlayerIcon" type="TextureRect" parent="."]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 96.0
+offset_bottom = 96.0
+pivot_offset = Vector2(40, 40)
+texture = ExtResource("4_u5h0k")
+expand_mode = 1

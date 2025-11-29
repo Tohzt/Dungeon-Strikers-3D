@@ -1,0 +1,49 @@
+[gd_scene load_steps=9 format=3 uid="uid://hj5g1jhc0mbi"]
+
+[ext_resource type="Script" uid="uid://dqe5ql2h1lftm" path="res://Entities/Boss/Hand/boss_hand.gd" id="1_0tpgu"]
+[ext_resource type="Texture2D" uid="uid://3b2eg8m6jibc" path="res://Entities/Player/Assets/Skribble hands_blank.png" id="2_d61q8"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_wcw2t"]
+properties/0/path = NodePath("Arm/Hand:modulate")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_wcw2t"]
+offsets = PackedFloat32Array(0.2, 0.478261)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_er2ng"]
+gradient = SubResource("Gradient_wcw2t")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_er2ng"]
+offsets = PackedFloat32Array(0.00537634, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_drlnh"]
+gradient = SubResource("Gradient_er2ng")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_or0a8"]
+particle_flag_disable_z = true
+gravity = Vector3(0, 98, 0)
+color_ramp = SubResource("GradientTexture1D_drlnh")
+
+[node name="Boss Hand" type="Node2D"]
+script = ExtResource("1_0tpgu")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_wcw2t")
+
+[node name="Arm" type="RayCast2D" parent="."]
+target_position = Vector2(0, 60)
+
+[node name="Hand" type="Sprite2D" parent="Arm"]
+position = Vector2(0, 44)
+texture = ExtResource("2_d61q8")
+
+[node name="GPUParticles2D" type="GPUParticles2D" parent="Arm/Hand"]
+z_index = -1
+texture = SubResource("GradientTexture2D_er2ng")
+lifetime = 0.25
+process_material = SubResource("ParticleProcessMaterial_or0a8")

@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3 uid="uid://dfhyv1dxxl7j"]
+
+[ext_resource type="Texture2D" uid="uid://bvotqkv5nh7ef" path="res://Items/Objects/dummy Neck.png" id="2_6o5qi"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_o3ik3"]
+size = Vector2(60.0001, 40.9998)
+
+[node name="Chain" type="RigidBody2D"]
+collision_layer = 0
+collision_mask = 0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+rotation = 1.5708
+scale = Vector2(2, 2)
+texture = ExtResource("2_6o5qi")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0.5, 0)
+rotation = 1.5708
+shape = SubResource("RectangleShape2D_o3ik3")

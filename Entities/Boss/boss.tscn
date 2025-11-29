@@ -1,0 +1,213 @@
+[gd_scene load_steps=27 format=3 uid="uid://du4p0gdnajtii"]
+
+[ext_resource type="Script" uid="uid://bb6t3u4wqmusb" path="res://Entities/Boss/boss.gd" id="1_ju3tf"]
+[ext_resource type="PackedScene" uid="uid://bbx2q6512o2aa" path="res://Entities/Boss/Attacks/Attack 01/attack_01.tscn" id="2_71440"]
+[ext_resource type="Script" uid="uid://c4yrsl0f08bft" path="res://Entities/Boss/State Machine/state_handler.gd" id="2_r5hgr"]
+[ext_resource type="Script" uid="uid://bb7hrvv8mlsp" path="res://Entities/Boss/State Machine/boss_state_idle.gd" id="3_fdnl6"]
+[ext_resource type="Texture2D" uid="uid://mbtuhu6wiogu" path="res://Entities/Player/Assets/Skribble Character_Outer.png" id="4_2j6g7"]
+[ext_resource type="Script" uid="uid://dntj7hpwj3qp0" path="res://Entities/Boss/State Machine/boss_state_wander.gd" id="4_71440"]
+[ext_resource type="Script" uid="uid://muywlnahu6te" path="res://Entities/Boss/State Machine/boss_state_target.gd" id="5_4o1ob"]
+[ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Entities/Player/Assets/Skribble Character_Inner.png" id="5_myhfd"]
+[ext_resource type="Script" uid="uid://fw7dprr1vi1b" path="res://Attacks/attack_resource.gd" id="6_fdnl6"]
+[ext_resource type="Script" uid="uid://d2h7u4cdp7nso" path="res://Entities/Boss/State Machine/boss_state_ball.gd" id="6_iht7o"]
+[ext_resource type="Script" uid="uid://pe0ipy56yl1r" path="res://Entities/Boss/Hand/boss_hands.gd" id="6_ju3tf"]
+[ext_resource type="Script" uid="uid://c0myelnu23082" path="res://Entities/Boss/State Machine/boss_state_dead.gd" id="7_d6ame"]
+[ext_resource type="PackedScene" uid="uid://bjesokgs5hi8v" path="res://Entities/Player/Hand/hand.tscn" id="7_klplh"]
+[ext_resource type="Script" uid="uid://dqe5ql2h1lftm" path="res://Entities/Boss/Hand/boss_hand.gd" id="8_ntee4"]
+[ext_resource type="Script" uid="uid://d2ocsa6tnl1h1" path="res://Entities/Resources/name_label.gd" id="8_r5hgr"]
+[ext_resource type="Texture2D" uid="uid://dv4og0hbg14ui" path="res://icon.svg" id="15_r5hgr"]
+[ext_resource type="Script" uid="uid://ce3aqskaur0ue" path="res://Entities/Boss/target_marker.gd" id="16_fdnl6"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_ntee4"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath("Sprite Inner:modulate")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+
+[sub_resource type="Resource" id="Resource_fdnl6"]
+script = ExtResource("6_fdnl6")
+attack_name = "attack_1"
+attack_damage = 0.0
+attack_distance = 0.0
+attack_mana_cost = 0.0
+attack_cast_time = 0.0
+attack_cooldown = 0.0
+attack_duration = 0.5
+attack_aoe_radius = 0.0
+attack_type = 1
+metadata/_custom_type_script = "uid://fw7dprr1vi1b"
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_m6ryd"]
+radius = 30.0
+
+[sub_resource type="Gradient" id="Gradient_x3vf3"]
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_apopc"]
+gradient = SubResource("Gradient_x3vf3")
+
+[sub_resource type="Gradient" id="Gradient_p5o4e"]
+interpolation_mode = 1
+offsets = PackedFloat32Array(0.552995)
+colors = PackedColorArray(1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_gu6f8"]
+gradient = SubResource("Gradient_p5o4e")
+
+[sub_resource type="Gradient" id="Gradient_00tjw"]
+offsets = PackedFloat32Array(0)
+colors = PackedColorArray(1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_x3vf3"]
+gradient = SubResource("Gradient_00tjw")
+
+[node name="Boss" type="CharacterBody2D" node_paths=PackedStringArray("Hands", "Attack_Origin", "State_Handler", "healthbar", "_Target") groups=["Boss", "Entity"]]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_ju3tf")
+Hands = NodePath("Hands")
+Attack_Origin = NodePath("Attack Origin")
+State_Handler = NodePath("State Handler")
+Attack_List = Array[PackedScene]([ExtResource("2_71440")])
+healthbar = NodePath("Healthbar")
+_Target = NodePath("_Target")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_ntee4")
+visibility_update_mode = 1
+
+[node name="State Handler" type="Node" parent="." node_paths=PackedStringArray("Master", "state_init")]
+script = ExtResource("2_r5hgr")
+Master = NodePath("..")
+state_init = NodePath("Boss_Idle")
+
+[node name="Boss_Idle" type="Node" parent="State Handler"]
+script = ExtResource("3_fdnl6")
+
+[node name="Boss_Wander" type="Node" parent="State Handler"]
+script = ExtResource("4_71440")
+
+[node name="Boss_Target" type="Node" parent="State Handler"]
+script = ExtResource("5_4o1ob")
+attack_resources = Array[ExtResource("6_fdnl6")]([SubResource("Resource_fdnl6")])
+
+[node name="Boss_Ball" type="Node" parent="State Handler"]
+script = ExtResource("6_iht7o")
+
+[node name="Boss_Dead" type="Node" parent="State Handler"]
+script = ExtResource("7_d6ame")
+
+[node name="Attack Origin" type="Marker2D" parent="."]
+position = Vector2(0, -20)
+
+[node name="Sprite Outer" type="Sprite2D" parent="."]
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("4_2j6g7")
+
+[node name="Sprite Inner" type="Sprite2D" parent="."]
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("5_myhfd")
+
+[node name="Hands" type="Node2D" parent="."]
+scale = Vector2(0.8, 0.8)
+script = ExtResource("6_ju3tf")
+
+[node name="Left Hand" parent="Hands" instance=ExtResource("7_klplh")]
+script = ExtResource("8_ntee4")
+handedness = "left"
+
+[node name="Arm" parent="Hands/Left Hand" index="1"]
+rotation = 1.74533
+
+[node name="Hand" parent="Hands/Left Hand/Arm" index="0"]
+position = Vector2(0, 60)
+
+[node name="Right Hand" parent="Hands" instance=ExtResource("7_klplh")]
+script = ExtResource("8_ntee4")
+handedness = "right"
+
+[node name="Arm" parent="Hands/Right Hand" index="1"]
+rotation = -1.74533
+
+[node name="Hand" parent="Hands/Right Hand/Arm" index="0"]
+position = Vector2(0, 60)
+
+[node name="Body" type="CollisionShape2D" parent="."]
+visible = false
+shape = SubResource("CircleShape2D_m6ryd")
+
+[node name="TextureRect" type="TextureRect" parent="."]
+visible = false
+offset_left = -222.0
+offset_top = -229.0
+offset_right = 280.0
+offset_bottom = 172.0
+texture = SubResource("GradientTexture1D_apopc")
+
+[node name="Healthbar" type="TextureProgressBar" parent="."]
+top_level = true
+offset_left = -69.0
+offset_top = -101.0
+offset_right = 71.0
+offset_bottom = -85.0
+max_value = 1000.0
+value = 500.0
+nine_patch_stretch = true
+texture_under = SubResource("GradientTexture1D_gu6f8")
+texture_progress = SubResource("GradientTexture1D_x3vf3")
+tint_progress = Color(0, 1, 1, 1)
+
+[node name="Label" type="Label" parent="."]
+top_level = true
+offset_left = -49.0
+offset_top = -104.0
+offset_right = 50.0
+offset_bottom = -81.0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0.581033, 0.581033, 0.581033, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 14
+text = "Player Name"
+horizontal_alignment = 1
+script = ExtResource("8_r5hgr")
+
+[node name="Target Marker" type="Label" parent="."]
+top_level = true
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -10.0
+offset_top = -11.5
+offset_right = 10.0
+offset_bottom = 11.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_constants/shadow_outline_size = 0
+text = "(+)"
+script = ExtResource("16_fdnl6")
+
+[node name="RayCast2D" type="RayCast2D" parent="."]
+target_position = Vector2(0, -200)
+collision_mask = 3
+
+[node name="_Target" type="Node2D" parent="."]
+top_level = true
+
+[node name="Sprite2D" type="Sprite2D" parent="_Target"]
+visible = false
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("15_r5hgr")
+
+[editable path="Hands/Left Hand"]
+[editable path="Hands/Right Hand"]

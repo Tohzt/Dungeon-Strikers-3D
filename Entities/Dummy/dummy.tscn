@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3 uid="uid://cx5wpjnrw20ng"]
+
+[ext_resource type="Script" uid="uid://b4u00gr0oxovt" path="res://Entities/Dummy/dummy.gd" id="1_4wna1"]
+[ext_resource type="Texture2D" uid="uid://bobo6gkxx4b1n" path="res://Items/Objects/dummy.png" id="1_vt871"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_4wna1"]
+bounce = 0.71
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_4wna1"]
+radius = 60.1332
+
+[node name="Dummy" type="RigidBody2D" groups=["Entity"]]
+collision_layer = 4
+collision_mask = 19
+mass = 10.0
+physics_material_override = SubResource("PhysicsMaterial_4wna1")
+can_sleep = false
+custom_integrator = true
+contact_monitor = true
+max_contacts_reported = 5
+script = ExtResource("1_4wna1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -5)
+rotation = -0.785398
+scale = Vector2(2, 2)
+texture = ExtResource("1_vt871")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 52)
+shape = SubResource("CircleShape2D_4wna1")

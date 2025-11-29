@@ -1,0 +1,16 @@
++ weapon cooldown before someone else can pick it up
+	Weapon should keep wielders color when throw/dropped(?) for a few sec
+
+
+
++ Target cycle
++ synergy weapon dmg combine?
++ send weapon dmg to enemy
++ Arrow break on impact?
++ weapon click/hold
++ Display Damage
++ attack dummy
++ pickup sword in either hand
++ launch sword from bow
+
+? Arrow quantity - nah, i don't think so anymore..

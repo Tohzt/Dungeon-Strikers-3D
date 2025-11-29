@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://bxcrqtrb0qw0j"]
+
+[ext_resource type="Script" uid="uid://4fm258y2scbs" path="res://Entities/Dummy/dummy_anchor.gd" id="1_gk4y7"]
+
+[node name="Dummy Anchor" type="Node2D"]
+script = ExtResource("1_gk4y7")
+chain_segments = 3

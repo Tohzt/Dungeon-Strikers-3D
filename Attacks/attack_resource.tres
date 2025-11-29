@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AttackResource" load_steps=3 format=3 uid="uid://dvkg8b8640wyy"]
+
+[ext_resource type="PackedScene" uid="uid://vc0hfttssepf" path="res://Entities/Boss/Attacks/Attack 01/attack_01_telegraph.tscn" id="1_yby5r"]
+[ext_resource type="Script" uid="uid://fw7dprr1vi1b" path="res://Attacks/attack_resource.gd" id="2_bypkv"]
+
+[resource]
+script = ExtResource("2_bypkv")
+attack_name = "Attack 01"
+attack_damage = 10.0
+attack_distance = 10.0
+attack_mana_cost = 10.0
+attack_cast_time = 1.0
+attack_cooldown = 1.0
+attack_duration = 1.0
+attack_aoe_radius = 0.0
+attack_telegraph_scene = ExtResource("1_yby5r")
+attack_type = 2
+metadata/_custom_type_script = "uid://fw7dprr1vi1b"

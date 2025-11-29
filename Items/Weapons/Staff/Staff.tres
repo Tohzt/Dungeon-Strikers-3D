@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=4 format=3 uid="uid://dfxnthrdfin2d"]
+
+[ext_resource type="Script" uid="uid://dgec0wqpw5rdf" path="res://Items/Weapons/weapon_resource.gd" id="1_3swot"]
+[ext_resource type="Texture2D" uid="uid://ccyv7i6vggs77" path="res://Items/Weapons/Staff/weapon_staff.png" id="3_dc6dm"]
+[ext_resource type="Script" uid="uid://dy8yxbxdixpdt" path="res://Items/Weapons/_Controllers/weapon_staff_controller.gd" id="3_lv7qx"]
+
+[resource]
+script = ExtResource("1_3swot")
+weapon_name = "Staff of Infections"
+weapon_type = 0
+weapon_synergies = Array[int]([])
+weapon_hand = 0
+weapon_throw_style = 0
+weapon_sprite = Array[CompressedTexture2D]([ExtResource("3_dc6dm")])
+weapon_sprite_offset = Vector2(16, 0)
+weapon_angle = 150.0
+weapon_col_radius = 10.0
+weapon_col_height = 80.0
+weapon_col_rotation = 33.0
+weapon_col_offset = Vector2(12, 0)
+weapon_damage = 11.0
+weapon_mod_damage = 0.0
+weapon_cooldown = 0.25
+weapon_duration = 1.0
+weapon_stamina_cost = 3.0
+weapon_mana_cost = 5.0
+weapon_cast_duration = 0.0
+weapon_arm_length = 0.0
+weapon_controller = ExtResource("3_lv7qx")
+metadata/_custom_type_script = "uid://dgec0wqpw5rdf"

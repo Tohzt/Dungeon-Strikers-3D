@@ -1,0 +1,47 @@
+[gd_scene load_steps=7 format=3 uid="uid://cgg53vkkel4lq"]
+
+[ext_resource type="Script" uid="uid://dgq14ej6t3n21" path="res://Entities/Ball/ball.gd" id="1_ixnqm"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_eo4ax"]
+rough = true
+bounce = 1.0
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_l4sn5"]
+properties/0/path = NodePath(".:global_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath("Sprite2D:modulate")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_0tmw3"]
+offsets = PackedFloat32Array(0.533654, 0.600962, 0.620192)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_2nxuw"]
+gradient = SubResource("Gradient_0tmw3")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_mmb0u"]
+radius = 26.0
+
+[node name="Ball" type="RigidBody2D" groups=["Ball", "Entity"]]
+collision_layer = 4
+collision_mask = 3
+mass = 0.5
+physics_material_override = SubResource("PhysicsMaterial_eo4ax")
+gravity_scale = 0.0
+contact_monitor = true
+max_contacts_reported = 4
+linear_damp = 1.0
+script = ExtResource("1_ixnqm")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_l4sn5")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = SubResource("GradientTexture2D_2nxuw")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_mmb0u")

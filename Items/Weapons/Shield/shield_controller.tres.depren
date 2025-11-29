@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="ShieldController" load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://b3lkpkwkss7fv" path="res://Items/Weapons/Controllers/weapon_shield_controller.gd" id="1_shield"]
+
+
+[resource]
+script = ExtResource("1_shield") 

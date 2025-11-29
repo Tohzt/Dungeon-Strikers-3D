@@ -1,0 +1,45 @@
+[gd_scene load_steps=6 format=3 uid="uid://6q4nkh2kftvh"]
+
+[ext_resource type="Script" uid="uid://c8ke7sv8ukd5y" path="res://Items/Weapons/weapon.gd" id="1_6fu2l"]
+[ext_resource type="Script" uid="uid://do4hvrwj7fb5u" path="res://Items/Weapons/_Controllers/base_weapon_controller.gd" id="2_637un"]
+[ext_resource type="Texture2D" uid="uid://bgm781nxifme8" path="res://Items/Weapons/Sword/weapon_sword.png" id="3_637un"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_6fu2l"]
+resource_local_to_scene = true
+height = 64.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_6fu2l"]
+radius = 44.0
+
+[node name="Weapon" type="RigidBody2D" groups=["Interact", "Weapon"]]
+collision_layer = 8
+collision_mask = 9
+contact_monitor = true
+max_contacts_reported = 3
+script = ExtResource("1_6fu2l")
+
+[node name="Controller" type="Node" parent="."]
+script = ExtResource("2_637un")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(19.535, 0)
+rotation = 1.57079
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("3_637un")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(20, 0)
+rotation = 1.5708
+shape = SubResource("CapsuleShape2D_6fu2l")
+debug_color = Color(0, 0.693583, 0.178807, 0.419608)
+
+[node name="Pickup" type="Area2D" parent="."]
+collision_layer = 8
+collision_mask = 7
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Pickup"]
+shape = SubResource("CircleShape2D_6fu2l")
+debug_color = Color(0, 0.6, 0.701961, 0.0392157)
+
+[connection signal="body_entered" from="Pickup" to="." method="_on_pickup_body_entered"]
+[connection signal="body_exited" from="Pickup" to="." method="_on_pickup_body_exited"]

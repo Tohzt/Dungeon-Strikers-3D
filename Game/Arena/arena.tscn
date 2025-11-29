@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3 uid="uid://ba2asl1rta0kr"]
+
+[ext_resource type="Script" uid="uid://bmthi8okkuhmv" path="res://Game/Room/room.gd" id="1_t4ai1"]
+[ext_resource type="Texture2D" uid="uid://cr6q2wrk7u7q5" path="res://Game/Arena/Assets/Gemini_Generated_Image_jq3r4ijq3r4ijq3r.png" id="2_5j0mw"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_7wb2k"]
+size = Vector2(2054, 2034)
+
+[node name="Arena" type="Node2D" node_paths=PackedStringArray("area") groups=["Room"]]
+script = ExtResource("1_t4ai1")
+area = NodePath("Area2D")
+
+[node name="Arena_Texture" type="Sprite2D" parent="."]
+position = Vector2(-2, 16)
+scale = Vector2(4, 4)
+texture = ExtResource("2_5j0mw")
+
+[node name="Collisions" type="StaticBody2D" parent="."]
+position = Vector2(-1144, -685)
+scale = Vector2(2, 2)
+collision_mask = 6
+
+[node name="Walls" type="CollisionPolygon2D" parent="Collisions"]
+position = Vector2(63, -65)
+polygon = PackedVector2Array(-200, -270, 1240, -277, 1245, 1100, 1148, 852, 1132, -32, 1094, -29, 1065, -39, 1021, -95, 1007, -131, 693, -124, 665, -43, 615, -44, 612, -111, 455, -111, 454, -45, 392, -45, 381, -121, 70, -124, 50, -89, -2, -40, -95, -5, -89, 848, -69, 874, -27, 879, 6, 904, 20, 935, 37, 942, 61, 988, 977, 990, 981, 936, 1030, 876, 1056, 864, 1101, 873, 1148, 852, 1246, 1100, -191, 1117)
+
+[node name="Area2D" type="Area2D" parent="."]
+position = Vector2(-1139, -681)
+scale = Vector2(2, 2)
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+position = Vector2(570, 349)
+shape = SubResource("RectangleShape2D_7wb2k")
+
+[connection signal="body_entered" from="Area2D" to="." method="_on_body_entered"]

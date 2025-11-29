@@ -1,0 +1,41 @@
+[gd_scene load_steps=5 format=3 uid="uid://bco22ftngcujn"]
+
+[ext_resource type="Script" uid="uid://jva0lprce6kd" path="res://_DEP/DEP_boss_attack.gd" id="1_rag7a"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_5d0fw"]
+radius = 23.0217
+
+[sub_resource type="SphereMesh" id="SphereMesh_attack"]
+radius = 23.0
+height = 46.0
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_hocnk"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:modulate")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath("Attack:scale")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath("MeshInstance2D:scale")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+properties/4/path = NodePath("MeshInstance2D:visible")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+
+[node name="Attack" type="Area2D"]
+collision_layer = 4
+collision_mask = 7
+script = ExtResource("1_rag7a")
+
+[node name="Attack" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_5d0fw")
+
+[node name="MeshInstance2D" type="MeshInstance2D" parent="."]
+mesh = SubResource("SphereMesh_attack")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_hocnk")

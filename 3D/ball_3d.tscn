@@ -1,0 +1,43 @@
+[gd_scene load_steps=9 format=3 uid="uid://do1mbihumg8t1"]
+
+[ext_resource type="Script" uid="uid://d31dqy4p0hrx" path="res://3D/ball_3d.gd" id="1_p1o42"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_5coap"]
+friction = 0.51
+bounce = 0.58
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_v8n5r"]
+
+[sub_resource type="Gradient" id="Gradient_5coap"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_p1o42"]
+noise_type = 2
+frequency = 0.0074
+fractal_type = 3
+fractal_octaves = 1
+fractal_ping_pong_strength = 8.75
+cellular_distance_function = 1
+cellular_jitter = -0.105
+cellular_return_type = 3
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_lr615"]
+noise = SubResource("FastNoiseLite_p1o42")
+color_ramp = SubResource("Gradient_5coap")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cw31k"]
+albedo_texture = SubResource("NoiseTexture2D_lr615")
+
+[sub_resource type="SphereMesh" id="SphereMesh_jrsk6"]
+material = SubResource("StandardMaterial3D_cw31k")
+
+[node name="Ball_3D" type="RigidBody3D" groups=["Ball"]]
+collision_mask = 3
+mass = 0.5
+physics_material_override = SubResource("PhysicsMaterial_5coap")
+script = ExtResource("1_p1o42")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_v8n5r")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CollisionShape3D"]
+mesh = SubResource("SphereMesh_jrsk6")

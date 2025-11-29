@@ -1,0 +1,41 @@
+[gd_scene load_steps=6 format=3 uid="uid://btf8e0wnlbd82"]
+
+[ext_resource type="Script" uid="uid://b1wxwtmfhlg00" path="res://Player/player.gd" id="1_iyeam"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_emixd"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:spawn_pos")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:visible")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_i7jue"]
+offsets = PackedFloat32Array(0.6875, 0.721154)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_sfcxh"]
+gradient = SubResource("Gradient_i7jue")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_m6ryd"]
+radius = 30.0
+
+[node name="Player" type="CharacterBody2D" groups=["Player"]]
+collision_layer = 2
+script = ExtResource("1_iyeam")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_emixd")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = SubResource("GradientTexture2D_sfcxh")
+
+[node name="Body" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_m6ryd")
+
+[node name="Marker2D" type="Marker2D" parent="."]

@@ -1,0 +1,14 @@
+{
+	"godotTools.editorPath.godot4": "c:\\Program Files (x86)\\Godot\\Godot 4.4.1\\Godot_v4.4.1-stable_win64.exe",
+
+	"files.exclude": {
+		"**/*.cfg": true,
+		"**/*.uid": true,
+		"**/*.import": true,
+		"**/.git": true,
+		"**/.DS_Store": true,
+		"**/*.js.map": true,
+		"**/*.tmp": true,
+		"**/*.log": true
+	}
+}

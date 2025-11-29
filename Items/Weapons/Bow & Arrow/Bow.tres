@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=5 format=3 uid="uid://bjltlxtu1gq0f"]
+
+[ext_resource type="Script" uid="uid://dgec0wqpw5rdf" path="res://Items/Weapons/weapon_resource.gd" id="1_weapon"]
+[ext_resource type="Texture2D" uid="uid://d3kudbiwgf2y7" path="res://Items/Weapons/Bow & Arrow/weapon_bow.png" id="2_xlgad"]
+[ext_resource type="Texture2D" uid="uid://sorsgdrismdy" path="res://Items/Weapons/Bow & Arrow/weapon_bow_arrow.png" id="3_oyqip"]
+[ext_resource type="Script" uid="uid://cioecb3clxdpt" path="res://Items/Weapons/_Controllers/weapon_bow_controller.gd" id="3_tduwl"]
+
+[resource]
+script = ExtResource("1_weapon")
+weapon_name = "Bow of Ners"
+weapon_type = 3
+weapon_synergies = Array[int]([4, 0])
+weapon_hand = 0
+weapon_throw_style = 2
+weapon_sprite = Array[CompressedTexture2D]([ExtResource("2_xlgad"), ExtResource("3_oyqip")])
+weapon_sprite_offset = Vector2(-3, 0)
+weapon_angle = 90.0
+weapon_col_radius = 10.0
+weapon_col_height = 80.0
+weapon_col_rotation = 0.0
+weapon_col_offset = Vector2(-4, 0)
+weapon_damage = 8.0
+weapon_mod_damage = 0.0
+weapon_cooldown = 0.8
+weapon_duration = 0.3
+weapon_stamina_cost = 3.0
+weapon_mana_cost = 0.0
+weapon_cast_duration = 0.0
+weapon_arm_length = 0.0
+weapon_controller = ExtResource("3_tduwl")
+metadata/_custom_type_script = "uid://dgec0wqpw5rdf"

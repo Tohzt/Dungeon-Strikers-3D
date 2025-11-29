@@ -1,0 +1,18 @@
+[gd_scene load_steps=5 format=3 uid="uid://dd6qdpcrpg525"]
+
+[ext_resource type="Script" uid="uid://oabjtq1xki1m" path="res://_Multiplayer/Server.gd" id="1_45wwx"]
+[ext_resource type="Script" uid="uid://bujsrhm8uh8sg" path="res://_Multiplayer/server_offline.gd" id="2_54c83"]
+[ext_resource type="Script" uid="uid://b260chdnllf5n" path="res://_Multiplayer/server_spawn.gd" id="2_ec83c"]
+[ext_resource type="Script" uid="uid://tju6u6m1urlr" path="res://_Multiplayer/server_connect.gd" id="3_ec83c"]
+
+[node name="Server" type="Node"]
+script = ExtResource("1_45wwx")
+
+[node name="Offline" type="Node" parent="."]
+script = ExtResource("2_54c83")
+
+[node name="Spawn" type="Node" parent="."]
+script = ExtResource("2_ec83c")
+
+[node name="Connect" type="Node" parent="."]
+script = ExtResource("3_ec83c")

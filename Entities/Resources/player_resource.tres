@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="PlayerResource" load_steps=2 format=3 uid="uid://dt83qw50xvngg"]
+
+[ext_resource type="Script" uid="uid://dgmwletqffblm" path="res://Entities/Resources/player_resource.gd" id="1_amuan"]
+
+[resource]
+script = ExtResource("1_amuan")
+player_name = ""
+player_id = 0
+player_color = Color(0, 0, 0, 1)
+player_strength = 0
+player_intelligence = 0
+player_endurance = 0
+metadata/_custom_type_script = "uid://dgec0wqpw5rdf"

@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="WeaponResource" load_steps=4 format=3 uid="uid://5gjhgh1sidek"]
+
+[ext_resource type="Script" uid="uid://dgec0wqpw5rdf" path="res://Items/Weapons/weapon_resource.gd" id="1_roq2m"]
+[ext_resource type="Script" uid="uid://dnl1i8s7rl1vc" path="res://Items/Weapons/_Controllers/weapon_arrow_controller.gd" id="3_fnbsr"]
+[ext_resource type="Texture2D" uid="uid://cym8pdlsgo0c1" path="res://Items/Weapons/Bow & Arrow/weapon_arrow.png" id="3_qt10x"]
+
+[resource]
+script = ExtResource("1_roq2m")
+weapon_name = "Arrow"
+weapon_type = 4
+weapon_synergies = Array[int]([3])
+weapon_hand = 1
+weapon_throw_style = 1
+weapon_sprite = Array[CompressedTexture2D]([ExtResource("3_qt10x")])
+weapon_sprite_offset = Vector2(16, 0)
+weapon_angle = 33.0
+weapon_col_radius = 4.0
+weapon_col_height = 64.0
+weapon_col_rotation = -33.0
+weapon_col_offset = Vector2(16, 0)
+weapon_damage = 3.0
+weapon_mod_damage = 0.0
+weapon_cooldown = 0.0
+weapon_duration = 1.0
+weapon_stamina_cost = 2.0
+weapon_mana_cost = 1.0
+weapon_cast_duration = 0.0
+weapon_arm_length = 0.0
+weapon_controller = ExtResource("3_fnbsr")
+metadata/_custom_type_script = "uid://dgec0wqpw5rdf"

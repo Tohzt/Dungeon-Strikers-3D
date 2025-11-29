@@ -1,0 +1,144 @@
+[gd_scene load_steps=13 format=3 uid="uid://btf8e0wnlbd82"]
+
+[ext_resource type="Script" uid="uid://b1wxwtmfhlg00" path="res://Player/player.gd" id="1_iyeam"]
+[ext_resource type="Script" uid="uid://q3o4p2j5hpsk" path="res://Player/handler_playerInput.gd" id="2_4ntmi"]
+[ext_resource type="Script" uid="uid://fhp5dwkco2h" path="res://Player/handler_playerAttack.gd" id="3_btcbx"]
+[ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Player/Assets/Skribble Character_Inner.png" id="4_od3ui"]
+[ext_resource type="Script" uid="uid://dc1vqfeqpwv8e" path="res://Player/hands.gd" id="5_fhl08"]
+[ext_resource type="PackedScene" uid="uid://bjesokgs5hi8v" path="res://Player/Hand/hand.tscn" id="5_k53q1"]
+[ext_resource type="Texture2D" uid="uid://mbtuhu6wiogu" path="res://Player/Assets/Skribble Character_Outer.png" id="5_od3ui"]
+[ext_resource type="Script" uid="uid://d2ocsa6tnl1h1" path="res://Player/name_label.gd" id="7_vtle1"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_m6ryd"]
+radius = 30.0
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_emixd"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:spawn_pos")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:visible")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:rotation")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+properties/4/path = NodePath("ProgressBar:value")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+properties/5/path = NodePath("ProgressBar:max_value")
+properties/5/spawn = true
+properties/5/replication_mode = 1
+properties/6/path = NodePath("Sprite Inner:modulate")
+properties/6/spawn = true
+properties/6/replication_mode = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vtle1"]
+bg_color = Color(1, 1, 1, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_od3ui"]
+bg_color = Color(0.6, 1, 0.564706, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="Player" type="CharacterBody2D" node_paths=PackedStringArray("Sprite", "Hands", "Attack_Origin", "Input_Handler", "Attack_Handler", "healthbar") groups=["Player"]]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_iyeam")
+Sprite = NodePath("Sprite Inner")
+Hands = NodePath("Hands")
+Attack_Origin = NodePath("Attack Origin")
+Input_Handler = NodePath("Input Handler")
+Attack_Handler = NodePath("Attack Handler")
+healthbar = NodePath("ProgressBar")
+
+[node name="Input Handler" type="Node" parent="."]
+script = ExtResource("2_4ntmi")
+
+[node name="Attack Handler" type="Node" parent="." node_paths=PackedStringArray("Input_Handler")]
+script = ExtResource("3_btcbx")
+Input_Handler = NodePath("../Input Handler")
+
+[node name="Attack Origin" type="Marker2D" parent="."]
+position = Vector2(0, -20)
+
+[node name="Sprite Outer" type="Sprite2D" parent="."]
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("5_od3ui")
+
+[node name="Sprite Inner" type="Sprite2D" parent="."]
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("4_od3ui")
+
+[node name="Hands" type="Node2D" parent="."]
+scale = Vector2(0.8, 0.8)
+script = ExtResource("5_fhl08")
+
+[node name="Left Hand" parent="Hands" instance=ExtResource("5_k53q1")]
+handedness = "left"
+
+[node name="Arm" parent="Hands/Left Hand" index="1"]
+rotation = 1.74533
+
+[node name="Hand" parent="Hands/Left Hand/Arm" index="0"]
+position = Vector2(0, 60)
+
+[node name="Right Hand" parent="Hands" instance=ExtResource("5_k53q1")]
+handedness = "right"
+
+[node name="Arm" parent="Hands/Right Hand" index="1"]
+rotation = -1.74533
+
+[node name="Hand" parent="Hands/Right Hand/Arm" index="0"]
+position = Vector2(0, 60)
+
+[node name="Body" type="CollisionShape2D" parent="."]
+visible = false
+shape = SubResource("CircleShape2D_m6ryd")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_emixd")
+
+[node name="ProgressBar" type="ProgressBar" parent="."]
+top_level = true
+offset_left = -66.0
+offset_top = -99.0
+offset_right = 74.0
+offset_bottom = -83.0
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/background = SubResource("StyleBoxFlat_vtle1")
+theme_override_styles/fill = SubResource("StyleBoxFlat_od3ui")
+max_value = 1000.0
+value = 950.0
+show_percentage = false
+
+[node name="Label" type="Label" parent="."]
+top_level = true
+offset_left = -49.0
+offset_top = -104.0
+offset_right = 50.0
+offset_bottom = -81.0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0.581033, 0.581033, 0.581033, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 14
+text = "Player Name"
+horizontal_alignment = 1
+script = ExtResource("7_vtle1")
+
+[editable path="Hands/Left Hand"]
+[editable path="Hands/Right Hand"]

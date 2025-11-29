@@ -1,0 +1,192 @@
+[gd_scene load_steps=17 format=3 uid="uid://ddn5dflpnvmfn"]
+
+[ext_resource type="Script" uid="uid://c6v4td75pemi0" path="res://Main Menu/main_menu.gd" id="1_col8w"]
+[ext_resource type="PackedScene" uid="uid://btf8e0wnlbd82" path="res://Entities/Player/player.tscn" id="2_5ms5j"]
+[ext_resource type="PackedScene" uid="uid://b31r5kemx5nnp" path="res://Main Menu/Stat Option.tscn" id="2_i0jnm"]
+[ext_resource type="PackedScene" uid="uid://ca18bdfs01cxc" path="res://Game/HUD/HUD.tscn" id="2_y6014"]
+[ext_resource type="PackedScene" uid="uid://b6tqbqvxpm0pi" path="res://Game/Room/Doors/door.tscn" id="4_8iwr2"]
+[ext_resource type="PackedScene" uid="uid://b4226omcdcsq6" path="res://Game/Room/room.tscn" id="4_wlfof"]
+[ext_resource type="PackedScene" uid="uid://b4041ff5ewhd3" path="res://Items/Chest/chest.tscn" id="5_4wqtw"]
+[ext_resource type="PackedScene" uid="uid://cx5wpjnrw20ng" path="res://Entities/Dummy/dummy.tscn" id="6_4wqtw"]
+[ext_resource type="Resource" uid="uid://dblh4y0bvtb18" path="res://Items/Weapons/Shield/Shield.tres" id="6_re3ss"]
+[ext_resource type="Resource" uid="uid://cn5v2okkp2ios" path="res://Items/Weapons/Sword/Sword.tres" id="7_4myfj"]
+[ext_resource type="Resource" uid="uid://bjltlxtu1gq0f" path="res://Items/Weapons/Bow & Arrow/Bow.tres" id="8_hat6j"]
+[ext_resource type="Resource" uid="uid://5gjhgh1sidek" path="res://Items/Weapons/Bow & Arrow/Arrow.tres" id="9_8iwr2"]
+[ext_resource type="Resource" uid="uid://dfxnthrdfin2d" path="res://Items/Weapons/Staff/Staff.tres" id="10_y6014"]
+[ext_resource type="PackedScene" uid="uid://bxcrqtrb0qw0j" path="res://Entities/Dummy/dummy_anchor.tscn" id="12_4myfj"]
+[ext_resource type="PackedScene" uid="uid://dfhyv1dxxl7j" path="res://Items/Chain/chain.tscn" id="12_hat6j"]
+[ext_resource type="PackedScene" uid="uid://6q4nkh2kftvh" path="res://Items/Weapons/weapon.tscn" id="16_qr6km"]
+
+[node name="Main Menu" type="Node2D" groups=["Main Menu"]]
+script = ExtResource("1_col8w")
+
+[node name="Hud" parent="." node_paths=PackedStringArray("game") instance=ExtResource("2_y6014")]
+game = NodePath("..")
+
+[node name="Player" parent="." instance=ExtResource("2_5ms5j")]
+position = Vector2(570, 330)
+
+[node name="Rooms" type="Node" parent="."]
+
+[node name="Room Center" parent="Rooms" instance=ExtResource("4_wlfof")]
+position = Vector2(570, 330)
+current_room = true
+
+[node name="Door" parent="Rooms" instance=ExtResource("4_8iwr2")]
+position = Vector2(1140, 330)
+rotation = 1.5708
+invincible = true
+
+[node name="Door2" parent="Rooms" instance=ExtResource("4_8iwr2")]
+position = Vector2(0, 330)
+rotation = 1.5708
+
+[node name="Door3" parent="Rooms" instance=ExtResource("4_8iwr2")]
+position = Vector2(570, 0)
+
+[node name="Door4" parent="Rooms" instance=ExtResource("4_8iwr2")]
+position = Vector2(570, 660)
+
+[node name="Menu UI" type="CanvasLayer" parent="."]
+
+[node name="Multiplayer" type="Control" parent="Menu UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+
+[node name="MarginContainer" type="MarginContainer" parent="Menu UI/Multiplayer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Menu UI/Multiplayer/MarginContainer"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Dungeon Strikers"
+
+[node name="Game Options" type="HBoxContainer" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 8
+theme_override_constants/separation = 11
+alignment = 1
+
+[node name="Host" type="Button" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options"]
+layout_mode = 2
+text = "Host"
+
+[node name="Join" type="Button" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options"]
+layout_mode = 2
+text = "Join"
+
+[node name="Quit" type="Button" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options"]
+layout_mode = 2
+text = "Quit"
+
+[node name="Quick Play" type="Button" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options"]
+layout_mode = 2
+text = "Quick Play"
+
+[node name="Character Select" type="MarginContainer" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 6
+theme_override_constants/margin_top = 295
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Character Select"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DisplayName" type="LineEdit" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Character Select/VBoxContainer" groups=["DisplayName"]]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+placeholder_text = "Enter Name"
+alignment = 1
+max_length = 20
+emoji_menu_enabled = false
+virtual_keyboard_enabled = false
+shortcut_keys_enabled = false
+drag_and_drop_selection_enabled = false
+
+[node name="Points Remaining" type="Label" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Character Select/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 15
+text = "(#) points remaining"
+horizontal_alignment = 1
+
+[node name="Strength" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Character Select/VBoxContainer" instance=ExtResource("2_i0jnm")]
+layout_mode = 2
+Stat_Color = Color(1, 0, 0, 1)
+
+[node name="Endurance" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Character Select/VBoxContainer" instance=ExtResource("2_i0jnm")]
+layout_mode = 2
+Stat_Type = 1
+Stat_Color = Color(0, 1, 0, 1)
+
+[node name="Intelligence" parent="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Character Select/VBoxContainer" instance=ExtResource("2_i0jnm")]
+layout_mode = 2
+Stat_Type = 2
+Stat_Color = Color(0, 0, 1, 1)
+
+[node name="Chest_Str" parent="." instance=ExtResource("5_4wqtw")]
+modulate = Color(1, 0.523455, 0.543051, 1)
+position = Vector2(220, 160)
+rotation = -0.785398
+items = Array[Resource]([ExtResource("6_re3ss"), ExtResource("7_4myfj")])
+
+[node name="Chest_End" parent="." instance=ExtResource("5_4wqtw")]
+modulate = Color(0, 0.860488, 0.188099, 1)
+position = Vector2(150, 330)
+rotation = -1.5708
+items = Array[Resource]([ExtResource("8_hat6j"), ExtResource("9_8iwr2")])
+
+[node name="Chest_Int" parent="." instance=ExtResource("5_4wqtw")]
+modulate = Color(0.601776, 0.596467, 1, 1)
+position = Vector2(220, 500)
+rotation = -2.35619
+items = Array[Resource]([ExtResource("10_y6014"), ExtResource("7_4myfj")])
+
+[node name="Entities" type="Node2D" parent="." groups=["Entities"]]
+
+[node name="Dummy Anchor" parent="Entities" instance=ExtResource("12_4myfj")]
+position = Vector2(1140, 330)
+rotation = 1.5708
+chain_scene = ExtResource("12_hat6j")
+ball_scene = ExtResource("6_4wqtw")
+chain_segments = 2
+segment_distance = 60.0
+joint_damping = 0.0
+
+[node name="Weapon" parent="." instance=ExtResource("16_qr6km")]
+position = Vector2(673, 181)
+Properties = ExtResource("7_4myfj")
+
+[node name="Weapon" parent="Weapon" instance=ExtResource("16_qr6km")]
+position = Vector2(-114, 57)
+Properties = ExtResource("7_4myfj")
+
+[node name="Weapon2" parent="." instance=ExtResource("16_qr6km")]
+position = Vector2(438, 179)
+Properties = ExtResource("8_hat6j")
+
+[connection signal="pressed" from="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options/Host" to="." method="_on_host_pressed"]
+[connection signal="pressed" from="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options/Join" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options/Quit" to="." method="_on_quit_pressed"]
+[connection signal="pressed" from="Menu UI/Multiplayer/MarginContainer/VBoxContainer/Game Options/Quick Play" to="." method="_on_quick_play_pressed"]

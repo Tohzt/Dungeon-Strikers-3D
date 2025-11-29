@@ -1,0 +1,23 @@
+[gd_scene load_steps=4 format=3 uid="uid://btf8e0wnlbd82"]
+
+[ext_resource type="Script" path="res://Player/player.gd" id="1_iyeam"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_m6ryd"]
+radius = 30.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_vldew"]
+radius = 30.0
+height = 60.0
+
+[node name="Player" type="CharacterBody2D"]
+script = ExtResource("1_iyeam")
+
+[node name="Body" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_m6ryd")
+
+[node name="Attack" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_m6ryd")
+
+[node name="MeshInstance2D" type="MeshInstance2D" parent="."]
+position = Vector2(-0.499999, -0.499993)
+mesh = SubResource("SphereMesh_vldew")

@@ -1,0 +1,38 @@
+[gd_scene load_steps=2 format=3 uid="uid://b31r5kemx5nnp"]
+
+[ext_resource type="Script" uid="uid://ku1yyre161js" path="res://Main Menu/stat_option.gd" id="1_co30a"]
+
+[node name="Strength" type="HBoxContainer"]
+size_flags_horizontal = 3
+alignment = 1
+script = ExtResource("1_co30a")
+
+[node name="Decrement" type="Button" parent="."]
+layout_mode = 2
+button_mask = 3
+text = "[ - ]"
+
+[node name="Control" type="PanelContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Stat Value" type="ProgressBar" parent="Control"]
+layout_mode = 2
+size_flags_vertical = 1
+max_value = 3.0
+step = 1.0
+show_percentage = false
+
+[node name="Stat Name" type="Label" parent="Control"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "STAT NAME"
+horizontal_alignment = 1
+
+[node name="Increment" type="Button" parent="."]
+layout_mode = 2
+button_mask = 3
+text = "[ + ]"
+
+[connection signal="pressed" from="Decrement" to="." method="_on_decrement_pressed"]
+[connection signal="pressed" from="Increment" to="." method="_on_increment_pressed"]
