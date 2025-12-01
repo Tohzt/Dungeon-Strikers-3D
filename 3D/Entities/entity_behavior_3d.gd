@@ -135,7 +135,7 @@ func apply_knockback(direction: Vector3, force: float) -> void:
 			Master.Input_Handler.velocity += direction * force
 	
 	# Visual feedback for iframes - apply alpha to mesh materials
-	if Master.has("mesh_instance_3d") and Master.mesh_instance_3d:
+	if Master is PlayerClass3D and Master.mesh_instance_3d:
 		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
 			if not mesh_instance:
 				continue
@@ -159,7 +159,7 @@ func apply_knockback(direction: Vector3, force: float) -> void:
 
 func set_color(color: Color = Color.WHITE) -> void:
 	# Apply color to all meshes in the player's mesh array
-	if Master.has("mesh_instance_3d") and Master.mesh_instance_3d:
+	if Master is PlayerClass3D and Master.mesh_instance_3d:
 		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
 			if not mesh_instance:
 				continue
@@ -186,7 +186,7 @@ func reset(active_status: bool = true) -> void:
 	has_control = active_status
 	
 	# Set stats from Properties if available
-	if Master.has("Properties") and Master.Properties:
+	if Master is PlayerClass3D and Master.Properties:
 		var props: Resource = Master.Properties
 		strength = props.player_strength + 10
 		intelligence = props.player_intelligence + 10
@@ -218,7 +218,7 @@ func reset(active_status: bool = true) -> void:
 func end_iframes() -> void:
 	is_in_iframes = false
 	# Restore visual feedback - restore full alpha to mesh materials
-	if Master.has("mesh_instance_3d") and Master.mesh_instance_3d:
+	if Master is PlayerClass3D and Master.mesh_instance_3d:
 		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
 			if not mesh_instance:
 				continue

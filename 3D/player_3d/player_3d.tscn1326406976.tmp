@@ -4,9 +4,9 @@
 [ext_resource type="PackedScene" uid="uid://2fm376vpf8mu" path="res://3D/Entities/entity.tscn" id="2_78ftg"]
 [ext_resource type="PackedScene" uid="uid://c86ptcgtunn2l" path="res://3D/Entities/Handlers/h_input.tscn" id="3_8y4cm"]
 
-[sub_resource type="SphereMesh" id="SphereMesh_q82k8"]
-radius = 0.25
-height = 0.5
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_sft31"]
+radius = 0.2
+height = 1.5
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_78ftg"]
 radius = 0.4
@@ -33,7 +33,6 @@ height = 0.2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
-collision_mask = 13
 script = ExtResource("1_qu530")
 
 [node name="Entity" parent="." instance=ExtResource("2_78ftg")]
@@ -41,42 +40,32 @@ script = ExtResource("1_qu530")
 [node name="H_Input" parent="." instance=ExtResource("3_8y4cm")]
 
 [node name="Appendages" type="Node3D" parent="."]
+transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0, 0, 0)
 
-[node name="Shoulder_Left" type="Node3D" parent="Appendages"]
-transform = Transform3D(0.9659258, 0, -0.25881904, 0, 1, 0, 0.25881904, 0, 0.9659258, 0, 0, 0)
+[node name="Shoulders" type="MeshInstance3D" parent="Appendages"]
+mesh = SubResource("CapsuleMesh_sft31")
+skeleton = NodePath("../..")
 
-[node name="Mesh_Shoulder_Left" type="MeshInstance3D" parent="Appendages/Shoulder_Left"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0)
-mesh = SubResource("SphereMesh_q82k8")
-
-[node name="Hand_Left" type="Area3D" parent="Appendages/Shoulder_Left"]
-transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, 1, -0.3, 0)
+[node name="Hand_Right" type="Area3D" parent="Appendages"]
+transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, -0.2, -1, 0)
 collision_layer = 2
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Appendages/Shoulder_Left/Hand_Left"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Appendages/Hand_Right"]
 transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 shape = SubResource("SphereShape3D_78ftg")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Appendages/Shoulder_Left/Hand_Left/CollisionShape3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Appendages/Hand_Right/CollisionShape3D"]
 mesh = SubResource("SphereMesh_8y4cm")
 
-[node name="Shoulder_Right" type="Node3D" parent="Appendages"]
-transform = Transform3D(0.9659258, 0, 0.25881904, 0, 1, 0, -0.25881904, 0, 0.9659258, 0, 0, 0)
-
-[node name="Mesh_Shoulder_Left" type="MeshInstance3D" parent="Appendages/Shoulder_Right"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, 0)
-mesh = SubResource("SphereMesh_q82k8")
-skeleton = NodePath("../../Shoulder_Left/Mesh_Shoulder_Left")
-
-[node name="Hand_Right" type="Area3D" parent="Appendages/Shoulder_Right"]
-transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, -1, -0.3, 0)
+[node name="Hand_Left" type="Area3D" parent="Appendages"]
+transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, -0.2, 1, 0)
 collision_layer = 2
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Appendages/Shoulder_Right/Hand_Right"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Appendages/Hand_Left"]
 transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 shape = SubResource("SphereShape3D_78ftg")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Appendages/Shoulder_Right/Hand_Right/CollisionShape3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Appendages/Hand_Left/CollisionShape3D"]
 mesh = SubResource("SphereMesh_8y4cm")
 
 [node name="Body" type="CollisionShape3D" parent="."]

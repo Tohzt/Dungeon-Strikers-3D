@@ -1,6 +1,8 @@
-[gd_scene load_steps=7 format=3 uid="uid://cdei2r6df0bov"]
+[gd_scene load_steps=9 format=3 uid="uid://cdei2r6df0bov"]
 
 [ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_gvrid"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_lnps2"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_tmecx"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_w1tv4"]
 albedo_color = Color(0.57070744, 0.37050173, 0.23154527, 1)
@@ -23,8 +25,20 @@ material = SubResource("StandardMaterial3D_lnps2")
 radius = 0.1
 height = 1.5
 
-[node name="Sword_3D" type="RigidBody3D"]
+[node name="Sword_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
 script = ExtResource("1_gvrid")
+follow_strength = 2000.0
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("2_lnps2")]
+
+[node name="WeaponProperties" parent="." instance=ExtResource("3_tmecx")]
 
 [node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
 transform = Transform3D(1.9106855e-15, 4.371139e-08, 1, 1, -4.371139e-08, 0, 4.371139e-08, 1, -4.371139e-08, 0, 0.18893492, 0)

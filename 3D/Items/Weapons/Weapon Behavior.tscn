@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cwk6psod3apas"]
+
+[ext_resource type="Script" uid="uid://r2a0cem6keat" path="res://3D/Items/Weapons/weapon_behavior.gd" id="1_5psfr"]
+
+[node name="WeaponBehavior" type="Node"]
+script = ExtResource("1_5psfr")

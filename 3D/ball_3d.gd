@@ -31,7 +31,7 @@ func _ready() -> void:
 	set_collision_mask_value(1, true)  # World
 	set_collision_mask_value(2, true)  # Player
 	set_collision_mask_value(3, true)  # Enemy
-	set_collision_mask_value(5, true)  # Weapon/Projectile
+	set_collision_mask_value(4, true)  # Weapon
 	
 	# Connect body entered signal
 	body_entered.connect(_on_body_entered)
@@ -73,7 +73,7 @@ func _on_body_entered(body: Node) -> void:
 	if body is CharacterBody3D:
 		var player: CharacterBody3D = body as CharacterBody3D
 		# Check if it has EB (EntityBehavior3D)
-		if player.has("Entity") and player.Entity:
+		if player.Entity:
 			var ball_speed: float = linear_velocity.length()
 			var ball_to_player: Vector3 = (player.global_position - global_position).normalized()
 			
@@ -85,9 +85,9 @@ func _on_body_entered(body: Node) -> void:
 				player.Entity.apply_knockback(ball_to_player, knockback_force)
 	
 	# Handle weapon/projectile collisions to move the ball
-	if body.is_in_group("Weapon") and body.has_method("get") and body.get("Properties"):
-		var weapon := body
-		if weapon and weapon.has("Properties") and weapon.Properties:
+	if body.is_in_group("Weapon") and body is Weapon3D:
+		var weapon: Weapon3D = body
+		if weapon.Properties:
 			var weapon_damage: float = weapon.Properties.weapon_damage
 			var weapon_velocity: Vector3 = weapon.linear_velocity
 			

@@ -31,7 +31,8 @@ albedo_texture = SubResource("NoiseTexture2D_lr615")
 material = SubResource("StandardMaterial3D_cw31k")
 
 [node name="Ball_3D" type="RigidBody3D" groups=["Ball"]]
-collision_mask = 3
+collision_layer = 4
+collision_mask = 15
 mass = 0.5
 physics_material_override = SubResource("PhysicsMaterial_5coap")
 continuous_cd = true

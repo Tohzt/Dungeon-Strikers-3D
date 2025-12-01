@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://c54eoe73yt4nh"]
+[gd_scene load_steps=17 format=3 uid="uid://c54eoe73yt4nh"]
 
 [ext_resource type="Script" uid="uid://c60lpak5bjaku" path="res://3D/camera_3d.gd" id="1_qgpjc"]
 [ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/game_3d.gd" id="1_sjtsc"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_k5r54"]
 [ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_uqeks"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="6_m836i"]
+[ext_resource type="PackedScene" uid="uid://byuvh0e1ejilk" path="res://3D/Entities/Enemy/enemy.tscn" id="8_0uf6h"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_xvsmf"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -61,6 +62,7 @@ environment = SubResource("Environment_jrsk6")
 [node name="Walls" type="Node" parent="."]
 
 [node name="Floor" type="StaticBody3D" parent="Walls"]
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Floor"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
@@ -71,24 +73,28 @@ mesh = SubResource("BoxMesh_sjtsc")
 
 [node name="Wall" type="StaticBody3D" parent="Walls"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 15)
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall"]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall2" type="StaticBody3D" parent="Walls"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -15)
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall2"]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall3" type="StaticBody3D" parent="Walls"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 5, 0)
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall3"]
 shape = SubResource("BoxShape3D_uqeks")
 
 [node name="Wall4" type="StaticBody3D" parent="Walls"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 5, 0)
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall4"]
 shape = SubResource("BoxShape3D_uqeks")
@@ -100,4 +106,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
 
 [node name="Sword_3D" parent="." instance=ExtResource("6_m836i")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 0, 4.707629)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 4.707629)
+follow_strength = 80.0
+
+[node name="Enemy" parent="." instance=ExtResource("8_0uf6h")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8671827, 1, 0.09756756)

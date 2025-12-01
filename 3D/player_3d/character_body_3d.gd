@@ -1,22 +1,47 @@
-extends CharacterBody3D
+class_name PlayerClass3D extends CharacterBody3D
 @onready var hold_anchor: Node3D = $Hold
 @onready var Entity: EntityBehavior3D = $Entity
-@onready var mesh_instance_3d: Array[MeshInstance3D] = [$Body/MeshInstance3D, $Appendages/Hand_Left/CollisionShape3D/MeshInstance3D, $Appendages/Hand_Right/CollisionShape3D/MeshInstance3D]
+@onready var mesh_instance_3d: Array[MeshInstance3D] = [$Body/MeshInstance3D, $Appendages/Shoulder_Left/Hand_Left/CollisionShape3D/MeshInstance3D, $Appendages/Shoulder_Right/Hand_Right/CollisionShape3D/MeshInstance3D]
+@onready var hand_right: Area3D = $Appendages/Shoulder_Right/Hand_Right
+@onready var hand_left: Area3D = $Appendages/Shoulder_Left/Hand_Left
+@onready var shoulder_left: Node3D = hand_left.get_parent() if hand_left else null
+@onready var shoulder_right: Node3D = hand_right.get_parent() if hand_right else null
+@onready var hand_left_mesh: MeshInstance3D = hand_left.get_node_or_null("CollisionShape3D/MeshInstance3D") if hand_left else null
 
 @export var Properties: PlayerResource
 @export var Input_Handler: PlayerInputHandler3D
 
+var held_weapon: WeaponClass3D = null
 var held_ball: RigidBody3D = null
 var original_ball_parent: Node = null
 var original_collision_layer: int = 0
 var original_collision_mask: int = 0
 var was_mouse_pressed: bool = false
+var was_attack_left: bool = false
+
+# Simple swipe parameters for the hand that holds the weapon
+var swipe_timer: float = 0.0
+const SWIPE_DURATION := 0.25
+var original_shoulder_rotation: Vector3
 
 const THROW_FORCE = 10.0
 const UPWARD_FORCE = 3.0
 
 const JUMP_VELOCITY = 4.5
 const ROTATION_SPEED = 10.0
+
+
+func _ready() -> void:
+	# Initialize spawn position
+	if Entity:
+		Entity.spawn_pos = global_position
+		# Initialize Entity with Properties if available
+		if Properties:
+			Entity.reset(true)
+	
+	# Cache original rotation of the left shoulder (weapon shoulder)
+	if shoulder_left:
+		original_shoulder_rotation = shoulder_left.rotation
 
 
 func _physics_process(delta: float) -> void:
@@ -62,6 +87,12 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	
+	# Update swipe motion for the weapon hand (procedural swing)
+	_update_weapon_swipe(delta)
+	
+	# Update hand mesh position to follow weapon when held
+	_update_hand_mesh_position()
+	
 	# Update held ball position to follow the hold anchor
 	if held_ball:
 		held_ball.global_position = hold_anchor.global_position
@@ -70,10 +101,19 @@ func _physics_process(delta: float) -> void:
 	
 	# Check for collisions with objects in the "Ball" group
 	if held_ball: return
-
+	
 	for i in range(get_slide_collision_count()):
 		var collision: KinematicCollision3D = get_slide_collision(i)
 		var collider: Node3D = collision.get_collider()
+		if collider.is_in_group("Weapon") and collider is WeaponClass3D:
+			collider.held_by = self
+			collider.is_held = true
+			held_weapon = collider
+			# Call equip() to update collision layers/masks so weapon doesn't collide with player
+			if collider.has_method("equip"):
+				collider.equip(self)
+		
+		if !!held_weapon: return
 		if collider.is_in_group("Ball") and collider is RigidBody3D:
 			var ball: RigidBody3D = collider as RigidBody3D
 			held_ball = ball
@@ -94,6 +134,16 @@ func _process(delta: float) -> void:
 	if held_ball and mouse_pressed and not was_mouse_pressed:
 		throw_ball()
 	was_mouse_pressed = mouse_pressed
+
+	# Handle weapon swipe input while holding a weapon (independent of Input_Handler wiring)
+	if held_weapon:
+		var attack_input_now: bool = Input.is_action_pressed("attack_left") or mouse_pressed
+		
+		if attack_input_now and not was_attack_left and swipe_timer <= 0.0:
+			swipe_timer = SWIPE_DURATION
+		elif attack_input_now and not was_attack_left:
+			pass
+		was_attack_left = attack_input_now
 	
 	# Handle targeting
 	if Input_Handler:
@@ -132,14 +182,6 @@ func throw_ball() -> void:
 	# Clear held ball reference
 	held_ball = null
 	original_ball_parent = null
-
-func _ready() -> void:
-	# Initialize spawn position
-	if Entity:
-		Entity.spawn_pos = global_position
-		# Initialize Entity with Properties if available
-		if Properties:
-			Entity.reset(true)
 
 func _handle_target() -> void:
 	if not Input_Handler or not Entity:
@@ -182,3 +224,41 @@ func _handle_rotation(delta: float) -> void:
 		var look_dir: Vector3 = Input_Handler.look_dir
 		var target_angle: float = atan2(look_dir.x, look_dir.z)
 		rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+
+
+func _update_hand_mesh_position() -> void:
+	# When holding a weapon, set hand mesh to top_level and sync to weapon position
+	if held_weapon and hand_left_mesh:
+		if not hand_left_mesh.top_level:
+			hand_left_mesh.top_level = true
+		hand_left_mesh.global_position = held_weapon.global_position
+	elif hand_left_mesh and hand_left_mesh.top_level:
+		# When not holding weapon, restore normal behavior
+		hand_left_mesh.top_level = false
+
+func _update_weapon_swipe(delta: float) -> void:
+	if not shoulder_left:
+		return
+	
+	if swipe_timer > 0.0:
+		swipe_timer -= delta
+		var swipe_angle := deg_to_rad(100)
+		var t: float = clamp(1.0 - (swipe_timer / SWIPE_DURATION), 0.0, 1.0)
+		
+		# Rotate the shoulder 90 degrees during the swipe, then back to original
+		# Use a smooth curve: go to 90 degrees, then return
+		var target_rotation: float
+		if t < 0.5:
+			# First half: rotate to 90 degrees
+			var progress: float = t * 2.0  # 0 to 1 over first half
+			target_rotation = lerp(0.0, swipe_angle, progress)
+		else:
+			# Second half: rotate back to 0
+			var progress: float = (t - 0.5) * 2.0  # 0 to 1 over second half
+			target_rotation = lerp(swipe_angle, 0.0, progress)
+		
+		# Apply rotation to the shoulder (assuming rotation around Y axis, adjust as needed)
+		shoulder_left.rotation.y = original_shoulder_rotation.y - target_rotation
+	else:
+		# When not swiping, restore original shoulder rotation
+		shoulder_left.rotation = original_shoulder_rotation
