@@ -42,6 +42,7 @@ func _process(delta: float) -> void:
 
 func _handle_look_input(delta: float) -> void:
 	if Global.input_type == "Keyboard":
+		print("Keyboard")
 		# For 3D, we can use mouse position to determine look direction
 		# This is a simplified version - can be enhanced with raycasting
 		if camera:
@@ -69,6 +70,7 @@ func _handle_look_input(delta: float) -> void:
 				look_dir = Vector3.ZERO
 	
 	elif Global.input_type == "Controller":
+		print("Controller")
 		var controller_input: Vector2 = Input.get_vector("aim_left","aim_right","aim_up","aim_down")
 		if controller_input.length() > 0.1:
 			look_dir = Vector3(controller_input.x, 0, controller_input.y).normalized()
@@ -77,6 +79,7 @@ func _handle_look_input(delta: float) -> void:
 			mouse_movement_timer -= delta
 			if mouse_movement_timer <= 0:
 				look_dir = Vector3.ZERO
+	printt("Looking Dir: ", look_dir)
 
 
 func _input(event: InputEvent) -> void:

@@ -31,14 +31,15 @@ material = SubResource("StandardMaterial3D_sft31")
 radius = 0.1
 height = 0.2
 
-[node name="Player" type="CharacterBody3D" groups=["Player"]]
+[node name="Player" type="CharacterBody3D" node_paths=PackedStringArray("Input_Handler") groups=["Player"]]
 collision_layer = 2
 collision_mask = 13
 script = ExtResource("1_qu530")
+Input_Handler = NodePath("Input")
 
 [node name="Entity" parent="." instance=ExtResource("2_78ftg")]
 
-[node name="H_Input" parent="." instance=ExtResource("3_8y4cm")]
+[node name="Input" parent="." instance=ExtResource("3_8y4cm")]
 
 [node name="Appendages" type="Node3D" parent="."]
 

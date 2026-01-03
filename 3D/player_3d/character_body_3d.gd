@@ -55,21 +55,22 @@ func _physics_process(delta: float) -> void:
 
 	# Get the input direction and handle the movement/deceleration.
 	# Use Input_Handler if available, otherwise fall back to direct input
-	var direction: Vector3
+	var direction: Vector3 = Vector3.ZERO
 	if Input_Handler:
 		direction = Input_Handler.move_dir
-	else:
-		# Fallback to direct input
-		var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-		direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
+	#else:
+		## Fallback to direct input
+		#var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+		#direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
 	
-	if direction:
+	if !direction.is_zero_approx():
 		var speed: float = Entity.SPEED if Entity else 5.0
 		velocity.x = direction.x * speed
 		velocity.z = direction.z * speed
 		
 		# Rotate player to face movement direction (or look direction if available)
-		if Input_Handler and Input_Handler.look_dir.length() > 0.1:
+		print("Face looking dir")
+		if Input_Handler and !Input_Handler.look_dir.is_zero_approx():
 			# Face look direction
 			var look_dir: Vector3 = Input_Handler.look_dir
 			var target_angle: float = atan2(look_dir.x, look_dir.z)
