@@ -1,22 +1,22 @@
-extends Node3D
+class_name Game3D_Class extends Node3D
+
+signal set_camera_active(TorF: bool)
+
 @onready var ball: RigidBody3D = $Ball_3D
 @onready var Player: CharacterBody3D = $CharacterBody3D
 @onready var HUD: HUD3D = $HUD
 
+func _enter_tree() -> void: Global.Game3D = self
 
 func _ready() -> void:
-	# Connect HUD to player if available
 	if HUD and Player:
 		HUD.game = self
-		# HUD will connect signals in its _process
 	
-	# Ensure player has Entity node (renamed from EntityBehavior)
-	if Player and not Player.has_node("Entity"):
-		print_debug("WARNING: Player3D missing Entity child node!")
+	await get_tree().create_timer(3.0).timeout
+	set_camera_active.emit(true)
 
 
-func _process(_delta: float) -> void: 
-	pass
+func _process(_delta: float) -> void: pass
 
 
 func _unhandled_input(event: InputEvent) -> void:

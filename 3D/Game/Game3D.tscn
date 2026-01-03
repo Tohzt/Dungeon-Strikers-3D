@@ -1,13 +1,13 @@
 [gd_scene load_steps=17 format=3 uid="uid://c54eoe73yt4nh"]
 
-[ext_resource type="Script" uid="uid://c60lpak5bjaku" path="res://3D/camera_3d.gd" id="1_qgpjc"]
-[ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/game_3d.gd" id="1_sjtsc"]
-[ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="1_v8n5r"]
-[ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="2_jrsk6"]
-[ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_k5r54"]
-[ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_uqeks"]
-[ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="6_m836i"]
-[ext_resource type="PackedScene" uid="uid://byuvh0e1ejilk" path="res://3D/Entities/Enemy/enemy.tscn" id="8_0uf6h"]
+[ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/Game/game_3d.gd" id="1_kwiv5"]
+[ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_wodrl"]
+[ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="3_dwu0v"]
+[ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_cpoda"]
+[ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
+[ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
+[ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
+[ext_resource type="PackedScene" uid="uid://byuvh0e1ejilk" path="res://3D/Entities/Enemy/enemy.tscn" id="8_484l6"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_xvsmf"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -27,8 +27,8 @@ size = Vector3(100, 0.5, 30)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uqeks"]
 albedo_color = Color(0.22576779, 0.5083114, 0.22435093, 1)
-albedo_texture = ExtResource("4_uqeks")
-normal_texture = ExtResource("4_uqeks")
+albedo_texture = ExtResource("4_cpoda")
+normal_texture = ExtResource("4_cpoda")
 uv1_scale = Vector3(-3, 2, 0)
 
 [sub_resource type="BoxMesh" id="BoxMesh_sjtsc"]
@@ -42,15 +42,12 @@ size = Vector3(100, 10, 1)
 size = Vector3(1, 10, 30)
 
 [node name="Game3d" type="Node3D"]
-script = ExtResource("1_sjtsc")
+script = ExtResource("1_kwiv5")
 
-[node name="HUD" parent="." instance=ExtResource("2_k5r54")]
+[node name="HUD" parent="." instance=ExtResource("2_wodrl")]
 
-[node name="Camera3D" type="Camera3D" parent="." node_paths=PackedStringArray("target")]
-transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 8, 30, 30)
-current = true
-script = ExtResource("1_qgpjc")
-target = NodePath("../CharacterBody3D")
+[node name="Camera3D" parent="." instance=ExtResource("3_dwu0v")]
+transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.86602545, 0, -0.86602545, 0.49999997, 0, 30, 17.36)
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 23.241423, 0)
@@ -99,15 +96,15 @@ collision_mask = 0
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall4"]
 shape = SubResource("BoxShape3D_uqeks")
 
-[node name="CharacterBody3D" parent="." instance=ExtResource("1_v8n5r")]
+[node name="CharacterBody3D" parent="." instance=ExtResource("5_sboqw")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1, 0)
 
-[node name="Ball_3D" parent="." instance=ExtResource("2_jrsk6")]
+[node name="Ball_3D" parent="." instance=ExtResource("6_uepvo")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
 
-[node name="Sword_3D" parent="." instance=ExtResource("6_m836i")]
+[node name="Sword_3D" parent="." instance=ExtResource("7_al1ea")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 4.707629)
 follow_strength = 80.0
 
-[node name="Enemy" parent="." instance=ExtResource("8_0uf6h")]
+[node name="Enemy" parent="." instance=ExtResource("8_484l6")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8671827, 1, 0.09756756)

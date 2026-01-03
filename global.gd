@@ -1,6 +1,7 @@
 extends Node
 
 const GAME: String = "res://Game/game.tscn"
+var Game3D: Game3D_Class
 const MAIN: String = "res://Main Menu/Main Menu.tscn"
 const ROOM: String = "res://Game/Room/room.tscn"
 
