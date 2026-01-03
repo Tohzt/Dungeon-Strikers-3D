@@ -18,6 +18,7 @@ var original_collision_layer: int = 0
 var original_collision_mask: int = 0
 var was_mouse_pressed: bool = false
 var was_attack_left: bool = false
+var was_action_left_ball: bool = false  # Track action_left state for ball throwing
 
 # Simple swipe parameters for the hand that holds the weapon
 var swipe_timer: float = 0.0
@@ -130,10 +131,15 @@ func _physics_process(delta: float) -> void:
 			ball.reparent(hold_anchor)
 
 func _process(delta: float) -> void:
-	# Handle throwing the ball on mouse click
+	# Handle throwing the ball on action_left press
+	if held_ball and Input_Handler:
+		var action_left_now: bool = Input_Handler.action_left
+		if action_left_now and not was_action_left_ball:
+			throw_ball()
+		was_action_left_ball = action_left_now
+	
+	# Keep was_mouse_pressed for weapon swipe compatibility
 	var mouse_pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-	if held_ball and mouse_pressed and not was_mouse_pressed:
-		throw_ball()
 	was_mouse_pressed = mouse_pressed
 
 	# Handle weapon swipe input while holding a weapon (independent of Input_Handler wiring)

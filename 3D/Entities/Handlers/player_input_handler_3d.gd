@@ -37,24 +37,41 @@ func _process(delta: float) -> void:
 	# Get 2D input and convert to 3D (X/Z plane)
 	var input_2d: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
+	
+	# Update action_left to track current held state (for ball throwing and other actions)
+	action_left = Input.is_action_pressed("attack_left")
+	
 	_handle_look_input(delta)
 
 
 func _handle_look_input(delta: float) -> void:
 	if Global.input_type == "Keyboard":
-		print("Keyboard")
-		# For 3D, we can use mouse position to determine look direction
-		# This is a simplified version - can be enhanced with raycasting
-		if camera:
-			var mouse_pos: Vector2 = get_viewport().get_mouse_position()
-			var from: Vector3 = camera.project_ray_origin(mouse_pos)
-			var to: Vector3 = from + camera.project_ray_normal(mouse_pos) * 1000.0
+		if camera and action_right:
+			# Get mouse position relative to viewport (game window)
+			var viewport: Viewport = get_viewport()
+			var mouse_pos: Vector2 = viewport.get_mouse_position()
 			
-			# Calculate direction from player to mouse ray intersection point
-			# For now, project onto X/Z plane
-			var _player_pos: Vector3 = Master.global_position
-			var ray_dir: Vector3 = (to - from).normalized()
-			var horizontal_dir: Vector3 = Vector3(ray_dir.x, 0, ray_dir.z).normalized()
+			# Clamp mouse position to viewport bounds to ensure it's within the game window
+			var viewport_size: Vector2 = viewport.get_visible_rect().size
+			mouse_pos.x = clamp(mouse_pos.x, 0, viewport_size.x)
+			mouse_pos.y = clamp(mouse_pos.y, 0, viewport_size.y)
+			
+			# Project mouse ray from camera
+			var mouse_ray_origin: Vector3 = camera.project_ray_origin(mouse_pos)
+			var mouse_ray_dir: Vector3 = camera.project_ray_normal(mouse_pos)
+			
+			# Project mouse position onto the ground plane (at player's Y level)
+			var plane_y: float = Master.global_position.y
+			var cursor_world_pos: Vector3 = Master.global_position  # Default to player position
+			
+			# Calculate intersection of mouse ray with ground plane
+			if mouse_ray_dir.y < -0.001:  # Ray is pointing down
+				var t: float = (plane_y - mouse_ray_origin.y) / mouse_ray_dir.y
+				cursor_world_pos = mouse_ray_origin + mouse_ray_dir * t
+			
+			# Calculate direction from player to mouse cursor's world position
+			var direction: Vector3 = (cursor_world_pos - Master.global_position)
+			var horizontal_dir: Vector3 = Vector3(direction.x, 0, direction.z).normalized()
 			
 			if horizontal_dir.length() > 0.1:
 				look_dir = horizontal_dir
@@ -70,7 +87,6 @@ func _handle_look_input(delta: float) -> void:
 				look_dir = Vector3.ZERO
 	
 	elif Global.input_type == "Controller":
-		print("Controller")
 		var controller_input: Vector2 = Input.get_vector("aim_left","aim_right","aim_up","aim_down")
 		if controller_input.length() > 0.1:
 			look_dir = Vector3(controller_input.x, 0, controller_input.y).normalized()
@@ -79,7 +95,6 @@ func _handle_look_input(delta: float) -> void:
 			mouse_movement_timer -= delta
 			if mouse_movement_timer <= 0:
 				look_dir = Vector3.ZERO
-	printt("Looking Dir: ", look_dir)
 
 
 func _input(event: InputEvent) -> void:

@@ -57,7 +57,13 @@ func _process(delta: float) -> void:
 	var fixed_y: float = initial_transform.origin.y
 	
 	# Get mouse position in world space (projected onto ground plane)
-	var mouse_pos_2d: Vector2 = get_viewport().get_mouse_position()
+	# Clamp mouse position to viewport bounds to ensure it's within the game window
+	var viewport: Viewport = get_viewport()
+	var mouse_pos_2d: Vector2 = viewport.get_mouse_position()
+	var viewport_size: Vector2 = viewport.get_visible_rect().size
+	mouse_pos_2d.x = clamp(mouse_pos_2d.x, 0, viewport_size.x)
+	mouse_pos_2d.y = clamp(mouse_pos_2d.y, 0, viewport_size.y)
+	
 	var mouse_ray_origin: Vector3 = project_ray_origin(mouse_pos_2d)
 	var mouse_ray_dir: Vector3 = project_ray_normal(mouse_pos_2d)
 	
