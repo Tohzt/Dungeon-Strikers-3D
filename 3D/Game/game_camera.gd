@@ -6,6 +6,7 @@ var can_zoom: bool = true
 @export var fov_sensitivity: float = 5.0
 @export var min_fov: float = 10.0
 @export var max_fov: float = 120.0
+@export var initial_fov: float = 30.0
 
 @export var max_camera_offset: float = 10.0  # Maximum distance camera can move from player
 @export var follow_speed: float = 8.0  # Camera follow responsiveness
@@ -14,17 +15,15 @@ var can_zoom: bool = true
 @export var controller_pull_distance: float = 30.0  # Max distance to offset from player when using controller
 
 var initial_transform: Transform3D
-var initial_fov: float = 0.0
 var test_offset: float = 0.0
 
 func _ready() -> void:
 	initial_transform = global_transform
-	initial_fov = fov
+	#initial_fov = fov
 	
 	if !target:
 		# Target Player
 		var player: Node = get_tree().get_first_node_in_group("Player")
-		print("Camera target Player: ", player)
 		if player: target = player as Node3D
 	
 	var Game: Game3D_Class = Global.Game3D
@@ -50,6 +49,12 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if !is_active:
+		if fov > initial_fov:
+			fov = lerp(fov, initial_fov, delta)
+	else:
+		if fov != initial_fov:
+			fov = initial_fov
 	if !target or !is_active: return
 	
 	# Keep rotation fixed - never change it

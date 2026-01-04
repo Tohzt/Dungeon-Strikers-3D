@@ -1,15 +1,20 @@
 class_name PlayerInputHandler3D extends Node
 @onready var Master: CharacterBody3D = get_parent()
 
+enum STATUS { NONE, PRESSED, HELD, RELEASED }
+
+var move_jump: bool = false
 var move_dir: Vector3
 var look_dir: Vector3 = Vector3.ZERO
 var action_left: bool = false
 var action_right: bool = false
-var dodge: bool = false
 var interact: bool = false
 var interact_held: bool = false
 var target_toggle: bool = false
 var target_scroll: bool = false
+var move_dodge: bool = false
+var dodge_dur: float = 0.0
+var dodge_status: STATUS = STATUS.NONE
 
 # Mouse movement tracking for 3D
 var last_mouse_pos: Vector2
@@ -40,11 +45,25 @@ func _process(delta: float) -> void:
 	
 	# Update action_left to track current held state (for ball throwing and other actions)
 	action_left = Input.is_action_pressed("attack_left")
-	
-	_handle_look_input(delta)
+	move_jump = Input.is_action_just_pressed("move_jump")
+	_handle_input_dodge(delta)
+	_handle_input_look(delta)
 
+func _handle_input_dodge(delta: float) -> void:
+	move_dodge = Input.is_action_pressed("move_dodge")
+	if move_dodge:
+		if dodge_status == STATUS.NONE:
+			dodge_status = STATUS.PRESSED
+		else:
+			dodge_status = STATUS.HELD
+		dodge_dur+=delta
+	else:
+		if dodge_status == STATUS.HELD:
+			pass
+		dodge_status = STATUS.RELEASED
+		dodge_dur = 0.0
 
-func _handle_look_input(delta: float) -> void:
+func _handle_input_look(delta: float) -> void:
 	if Global.input_type == "Keyboard":
 		if camera and action_right:
 			# Get mouse position relative to viewport (game window)
@@ -108,8 +127,8 @@ func _input(event: InputEvent) -> void:
 	if event.is_action("attack_right"):
 		action_right = event.is_action_pressed("attack_right")
 	
-	if event.is_action("dodge"):
-		dodge = event.is_action_pressed("dodge")
+	if event.is_action("move_dodge"):
+		move_dodge = event.is_action_pressed("move_dodge")
 	
 	if event.is_action("interact"):
 		interact = event.is_action_pressed("interact")

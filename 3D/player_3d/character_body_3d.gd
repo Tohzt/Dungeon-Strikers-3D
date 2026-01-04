@@ -46,15 +46,22 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# Add the gravity.
 	if not is_on_floor():
 		velocity += get_gravity() * delta
-
-	# Handle jump.
-	if Input.is_action_just_pressed("ui_accept") and is_on_floor():
-		velocity.y = JUMP_VELOCITY
-
-	# Get the input direction and handle the movement/deceleration.
+	
+	# Apply jump velocity multiplier only when jump is initiated, not every frame
+	if Input_Handler.move_jump and is_on_floor():
+		var jump_multiplier: float = 1.0
+		if Input_Handler.move_dodge:
+			jump_multiplier = 1.5  # Sprint jump multiplier
+		velocity.y = JUMP_VELOCITY * jump_multiplier
+	
+	if Input_Handler.move_dodge:
+		Properties.speed_mod.x = 2.0
+		Properties.speed_mod.z = 2.0
+	else:
+		Properties.speed_mod = Vector3.ONE
+	
 	var direction: Vector3 = Vector3.ZERO
 	if Input_Handler:
 		direction = Input_Handler.move_dir
@@ -81,7 +88,10 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
 	
-	if Properties: velocity *= Properties.speed_mod
+	# Apply speed_mod only to horizontal velocity, not vertical
+	if Properties:
+		velocity.x *= Properties.speed_mod.x
+		velocity.z *= Properties.speed_mod.z
 	move_and_slide()
 	
 	_update_weapon_swipe(delta)
@@ -134,7 +144,6 @@ func _process(delta: float) -> void:
 	# Handle weapon swipe input while holding a weapon (independent of Input_Handler wiring)
 	if held_weapon:
 		var attack_input_now: bool = Input.is_action_pressed("attack_left") or mouse_pressed
-		
 		if attack_input_now and not was_attack_left and swipe_timer <= 0.0:
 			swipe_timer = SWIPE_DURATION
 		elif attack_input_now and not was_attack_left:
