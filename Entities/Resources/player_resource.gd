@@ -6,3 +6,4 @@ class_name PlayerResource extends Resource
 @export var player_strength: int
 @export var player_intelligence: int
 @export var player_endurance: int
+@export var speed_mod: float = 1.0

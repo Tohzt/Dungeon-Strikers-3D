@@ -1,14 +1,9 @@
-[gd_scene load_steps=14 format=3 uid="uid://c6pn0hh7losfc"]
+[gd_scene load_steps=13 format=3 uid="uid://c6pn0hh7losfc"]
 
 [ext_resource type="Script" uid="uid://s0nth7q6mjuh" path="res://3D/player_3d/character_body_3d.gd" id="1_qu530"]
 [ext_resource type="PackedScene" uid="uid://2fm376vpf8mu" path="res://3D/Entities/entity.tscn" id="2_78ftg"]
-[ext_resource type="Script" uid="uid://dgmwletqffblm" path="res://Entities/Resources/player_resource.gd" id="2_q82k8"]
+[ext_resource type="Resource" uid="uid://dt83qw50xvngg" path="res://Entities/Resources/player_resource.tres" id="2_q82k8"]
 [ext_resource type="PackedScene" uid="uid://c86ptcgtunn2l" path="res://3D/Entities/Handlers/h_input.tscn" id="3_8y4cm"]
-
-[sub_resource type="Resource" id="Resource_x74e5"]
-script = ExtResource("2_q82k8")
-player_color = Color(0, 0.080804534, 0.9999855, 1)
-metadata/_custom_type_script = "uid://dgmwletqffblm"
 
 [sub_resource type="SphereMesh" id="SphereMesh_q82k8"]
 radius = 0.25
@@ -41,7 +36,7 @@ height = 0.2
 collision_layer = 2
 collision_mask = 13
 script = ExtResource("1_qu530")
-Properties = SubResource("Resource_x74e5")
+Properties = ExtResource("2_q82k8")
 Input_Handler = NodePath("Input")
 
 [node name="Entity" parent="." instance=ExtResource("2_78ftg")]

@@ -142,12 +142,8 @@ func apply_knockback(direction: Vector3, force: float) -> void:
 			
 			var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
 			if not material:
-				# Get or duplicate base material
-				var base_material: Material = mesh_instance.get_surface_material(0)
-				if base_material:
-					material = base_material.duplicate() as StandardMaterial3D
-				else:
-					material = StandardMaterial3D.new()
+				# Create new material if no override exists
+				material = StandardMaterial3D.new()
 				mesh_instance.set_surface_override_material(0, material)
 			
 			if material is StandardMaterial3D:
@@ -167,12 +163,8 @@ func set_color(color: Color = Color.WHITE) -> void:
 			# Get or create material
 			var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
 			if not material:
-				# If no override material, duplicate the existing one or create new
-				var base_material: Material = mesh_instance.get_surface_material(0)
-				if base_material:
-					material = base_material.duplicate() as StandardMaterial3D
-				else:
-					material = StandardMaterial3D.new()
+				# Create new material if no override exists
+				material = StandardMaterial3D.new()
 				mesh_instance.set_surface_override_material(0, material)
 			
 			# Apply color to material

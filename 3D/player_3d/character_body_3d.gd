@@ -55,14 +55,9 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_VELOCITY
 
 	# Get the input direction and handle the movement/deceleration.
-	# Use Input_Handler if available, otherwise fall back to direct input
 	var direction: Vector3 = Vector3.ZERO
 	if Input_Handler:
 		direction = Input_Handler.move_dir
-	#else:
-		## Fallback to direct input
-		#var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-		#direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
 	
 	if !direction.is_zero_approx():
 		var speed: float = Entity.SPEED if Entity else 5.0
@@ -70,7 +65,6 @@ func _physics_process(delta: float) -> void:
 		velocity.z = direction.z * speed
 		
 		# Rotate player to face movement direction (or look direction if available)
-		print("Face looking dir")
 		if Input_Handler and !Input_Handler.look_dir.is_zero_approx():
 			# Face look direction
 			var look_dir: Vector3 = Input_Handler.look_dir
@@ -86,23 +80,18 @@ func _physics_process(delta: float) -> void:
 		var speed: float = Entity.SPEED if Entity else 5.0
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
-
+	
+	if Properties: velocity *= Properties.speed_mod
 	move_and_slide()
 	
-	# Update swipe motion for the weapon hand (procedural swing)
 	_update_weapon_swipe(delta)
-	
-	# Update hand mesh position to follow weapon when held
 	_update_hand_mesh_position()
 	
-	# Update held ball position to follow the hold anchor
 	if held_ball:
 		held_ball.global_position = hold_anchor.global_position
 		held_ball.linear_velocity = Vector3.ZERO
 		held_ball.angular_velocity = Vector3.ZERO
-	
-	# Check for collisions with objects in the "Ball" group
-	if held_ball: return
+		return
 	
 	for i in range(get_slide_collision_count()):
 		var collision: KinematicCollision3D = get_slide_collision(i)
@@ -114,8 +103,8 @@ func _physics_process(delta: float) -> void:
 			# Call equip() to update collision layers/masks so weapon doesn't collide with player
 			if collider.has_method("equip"):
 				collider.equip(self)
-		
 		if !!held_weapon: return
+		
 		if collider.is_in_group("Ball") and collider is RigidBody3D:
 			var ball: RigidBody3D = collider as RigidBody3D
 			held_ball = ball
@@ -161,29 +150,19 @@ func throw_ball() -> void:
 	if not held_ball: return
 	
 	var ball: RigidBody3D = held_ball
-	
-	# Reparent back to original parent (or scene root)
 	ball.reparent(get_parent())
-	
-	# Restore original collision properties
 	ball.collision_layer = original_collision_layer
 	ball.collision_mask = original_collision_mask
-	
-	# Unfreeze the ball
 	ball.freeze = false
 	
 	# Calculate forward direction based on player's rotation
-	# In 3D, forward is typically -Z when rotation.y is 0
 	var forward_direction: Vector3 = Vector3(
 		sin(rotation.y),
 		0,
 		cos(rotation.y)
 	).normalized()
 	
-	# Add upward component
 	var throw_direction: Vector3 = (forward_direction + Vector3.UP * (UPWARD_FORCE / THROW_FORCE)).normalized()
-	
-	# Apply impulse
 	ball.apply_impulse(throw_direction * THROW_FORCE)
 	
 	# Clear held ball reference
@@ -191,46 +170,43 @@ func throw_ball() -> void:
 	original_ball_parent = null
 
 func _handle_target() -> void:
-	if not Input_Handler or not Entity:
-		return
-	
-	# Handle target scrolling (cycle through targets)
-	if Entity.target and Input_Handler.target_scroll:
-		Input_Handler.target_scroll = false
-		# Get nearest entity, excluding the current target if it's still valid
-		var exclude_target: Node3D = Entity.target if is_instance_valid(Entity.target) else null
-		var nearest := Global.get_nearest_3d(global_position, "Entity", INF, exclude_target)
-		if nearest.get("found", false):
-			Entity.target = nearest["inst"]
-	
-	# Handle target toggle (target nearest or clear current)
-	if Input_Handler.target_toggle:
-		Input_Handler.target_toggle = false
-		if Entity.target and is_instance_valid(Entity.target):
-			# Clear current target
-			Entity.target = null
-		else:
-			# Find nearest entity
-			var nearest := Global.get_nearest_3d(global_position, "Entity", INF)
-			if nearest.get("found", false):
-				Entity.target = nearest["inst"]
+	if not Input_Handler or not Entity: return
+	## Handle target scrolling (cycle through targets)
+	#if Entity.target and Input_Handler.target_scroll:
+		#Input_Handler.target_scroll = false
+		## Get nearest entity, excluding the current target if it's still valid
+		#var exclude_target: Node3D = Entity.target if is_instance_valid(Entity.target) else null
+		#var nearest := Global.get_nearest_3d(global_position, "Entity", INF, exclude_target)
+		#if nearest.get("found", false):
+			#Entity.target = nearest["inst"]
+	#
+	## Handle target toggle (target nearest or clear current)
+	#if Input_Handler.target_toggle:
+		#Input_Handler.target_toggle = false
+		#if Entity.target and is_instance_valid(Entity.target):
+			## Clear current target
+			#Entity.target = null
+		#else:
+			## Find nearest entity
+			#var nearest := Global.get_nearest_3d(global_position, "Entity", INF)
+			#if nearest.get("found", false):
+				#Entity.target = nearest["inst"]
 
-func _handle_rotation(delta: float) -> void:
-	if not Entity:
-		return
-	
-	# Rotate to face target if locked
-	if Entity.target and is_instance_valid(Entity.target):
-		var direction: Vector3 = (Entity.target.global_position - global_position)
-		var horizontal_dir: Vector3 = Vector3(direction.x, 0, direction.z).normalized()
-		if horizontal_dir.length() > 0.1:
-			var target_angle: float = atan2(horizontal_dir.x, horizontal_dir.z)
-			rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
-	elif Input_Handler and Input_Handler.look_dir.length() > 0.1:
-		# Face look direction
-		var look_dir: Vector3 = Input_Handler.look_dir
-		var target_angle: float = atan2(look_dir.x, look_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+
+func _handle_rotation(_delta: float) -> void:
+	if not Entity: return
+	## Rotate to face target if locked
+	#if Entity.target and is_instance_valid(Entity.target):
+		#var direction: Vector3 = (Entity.target.global_position - global_position)
+		#var horizontal_dir: Vector3 = Vector3(direction.x, 0, direction.z).normalized()
+		#if horizontal_dir.length() > 0.1:
+			#var target_angle: float = atan2(horizontal_dir.x, horizontal_dir.z)
+			#rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+	#elif Input_Handler and Input_Handler.look_dir.length() > 0.1:
+		## Face look direction
+		#var look_dir: Vector3 = Input_Handler.look_dir
+		#var target_angle: float = atan2(look_dir.x, look_dir.z)
+		#rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
 
 
 func _update_hand_mesh_position() -> void:
@@ -244,8 +220,7 @@ func _update_hand_mesh_position() -> void:
 		hand_left_mesh.top_level = false
 
 func _update_weapon_swipe(delta: float) -> void:
-	if not shoulder_left:
-		return
+	if not shoulder_left: return
 	
 	if swipe_timer > 0.0:
 		swipe_timer -= delta

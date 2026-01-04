@@ -50,7 +50,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if !target: return
+	if !target or !is_active: return
 	
 	# Keep rotation fixed - never change it
 	global_transform.basis = initial_transform.basis
