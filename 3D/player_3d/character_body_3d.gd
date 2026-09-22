@@ -1,5 +1,4 @@
 class_name PlayerClass3D extends CharacterBody3D
-@onready var hold_anchor: Node3D = $Hold
 @onready var Entity: EntityBehavior3D = $Entity
 @onready var mesh_instance_3d: Array[MeshInstance3D] = [$Body/MeshInstance3D, $Appendages/Shoulder_Left/Hand_Left/CollisionShape3D/MeshInstance3D, $Appendages/Shoulder_Right/Hand_Right/CollisionShape3D/MeshInstance3D]
 @onready var hand_right: Area3D = $Appendages/Shoulder_Right/Hand_Right
@@ -15,16 +14,15 @@ class_name PlayerClass3D extends CharacterBody3D
 var held_weapon_left: Weapon3D = null
 var held_weapon_right: Weapon3D = null
 var held_ball: RigidBody3D = null
-var original_ball_parent: Node = null
+var held_ball_hand_is_left: bool = false
 var original_collision_layer: int = 0
 var original_collision_mask: int = 0
 var was_attack_left: bool = false
 var was_attack_right: bool = false
-var was_action_left_ball: bool = false  # Track action_left state for ball throwing
 
 # Tap-to-swing, hold-to-throw: track when each attack button was pressed so
 # we can measure hold duration on release.
-const HOLD_THRESHOLD := 0.2
+const HOLD_THRESHOLD := 0.35
 var attack_left_press_time: float = 0.0
 var attack_right_press_time: float = 0.0
 
@@ -117,10 +115,9 @@ func _physics_process(delta: float) -> void:
 	_update_hand_mesh_position()
 
 	if held_ball:
-		held_ball.global_position = hold_anchor.global_position
+		_update_held_ball_position()
 		held_ball.linear_velocity = Vector3.ZERO
 		held_ball.angular_velocity = Vector3.ZERO
-		return
 
 	for i in range(get_slide_collision_count()):
 		var collision: KinematicCollision3D = get_slide_collision(i)
@@ -130,54 +127,128 @@ func _physics_process(delta: float) -> void:
 
 		if collider.is_in_group("Weapon") and collider is Weapon3D and collider.can_pickup:
 			_pickup_weapon(collider)
-		elif collider.is_in_group("Ball") and collider is RigidBody3D and not held_weapon_left and not held_weapon_right:
+		elif collider.is_in_group("Ball") and collider is RigidBody3D and not held_ball and (not _is_hand_occupied(false) or not _is_hand_occupied(true)):
 			_pickup_ball(collider)
 
 
+## A hand is occupied if it holds a weapon or is the hand currently gripping the ball.
+func _is_hand_occupied(is_left: bool) -> bool:
+	if is_left:
+		return held_weapon_left != null or (held_ball != null and held_ball_hand_is_left)
+	else:
+		return held_weapon_right != null or (held_ball != null and not held_ball_hand_is_left)
+
+
 func _pickup_weapon(weapon: Weapon3D) -> void:
-	if not held_weapon_left:
-		held_weapon_left = weapon
-		weapon.equip(self, hand_left)
-	elif not held_weapon_right:
+	if not _is_hand_occupied(false):
 		held_weapon_right = weapon
 		weapon.equip(self, hand_right)
+	elif not _is_hand_occupied(true):
+		held_weapon_left = weapon
+		weapon.equip(self, hand_left)
 	# else both hands are full - leave it on the ground
 
 
 func _pickup_ball(ball: RigidBody3D) -> void:
 	held_ball = ball
-	# Store original properties
-	original_ball_parent = ball.get_parent()
+	# Prefer the right hand, same as weapons; fall back to the left if it's taken.
+	held_ball_hand_is_left = _is_hand_occupied(false)
 	original_collision_layer = ball.collision_layer
 	original_collision_mask = ball.collision_mask
 	# Freeze the ball's physics and disable collision
 	ball.freeze = true
 	ball.collision_layer = 0
 	ball.collision_mask = 0
-	ball.global_position = hold_anchor.global_position
-	ball.reparent(hold_anchor)
+	_update_held_ball_position()
+
+
+## Keeps the ball's surface resting against the hand instead of the hand
+## sitting inside the ball's center: offset the ball outward from the hand,
+## away from the player's body, by its own radius.
+func _update_held_ball_position() -> void:
+	if not held_ball: return
+	var ball_hand: Area3D = hand_left if held_ball_hand_is_left else hand_right
+	var radius: float = _get_ball_radius(held_ball)
+	var outward_dir: Vector3 = ball_hand.global_position - global_position
+	outward_dir.y = 0
+	if outward_dir.length() < 0.01:
+		outward_dir = -global_transform.basis.z
+	outward_dir = outward_dir.normalized()
+	held_ball.global_position = ball_hand.global_position + outward_dir * radius
+
+
+func _get_ball_radius(ball: RigidBody3D) -> float:
+	var collision: CollisionShape3D = ball.get_node_or_null("CollisionShape3D")
+	if collision and collision.shape is SphereShape3D:
+		return (collision.shape as SphereShape3D).radius
+	return 0.5
 
 
 func _process(delta: float) -> void:
-	# Handle throwing the ball on action_left press
-	if held_ball and Input_Handler:
-		var action_left_now: bool = Input_Handler.action_left
-		if action_left_now and not was_action_left_ball:
-			throw_ball()
-		was_action_left_ball = action_left_now
+	# Heavy input takes priority: if the hand holds a shield, it raises to
+	# block instead of following its usual tap-bump/hold-throw behavior.
+	_handle_hand_block(Input_Handler.action_heavy_left, true)
+	_handle_hand_block(Input_Handler.action_heavy_right, false)
 
-	# Handle each hand's weapon independently: a quick tap swings the weapon,
-	# holding the button past HOLD_THRESHOLD and releasing throws it.
-	_handle_hand_attack(held_weapon_left, Input_Handler.action_left, was_attack_left, true)
+	# Handle each hand independently: whichever hand holds the ball throws it
+	# on release (charged by hold duration); whichever holds a weapon swings
+	# it on a quick tap or throws it on a hold-then-release past the threshold.
+	_handle_hand_input(Input_Handler.action_left, was_attack_left, true)
 	was_attack_left = Input_Handler.action_left
 
-	_handle_hand_attack(held_weapon_right, Input_Handler.action_right, was_attack_right, false)
+	_handle_hand_input(Input_Handler.action_right, was_attack_right, false)
 	was_attack_right = Input_Handler.action_right
 
 	# Handle targeting
 	if Input_Handler:
 		_handle_target()
 		_handle_rotation(delta)
+
+
+func _handle_hand_block(is_heavy_pressed: bool, is_left: bool) -> void:
+	var weapon: Weapon3D = held_weapon_left if is_left else held_weapon_right
+	if weapon is ShieldClass3D:
+		if is_heavy_pressed:
+			weapon.start_block()
+		else:
+			weapon.stop_block()
+
+
+func _handle_hand_input(is_pressed: bool, was_pressed: bool, is_left: bool) -> void:
+	var weapon: Weapon3D = held_weapon_left if is_left else held_weapon_right
+	if weapon is ShieldClass3D and weapon.is_blocking:
+		return  # Raised to block - ignore tap/hold-throw for this hand.
+
+	if held_ball and held_ball_hand_is_left == is_left:
+		_handle_ball_hand(is_pressed, was_pressed, is_left)
+	else:
+		_handle_hand_attack(weapon, is_pressed, was_pressed, is_left)
+
+
+func _handle_ball_hand(is_pressed: bool, was_pressed: bool, is_left: bool) -> void:
+	var now: float = Time.get_ticks_msec() / 1000.0
+
+	if is_pressed and not was_pressed:
+		# Press started - just record when; swing-vs-throw is decided on release
+		if is_left:
+			attack_left_press_time = now
+		else:
+			attack_right_press_time = now
+		return
+
+	if not is_pressed and was_pressed:
+		# Released - a quick tap swings the ball (bonk), a hold past the
+		# threshold throws it, charged by hold duration just like a weapon.
+		var press_time: float = attack_left_press_time if is_left else attack_right_press_time
+		var hold_duration: float = now - press_time
+		if hold_duration >= HOLD_THRESHOLD:
+			var charge_ratio: float = clamp((hold_duration - HOLD_THRESHOLD) / THROW_CHARGE_MAX_DURATION, 0.0, 1.0)
+			var force_multiplier: float = lerp(THROW_FORCE_MIN_RATIO, THROW_FORCE_MAX_RATIO, charge_ratio)
+			throw_ball(force_multiplier)
+		elif is_left and swipe_timer_left <= 0.0:
+			swipe_timer_left = SWIPE_DURATION
+		elif not is_left and swipe_timer_right <= 0.0:
+			swipe_timer_right = SWIPE_DURATION
 
 
 func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, is_left: bool) -> void:
@@ -225,11 +296,10 @@ func _get_aim_direction() -> Vector3:
 	return Vector3(sin(rotation.y), 0, cos(rotation.y))
 
 
-func throw_ball() -> void:
+func throw_ball(force_multiplier: float = 1.0) -> void:
 	if not held_ball: return
 
 	var ball: RigidBody3D = held_ball
-	ball.reparent(get_parent())
 	ball.collision_layer = original_collision_layer
 	ball.collision_mask = original_collision_mask
 	ball.freeze = false
@@ -242,11 +312,10 @@ func throw_ball() -> void:
 	).normalized()
 
 	var throw_direction: Vector3 = (forward_direction + Vector3.UP * (UPWARD_FORCE / THROW_FORCE)).normalized()
-	ball.apply_impulse(throw_direction * THROW_FORCE)
+	ball.apply_impulse(throw_direction * THROW_FORCE * force_multiplier)
 
 	# Clear held ball reference
 	held_ball = null
-	original_ball_parent = null
 
 func _handle_target() -> void:
 	if not Input_Handler or not Entity: return
@@ -289,19 +358,23 @@ func _handle_rotation(_delta: float) -> void:
 
 
 func _update_hand_mesh_position() -> void:
+	# Only weapons need this: they drift from the hand due to spring-follow
+	# lag, so the hand mesh is pinned to follow. The ball is pinned to a
+	# fixed offset from the hand directly, so the hand mesh can stay at its
+	# natural rest position instead of jumping to the ball's center.
 	_sync_hand_mesh(held_weapon_left, hand_left_mesh)
 	_sync_hand_mesh(held_weapon_right, hand_right_mesh)
 
 
-func _sync_hand_mesh(weapon: Weapon3D, mesh: MeshInstance3D) -> void:
+func _sync_hand_mesh(item: Node3D, mesh: MeshInstance3D) -> void:
 	if not mesh: return
-	# When holding a weapon, set hand mesh to top_level and sync to weapon position
-	if weapon:
+	# When holding something (weapon or ball), set hand mesh to top_level and sync to its position
+	if item:
 		if not mesh.top_level:
 			mesh.top_level = true
-		mesh.global_position = weapon.global_position
+		mesh.global_position = item.global_position
 	elif mesh.top_level:
-		# When not holding weapon, restore normal behavior
+		# When empty-handed, restore normal behavior
 		mesh.top_level = false
 
 

@@ -5,12 +5,14 @@
 [ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="3_dwu0v"]
 [ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_cpoda"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
+[ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
 [ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
 [ext_resource type="PackedScene" uid="uid://byuvh0e1ejilk" path="res://3D/Entities/Enemy/enemy.tscn" id="8_484l6"]
 [ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="8_cpoda"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="9_sboqw"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="10_uepvo"]
+[ext_resource type="PackedScene" uid="uid://cqdd6x0yvjqmx" path="res://3D/Weapons/Shield/Shield_3D.tscn" id="12_uepvo"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_xvsmf"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -26,7 +28,7 @@ tonemap_mode = 2
 glow_enabled = true
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_qgpjc"]
-size = Vector3(100, 0.5, 30)
+size = Vector3(106.52246, 0.5, 34.88965)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uqeks"]
 albedo_color = Color(0.22576779, 0.5083114, 0.22435093, 1)
@@ -38,11 +40,17 @@ uv1_scale = Vector3(-3, 2, 0)
 material = SubResource("StandardMaterial3D_uqeks")
 size = Vector3(100, 0.5, 30)
 
+[sub_resource type="PlaneMesh" id="PlaneMesh_p6jv2"]
+size = Vector2(107, 35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8hcp5"]
+albedo_color = Color(0.30323282, 0.30323282, 0.30323282, 1)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_jrsk6"]
-size = Vector3(100, 10, 1)
+size = Vector3(106.99121, 10, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_uqeks"]
-size = Vector3(1, 10, 30)
+size = Vector3(1, 10, 34.92383)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_w1tv4"]
 albedo_color = Color(0.57070744, 0.37050173, 0.23154527, 1)
@@ -104,33 +112,45 @@ shape = SubResource("BoxShape3D_qgpjc")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/Floor/CollisionShape3D" unique_id=1471026686]
 mesh = SubResource("BoxMesh_sjtsc")
 
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="Walls/Floor/CollisionShape3D" unique_id=208775146]
+mesh = SubResource("PlaneMesh_p6jv2")
+surface_material_override/0 = SubResource("StandardMaterial3D_8hcp5")
+
 [node name="Wall" type="StaticBody3D" parent="Walls" unique_id=31739291]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 17.811562)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall" unique_id=66902059]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall2" type="StaticBody3D" parent="Walls" unique_id=1364339183]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -17.811565)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall2" unique_id=1586535081]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall3" type="StaticBody3D" parent="Walls" unique_id=1226163763]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 53.748756, 5, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall3" unique_id=2016981924]
 shape = SubResource("BoxShape3D_uqeks")
 
 [node name="Wall4" type="StaticBody3D" parent="Walls" unique_id=1775812778]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -53.826855, 5, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall4" unique_id=1686025649]
 shape = SubResource("BoxShape3D_uqeks")
+
+[node name="GridMap" type="GridMap" parent="Walls" unique_id=119941122]
+mesh_library = ExtResource("5_uepvo")
+cell_size = Vector3(4, 4, 4)
+cell_center_y = false
+data = {
+"cells": PackedInt32Array(65530, 4, 2, 65531, 4, 2, 65532, 4, 2, 65533, 4, 2, 65534, 4, 2, 65535, 4, 2, 0, 4, 2, 1, 4, 2, 2, 4, 2, 3, 4, 2, 4, 4, 2, 5, 4, 2, 6, 4, 2, 7, 4, 2, 8, 4, 2, 9, 4, 2, 10, 4, 2, 11, 4, 2, 12, 4, 2, 65529, 4, 2, 65528, 4, 2, 65527, 4, 2, 65526, 4, 2, 65525, 4, 2, 65524, 4, 2, 65523, 4, 2, 65523, 65531, 2, 65524, 65531, 2, 65525, 65531, 2, 65526, 65531, 2, 65527, 65531, 2, 65528, 65531, 2, 65529, 65531, 2, 65530, 65531, 2, 65531, 65531, 2, 65532, 65531, 2, 65533, 65531, 2, 65534, 65531, 2, 65535, 65531, 2, 0, 65531, 2, 1, 65531, 2, 2, 65531, 2, 3, 65531, 2, 4, 65531, 2, 5, 65531, 2, 6, 65531, 2, 7, 65531, 2, 8, 65531, 2, 9, 65531, 2, 10, 65531, 2, 11, 65531, 2, 12, 65531, 2, 65522, 3, 1441794, 65522, 2, 1441794, 65522, 65532, 1441794, 65522, 65533, 1441794, 65522, 65534, 1441794, 65522, 65535, 1441794, 65522, 0, 1441794, 65522, 1, 1441794, 13, 65532, 1441794, 13, 65533, 1441794, 13, 65534, 1441794, 13, 65535, 1441794, 13, 0, 1441794, 13, 1, 1441794, 13, 2, 1441794, 13, 3, 1441794, 13, 4, 1441795, 65522, 4, 655363, 65522, 65531, 1048579, 13, 65531, 3)
+}
 
 [node name="CharacterBody3D" parent="." unique_id=1150581159 instance=ExtResource("5_sboqw")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1, 0)
@@ -199,6 +219,9 @@ shape = SubResource("BoxShape3D_gvrid")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Weapons/Sword_3D3/CollisionShape3D" unique_id=1249429144]
 mesh = SubResource("CapsuleMesh_drgkw")
 skeleton = NodePath("../..")
+
+[node name="Shield3d" parent="Weapons" unique_id=956456063 instance=ExtResource("12_uepvo")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8102303, -4.600742)
 
 [node name="Enemy" parent="." unique_id=1664258252 instance=ExtResource("8_484l6")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8671827, 1, 0.09756756)

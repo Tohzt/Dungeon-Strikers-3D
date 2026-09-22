@@ -1,0 +1,37 @@
+[gd_scene format=3]
+
+[ext_resource type="MeshLibrary" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="1_ttl7p"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_2341u"]
+size = Vector3(16, 0.5, 16)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0twu5"]
+albedo_color = Color(0.35, 0.34, 0.32, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_11oqg"]
+material = SubResource("StandardMaterial3D_0twu5")
+size = Vector3(16, 0.5, 16)
+
+[node name="Dungeon" type="Node3D" unique_id=1496697495]
+
+[node name="GridMap" type="GridMap" parent="." unique_id=408612596]
+mesh_library = ExtResource("1_ttl7p")
+cell_size = Vector3(4, 4, 4)
+cell_center_y = false
+data = {
+"cells": PackedInt32Array(0, 0, 1048579, 3, 0, 3, 3, 3, 1441795, 0, 3, 655363, 1, 0, 23, 2, 0, 2, 1, 3, 2, 2, 3, 2, 0, 1, 1048578, 0, 2, 1048578, 3, 1, 1048578, 3, 2, 1048578, 2, 2, 0)
+}
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=1382363106]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=1601976603]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -0.25, 6)
+shape = SubResource("BoxShape3D_2341u")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=180227261]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -0.25, 6)
+mesh = SubResource("BoxMesh_11oqg")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1565539674]
+transform = Transform3D(1, 0, 0, 0, 0.64278764, 0.76604444, 0, -0.76604444, 0.64278764, 0, 0, 0)
+shadow_enabled = true

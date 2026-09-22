@@ -1,0 +1,37 @@
+[gd_scene format=3 uid="uid://cqdd6x0yvjqmx"]
+
+[ext_resource type="Script" uid="uid://b0oxcf5fv00jt" path="res://3D/Weapons/Shield/shield_3d.gd" id="1_smdq6"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_37nig"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="4_rf7fj"]
+[ext_resource type="PackedScene" uid="uid://d25l4r8xx34gs" path="res://Assets/Weapons/shield_common.gltf.glb" id="6_wp6bp"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_8hcp5"]
+height = 0.1723938
+radius = 0.6953125
+
+[node name="Shield3d" type="RigidBody3D" unique_id=956456063 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 3.0
+script = ExtResource("1_smdq6")
+follow_strength = 800.0
+follow_damping = 60.0
+held_pitch = 0.0
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." unique_id=1505864104 instance=ExtResource("2_37nig")]
+weapon_name = "Shield"
+
+[node name="WeaponProperties" parent="." unique_id=716835754 instance=ExtResource("4_rf7fj")]
+weapon_name = "Shield"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1458033803]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -6.089558e-10, 0.12402409)
+shape = SubResource("CylinderShape3D_8hcp5")
+
+[node name="shield_common_gltf" parent="." unique_id=776317514 instance=ExtResource("6_wp6bp")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0.09261596)

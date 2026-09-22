@@ -1,5 +1,4 @@
 class_name WeaponClass3D extends Weapon3D
-@onready var mesh_instance_3d := $CollisionShape3D/MeshInstance3D
 
 # How strongly the weapon is pulled toward the hand
 @export var follow_strength: float = 300.0
@@ -9,6 +8,10 @@ class_name WeaponClass3D extends Weapon3D
 @export var follow_max_distance: float = 0.02
 # Velocity prediction factor (helps anticipate hand movement)
 @export var velocity_prediction: float = 0.1
+# Local X rotation applied while held (not blocking/thrown). A blade needs to
+# tip up to point forward from a Y-aligned mesh; a flat shield should stay
+# upright facing outward instead, so subclasses override this.
+@export var held_pitch: float = deg_to_rad(90)
 
 var prev_hand_pos: Vector3
 
@@ -73,4 +76,4 @@ func _physics_process(delta: float) -> void:
 			# atan2(x, z) gives us the yaw angle in Godot's coordinate system
 			var yaw: float = atan2(horizontal_dir.x, horizontal_dir.y)
 			rotation.y = yaw
-			rotation.x = deg_to_rad(90)
+			rotation.x = held_pitch

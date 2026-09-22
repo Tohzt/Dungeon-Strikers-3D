@@ -8,6 +8,8 @@ var move_dir: Vector3
 var look_dir: Vector3 = Vector3.ZERO
 var action_left: bool = false
 var action_right: bool = false
+var action_heavy_left: bool = false
+var action_heavy_right: bool = false
 var interact: bool = false
 var interact_held: bool = false
 var target_toggle: bool = false
@@ -126,7 +128,13 @@ func _input(event: InputEvent) -> void:
 	
 	if event.is_action("attack_right"):
 		action_right = event.is_action_pressed("attack_right")
-	
+
+	if event.is_action("attack_heavy_left"):
+		action_heavy_left = event.is_action_pressed("attack_heavy_left")
+
+	if event.is_action("attack_heavy_right"):
+		action_heavy_right = event.is_action_pressed("attack_heavy_right")
+
 	if event.is_action("move_dodge"):
 		move_dodge = event.is_action_pressed("move_dodge")
 	
