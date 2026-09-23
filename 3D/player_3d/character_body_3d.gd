@@ -272,10 +272,13 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 		if hold_duration >= HOLD_THRESHOLD:
 			var charge_ratio: float = clamp((hold_duration - HOLD_THRESHOLD) / THROW_CHARGE_MAX_DURATION, 0.0, 1.0)
 			_throw_weapon(weapon, is_left, charge_ratio)
-		elif is_left and swipe_timer_left <= 0.0:
-			swipe_timer_left = SWIPE_DURATION
-		elif not is_left and swipe_timer_right <= 0.0:
-			swipe_timer_right = SWIPE_DURATION
+		else:
+			weapon.attack(_get_aim_direction())
+			if weapon.plays_swipe_animation:
+				if is_left and swipe_timer_left <= 0.0:
+					swipe_timer_left = SWIPE_DURATION
+				elif not is_left and swipe_timer_right <= 0.0:
+					swipe_timer_right = SWIPE_DURATION
 
 
 func _throw_weapon(weapon: Weapon3D, is_left: bool, charge_ratio: float = 1.0) -> void:

@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://gwtg3n8y37dp"]
+
+[ext_resource type="Script" uid="uid://cxfcslpgv6kke" path="res://3D/Weapons/Bow and Arrow/crossbow_3d.gd" id="1_crossbow"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
+[ext_resource type="PackedScene" uid="uid://b035nv2n3rrry" path="res://Assets/Weapons/crossbow_common.gltf.glb" id="4_cn188"]
+[ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://3D/Weapons/Bow and Arrow/arrow_3d.tscn" id="5_arrow"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_p6jv2"]
+size = Vector3(0.22460938, 0.5996094, 0.1821289)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8hcp5"]
+size = Vector3(1.1992188, 0.5052643, 0.18182373)
+
+[node name="Bow_3D" type="RigidBody3D" unique_id=92531580 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 1.5
+script = ExtResource("1_crossbow")
+plays_swipe_animation = false
+arrow_scene = ExtResource("5_arrow")
+follow_strength = 1500.0
+follow_damping = 50.0
+held_pitch = 0.0
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." unique_id=1417607145 instance=ExtResource("2_behavior")]
+weapon_name = "Crossbow"
+
+[node name="WeaponProperties" parent="." unique_id=937272670 instance=ExtResource("3_properties")]
+weapon_name = "Crossbow"
+
+[node name="crossbow_common_gltf" parent="." unique_id=613123724 instance=ExtResource("4_cn188")]
+transform = Transform3D(1.75, 0, 0, 0, 1.75, 0, 0, 0, 1.75, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=316060565]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.010986328, 0.12161252)
+shape = SubResource("BoxShape3D_p6jv2")
+
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="." unique_id=1451312623]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.011138916, 0.68011904)
+shape = SubResource("BoxShape3D_8hcp5")

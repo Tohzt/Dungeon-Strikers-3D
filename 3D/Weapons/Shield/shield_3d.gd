@@ -37,7 +37,7 @@ func _physics_process(delta: float) -> void:
 		super._physics_process(delta)
 
 
-func _physics_process_block(delta: float) -> void:
+func _physics_process_block(_delta: float) -> void:
 	if not wielder: return
 
 	var forward_dir: Vector3 = Vector3(sin(wielder.rotation.y), 0.0, cos(wielder.rotation.y))

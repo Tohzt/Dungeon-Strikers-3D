@@ -9,7 +9,7 @@
 height = 0.1723938
 radius = 0.6953125
 
-[node name="Shield3d" type="RigidBody3D" unique_id=956456063 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+[node name="Shield_3D" type="RigidBody3D" unique_id=956456063 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
 collision_layer = 8
 collision_mask = 7
 axis_lock_angular_x = true

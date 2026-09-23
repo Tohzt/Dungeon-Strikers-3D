@@ -4,6 +4,11 @@ class_name Weapon3D extends RigidBody3D
 @export var Behavior: WeaponBehavior3D
 @onready var Collision := $CollisionShape3D
 
+## Whether a quick tap plays the shoulder-swipe swing animation. Melee
+## weapons want the swing; a weapon that just fires in place (like the
+## crossbow) turns this off.
+@export var plays_swipe_animation: bool = true
+
 var wielder: Node3D = null
 var held_hand: Area3D = null
 var is_held: bool = false
@@ -76,6 +81,13 @@ func _handle_thrown_settle() -> void:
 		_update_collisions("on-ground")
 
 
+## High-level API: called when a quick tap resolves to an attack rather than a
+## hold-to-throw. Base weapons rely on the shoulder-swipe animation alone;
+## ranged weapons (like the crossbow) override this to fire a projectile.
+func attack(_aim_direction: Vector3) -> void:
+	pass
+
+
 ## High-level API: called by player/enemy when picking up this weapon.
 ## `hand` is the Area3D of the hand it's being equipped into, used by
 ## weapon behaviors (like the spring-follow sword) to know what to track.
@@ -88,6 +100,28 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 	can_pickup_cd = can_pickup_dur_in_sec
 	_update_collisions("in-hand")
 
+	# Layer/mask alone still leaves a window where the wielder's own physics
+	# body can shove or be shoved by this weapon (e.g. mid-transition, or
+	# while it's still moving to its held pose). A hard collision exception
+	# between this specific pair rules that out entirely, regardless of
+	# layer/mask state or timing. It has to be added on BOTH sides: Godot's
+	# move_and_slide() consults the calling body's own exception list, so
+	# only exempting the weapon leaves the wielder's own move_and_slide still
+	# treating it as a solid obstacle.
+	if new_wielder is PhysicsBody3D:
+		add_collision_exception_with(new_wielder)
+		new_wielder.add_collision_exception_with(self)
+
+	# Snap straight to the hand instead of leaving the weapon at its pickup
+	# spot for the hand-follow spring to violently close the gap. A large,
+	# fast RigidBody3D lurching up off the ground right under the wielder's
+	# feet gets picked up by move_and_slide() as if standing on a launching
+	# platform, flinging the wielder into the air.
+	if hand:
+		global_position = hand.global_position
+		linear_velocity = Vector3.ZERO
+		angular_velocity = Vector3.ZERO
+
 	if Behavior:
 		Behavior.equip(new_wielder)
 
@@ -96,6 +130,10 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 func unequip() -> void:
 	if Behavior:
 		Behavior.unequip()
+
+	if wielder is PhysicsBody3D:
+		remove_collision_exception_with(wielder)
+		wielder.remove_collision_exception_with(self)
 
 	wielder = null
 	held_hand = null
@@ -115,6 +153,10 @@ func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0,
 
 	if Behavior:
 		Behavior.unequip()
+
+	if wielder is PhysicsBody3D:
+		remove_collision_exception_with(wielder)
+		wielder.remove_collision_exception_with(self)
 
 	wielder = null
 	held_hand = null
