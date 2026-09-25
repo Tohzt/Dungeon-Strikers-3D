@@ -1,20 +1,30 @@
 class_name HUD3D extends CanvasLayer
-@export var game: Node3D
+@export var player: PlayerClass3D
 
 @onready var health_bar:  TextureProgressBar = $HealthBar
 @onready var stamina_bar: TextureProgressBar = $StaminaBar
 @onready var mana_bar:    TextureProgressBar = $ManaBar
 @onready var player_icon: TextureRect        = $PlayerIcon
 
+## Screen space the HUD art occupies, including its margin from the edge.
+const PANEL_SIZE := Vector2(304, 112)
+
 var signals_connected: bool = false
 
+
+## Binds this HUD to a player and moves it to that player's corner:
+## P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right.
+func setup(p: PlayerClass3D, slot: PlayerSlot) -> void:
+	player = p
+	var screen := Vector2(
+		ProjectSettings.get_setting("display/window/size/viewport_width"),
+		ProjectSettings.get_setting("display/window/size/viewport_height"))
+	offset = Vector2(
+		screen.x - PANEL_SIZE.x if slot.index % 2 == 1 else 0.0,
+		screen.y - PANEL_SIZE.y if slot.index >= 2 else 0.0)
+	player_icon.modulate = slot.color
+
 func _process(_delta: float) -> void:
-	if not game:
-		return
-	
-	# Access Player property directly (it's an @onready var in game_3d.gd)
-	var player: CharacterBody3D = game.Player if game else null
-	
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)
@@ -26,7 +36,7 @@ func _connect_signals(eb: Node) -> void:
 	eb.hp_changed.connect(_on_hp_changed)
 	eb.mana_changed.connect(_on_mana_changed)
 	eb.stamina_changed.connect(_on_stamina_changed)
-	
+
 	# Get initial values immediately after connecting
 	_on_hp_changed(eb.hp, eb.hp_max)
 	_on_mana_changed(eb.mana, eb.mana_max)

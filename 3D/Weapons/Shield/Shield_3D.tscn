@@ -24,6 +24,8 @@ Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 
 [node name="WeaponBehavior" parent="." unique_id=1505864104 instance=ExtResource("2_37nig")]
+base_damage = 10.0
+knockback_force = 14.0
 weapon_name = "Shield"
 
 [node name="WeaponProperties" parent="." unique_id=716835754 instance=ExtResource("4_rf7fj")]

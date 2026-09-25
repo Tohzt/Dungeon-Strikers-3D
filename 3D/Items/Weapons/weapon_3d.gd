@@ -20,6 +20,17 @@ var can_pickup_dur_in_sec: float = 1.0
 
 var throw_spin_direction: float = 1.0
 
+# Hitting things: a swing is live for a short window after a tap-attack, a
+# throw while the weapon is still flying fast. Each target is hit once per
+# swing/throw. Damage and shove come from Behavior (base_damage/knockback_force).
+const HIT_POP := 3.0
+const THROWN_DAMAGE_MULTIPLIER := 1.25
+const THROWN_HIT_MIN_SPEED := 4.0
+const THROWN_SLOWDOWN_ON_HIT := 0.3  # Keeps this much speed after hitting a player
+var swing_time_left: float = 0.0
+var thrower: Node3D = null  # Who threw it, so it can't hit them mid-flight
+var _hit_this_action: Array[Node] = []
+
 const THROWN_SETTLE_SPEED: float = 0.4
 const DEFAULT_THROW_FORCE: float = 15.0
 const DEFAULT_THROW_UPWARD_RATIO: float = 0.15
@@ -36,6 +47,7 @@ func _process(delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	_handle_thrown_settle()
+	_update_hits(delta)
 	if is_thrown:
 		var spin_speed: float = Properties.throw_spin_speed if Properties else DEFAULT_THROW_SPIN_SPEED
 		# Spin around the weapon's own local Z axis (perpendicular to its
@@ -78,7 +90,40 @@ func _handle_pickup_cooldown(delta: float) -> void:
 func _handle_thrown_settle() -> void:
 	if is_thrown and linear_velocity.length() < THROWN_SETTLE_SPEED:
 		is_thrown = false
+		thrower = null
 		_update_collisions("on-ground")
+
+
+## Makes the next `duration` seconds of this held weapon's swing able to hit.
+func start_swing(duration: float) -> void:
+	swing_time_left = duration
+	_hit_this_action.clear()
+
+
+func _update_hits(delta: float) -> void:
+	if swing_time_left > 0.0:
+		swing_time_left -= delta
+		if is_held and wielder:
+			_hit_overlapping(wielder, 1.0, false)
+	elif is_thrown and linear_velocity.length() > THROWN_HIT_MIN_SPEED:
+		_hit_overlapping(thrower, THROWN_DAMAGE_MULTIPLIER, true)
+
+
+func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) -> void:
+	if not Collision or not Collision.shape: return
+	var exclude: Array[RID] = [get_rid()]
+	if attacker is CollisionObject3D:
+		exclude.append(attacker.get_rid())
+	for body: Node3D in Combat.overlaps(get_world_3d(), Collision.shape, Collision.global_transform, exclude):
+		# Never hit our own side's gear (e.g. the wielder's other-hand weapon)
+		if body in _hit_this_action or (body is Weapon3D and attacker and body.wielder == attacker):
+			continue
+		_hit_this_action.append(body)
+		var dir: Vector3 = linear_velocity if thrown else body.global_position - attacker.global_position
+		var damage: float = (Behavior.get_damage() if Behavior else 10.0) * damage_multiplier
+		var knockback: float = Behavior.knockback_force if Behavior else 8.0
+		if Combat.strike(body, dir, damage, knockback, HIT_POP) and thrown:
+			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
 
 
 ## High-level API: called when a quick tap resolves to an attack rather than a
@@ -150,6 +195,9 @@ func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0,
 	if !wielder: return
 
 	throw_spin_direction = spin_direction
+	thrower = wielder
+	swing_time_left = 0.0
+	_hit_this_action.clear()
 
 	if Behavior:
 		Behavior.unequip()

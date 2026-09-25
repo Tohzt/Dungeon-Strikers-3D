@@ -15,6 +15,7 @@ class_name Arrow3D extends RigidBody3D
 
 @export var damage: float = 10.0
 @export var impact_impulse: float = 6.0
+@export var knockback: float = 10.0  # Shove speed given to a player it hits
 
 @onready var hit_area: Area3D = $HitArea
 
@@ -69,14 +70,8 @@ func _on_body_entered(body: Node) -> void:
 	if linear_velocity.length_squared() > 0.01:
 		travel_dir = linear_velocity.normalized()
 
-	# Anything with an Entity (EntityBehavior3D) - players, and eventually
-	# other entities - takes real damage + knockback through that shared API.
-	# Anything else that's just a physics prop (the ball, a placeholder
-	# dummy) gets a plain impulse shove instead.
-	var entity: Object = body.get("Entity")
-	if entity and entity.has_method("take_damage"):
-		entity.take_damage(damage, travel_dir)
-	elif body is RigidBody3D:
-		body.apply_central_impulse(travel_dir * impact_impulse)
+	# Players take damage + knockback (unless shield-blocked); physics props
+	# (the ball, a placeholder dummy) just get shoved - same as every attack.
+	Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse)
 
 	queue_free()

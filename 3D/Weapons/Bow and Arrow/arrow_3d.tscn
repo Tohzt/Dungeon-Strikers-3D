@@ -15,14 +15,13 @@ script = ExtResource("1_arrow")
 [node name="arrow_gltf" parent="." unique_id=1981662479 instance=ExtResource("1_s1qdh")]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, -0.41389436)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1696974647]
 transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, -0.49499488)
 shape = SubResource("CylinderShape3D_p6jv2")
 
-[node name="HitArea" type="Area3D" parent="."]
+[node name="HitArea" type="Area3D" parent="." unique_id=22727189]
 collision_layer = 0
 collision_mask = 7
-monitoring = true
 monitorable = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="HitArea" unique_id=972831356]

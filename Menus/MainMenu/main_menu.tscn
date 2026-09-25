@@ -1,0 +1,136 @@
+[gd_scene format=3 uid="uid://csbxv6vcnwqc1"]
+
+[ext_resource type="Script" path="res://Menus/MainMenu/main_menu.gd" id="1_menu"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.07, 0.09, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 40
+
+[node name="Title" type="Label" parent="Center/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 56
+text = "Dungeon Strikers"
+horizontal_alignment = 1
+
+[node name="Home" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="SinglePlayerButton" type="Button" parent="Center/Content/Home"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Single Player"
+
+[node name="LocalMultiplayerButton" type="Button" parent="Center/Content/Home"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Local Multiplayer"
+
+[node name="QuitButton" type="Button" parent="Center/Content/Home"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Quit"
+
+[node name="SinglePlayer" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="Prompt" type="Label" parent="Center/Content/SinglePlayer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Choose your device"
+horizontal_alignment = 1
+
+[node name="KeyboardMouse" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Keyboard & Mouse"
+
+[node name="Controller" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Controller"
+
+[node name="SinglePlayerBack" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Back"
+
+[node name="Lobby" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LobbyHint" type="Label" parent="Center/Content/Lobby"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Join: A / Start on a controller, or Enter / Space on the keyboard.
+Leave: B / Esc."
+horizontal_alignment = 1
+
+[node name="Cards" type="HBoxContainer" parent="Center/Content/Lobby"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Start" type="Button" parent="Center/Content/Lobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 52)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 24
+text = "Start (2+ players)"
+
+[node name="LobbyBack" type="Button" parent="Center/Content/Lobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Back"

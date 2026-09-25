@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://83ys3ad7isxp"
-path="res://.godot/imported/HUD_Blue.png-78f0fbd765648fcb1a8bdf1feb3c6cd5.ctex"
+uid="uid://c8h0u6un7ryrw"
+path="res://.godot/imported/HUD_Green.png-e85c87feced1f391dfc9bdab6c3f3035.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Game/HUD/Assets/HUD_Blue.png"
-dest_files=["res://.godot/imported/HUD_Blue.png-78f0fbd765648fcb1a8bdf1feb3c6cd5.ctex"]
+source_file="res://Menus/HUD/Assets/HUD_Green.png"
+dest_files=["res://.godot/imported/HUD_Green.png-e85c87feced1f391dfc9bdab6c3f3035.ctex"]
 
 [params]
 

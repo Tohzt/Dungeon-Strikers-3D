@@ -1,6 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://7tsbp2fdluq8"]
 
-[ext_resource type="MeshLibrary" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="1_ttl7p"]
+[ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="1_ttl7p"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_2341u"]
 size = Vector3(16, 0.5, 16)
