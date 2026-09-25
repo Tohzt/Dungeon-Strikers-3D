@@ -40,6 +40,17 @@ const SWIPE_DURATION := 0.25
 var original_shoulder_rotation_left: Vector3
 var original_shoulder_rotation_right: Vector3
 
+# Wind-up: while a hand holding something throwable (weapon or ball) is
+# pressed, the arm pulls back progressively instead of sitting static, so a
+# throw doesn't just fire from a resting pose. Ramps up over the same
+# press-and-hold window that charges throw force, so a fully wound-up arm
+# means a fully-charged throw is coming.
+const WINDUP_RAMP_DURATION := HOLD_THRESHOLD + THROW_CHARGE_MAX_DURATION
+const WINDUP_MAX_ANGLE := deg_to_rad(35)
+const WINDUP_LERP_SPEED := 6.0
+var windup_left: float = 0.0
+var windup_right: float = 0.0
+
 const THROW_FORCE = 10.0
 const UPWARD_FORCE = 3.0
 
@@ -112,6 +123,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	_update_weapon_swipes(delta)
+	_update_weapon_windups(delta)
 	_update_hand_mesh_position()
 
 	if held_ball:
@@ -382,11 +394,11 @@ func _sync_hand_mesh(item: Node3D, mesh: MeshInstance3D) -> void:
 
 
 func _update_weapon_swipes(delta: float) -> void:
-	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0)
-	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0)
+	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left)
+	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right)
 
 
-func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float) -> float:
+func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float) -> float:
 	if not shoulder: return timer
 
 	if timer > 0.0:
@@ -407,6 +419,24 @@ func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vecto
 
 		shoulder.rotation.y = base_rotation.y - target_rotation
 	else:
-		shoulder.rotation = base_rotation
+		# At rest (not mid-swipe): pull back opposite the swing-out direction,
+		# proportional to how wound up this arm currently is.
+		shoulder.rotation.y = base_rotation.y + direction * windup * WINDUP_MAX_ANGLE
 
 	return timer
+
+
+## Winds the arm back while its hand holds something throwable and the
+## attack button is held, ramping up over WINDUP_RAMP_DURATION (matching the
+## throw-charge window) and relaxing back to rest otherwise.
+func _update_weapon_windups(delta: float) -> void:
+	windup_left = _update_hand_windup(windup_left, delta, Input_Handler.action_left, attack_left_press_time, _is_hand_occupied(true))
+	windup_right = _update_hand_windup(windup_right, delta, Input_Handler.action_right, attack_right_press_time, _is_hand_occupied(false))
+
+
+func _update_hand_windup(current: float, delta: float, is_pressed: bool, press_time: float, has_throwable: bool) -> float:
+	var target: float = 0.0
+	if is_pressed and has_throwable:
+		var hold_duration: float = (Time.get_ticks_msec() / 1000.0) - press_time
+		target = clamp(hold_duration / WINDUP_RAMP_DURATION, 0.0, 1.0)
+	return move_toward(current, target, delta * WINDUP_LERP_SPEED)
