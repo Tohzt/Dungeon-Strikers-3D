@@ -24,7 +24,6 @@ config/icon="uid://b7k3wfvekym8w"
 [autoload]
 
 Global="*res://global.gd"
-Server="*res://_Multiplayer/Server.tscn"
 Settings="*res://settings.gd"
 
 [debug]
@@ -40,18 +39,8 @@ window/stretch/mode="viewport"
 [file_customization]
 
 folder_colors={
+"res://3D/": "green",
 "res://Assets/": "teal",
-"res://Attacks/": "red",
-"res://Entities/": "purple",
-"res://Entities/Ball/": "orange",
-"res://Entities/Boss/": "red",
-"res://Entities/Dummy/": "orange",
-"res://Entities/Player/": "green",
-"res://Entities/Resources/": "gray",
-"res://Game/": "green",
-"res://Items/": "yellow",
-"res://Main Menu/": "gray",
-"res://_DEP/": "gray",
 "res://_Multiplayer/": "orange"
 }
 
@@ -222,21 +211,14 @@ attack_heavy_right={
 
 [layer_names]
 
-2d_physics/layer_1="World"
 3d_physics/layer_1="World"
-2d_physics/layer_2="Player"
 3d_physics/layer_2="Player"
-2d_physics/layer_3="Enemy"
 3d_physics/layer_3="Enemy"
-2d_physics/layer_4="Item"
 3d_physics/layer_4="Weapon"
-2d_physics/layer_5="Weapon"
 
 [physics]
 
 3d/default_gravity=12.0
-2d/default_gravity=0.0
-2d/default_gravity_vector=Vector2(0, 0)
 
 [rendering]
 
