@@ -15,6 +15,15 @@ class_name PlayerClass3D extends CharacterBody3D
 ## before the player enters the tree; null = listen to every device.
 var slot: PlayerSlot = null
 
+## Online: what the owning machine sends everyone else about this player.
+const SYNCED_PROPERTIES: Array[NodePath] = [
+	^":position", ^":rotation",
+	^"Appendages/Shoulder_Left:rotation", ^"Appendages/Shoulder_Right:rotation",
+	^"Entity:hp", ^"Entity:stamina",
+]
+## Online only; sends SYNCED_PROPERTIES from this player's owner.
+var net_sync: MultiplayerSynchronizer = null
+
 var held_weapon_left: Weapon3D = null
 var held_weapon_right: Weapon3D = null
 var held_ball: RigidBody3D = null
@@ -168,6 +177,37 @@ func _ready() -> void:
 		hand_left_mesh_rest = hand_left_mesh.transform
 	if hand_right_mesh:
 		hand_right_mesh_rest = hand_right_mesh.transform
+
+
+## Online: hand this player to the peer that controls it. Call before it
+## enters the tree. Syncing stays off until start_network_sync().
+func setup_network(peer_id: int) -> void:
+	var config := SceneReplicationConfig.new()
+	for path: NodePath in SYNCED_PROPERTIES:
+		config.add_property(path)
+		config.property_set_replication_mode(path, SceneReplicationConfig.REPLICATION_MODE_ALWAYS)
+	net_sync = MultiplayerSynchronizer.new()
+	net_sync.name = "NetSync"
+	net_sync.replication_config = config
+	net_sync.public_visibility = false
+	add_child(net_sync)
+	set_multiplayer_authority(peer_id)
+
+
+## Online, once every machine has spawned its copy: the owner starts sending.
+func start_network_sync() -> void:
+	if net_sync and is_multiplayer_authority():
+		net_sync.public_visibility = true
+
+
+## Online: another machine controls this player, so stop simulating it here
+## and let its synchronizer move it.
+func set_remote() -> void:
+	set_physics_process(false)
+	set_process(false)
+	if Input_Handler:
+		Input_Handler.set_process(false)
+		Input_Handler.set_process_input(false)
 
 
 func _physics_process(delta: float) -> void:

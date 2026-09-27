@@ -59,6 +59,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Local Multiplayer"
 
+[node name="OnlineButton" type="Button" parent="Center/Content/Home"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Online"
+
 [node name="QuitButton" type="Button" parent="Center/Content/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
@@ -134,3 +141,213 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Back"
+
+[node name="Online" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="HostButton" type="Button" parent="Center/Content/Online"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Host Game"
+
+[node name="JoinButton" type="Button" parent="Center/Content/Online"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Join Game"
+
+[node name="OnlineBack" type="Button" parent="Center/Content/Online"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Back"
+
+[node name="HostSetup" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="Prompt" type="Label" parent="Center/Content/HostSetup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+autowrap_mode = 3
+text = "Pick an access code, or leave it blank for a random one"
+horizontal_alignment = 1
+
+[node name="CodeRow" type="HBoxContainer" parent="Center/Content/HostSetup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HostCodeInput" type="LineEdit" parent="Center/Content/HostSetup/CodeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+placeholder_text = "Random"
+alignment = 1
+max_length = 8
+
+[node name="RandomCode" type="Button" parent="Center/Content/HostSetup/CodeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Random"
+
+[node name="HostConfirm" type="Button" parent="Center/Content/HostSetup"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Host"
+
+[node name="HostStatus" type="Label" parent="Center/Content/HostSetup"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
+theme_override_font_sizes/font_size = 18
+text = ""
+horizontal_alignment = 1
+
+[node name="HostBack" type="Button" parent="Center/Content/HostSetup"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Back"
+
+[node name="JoinSetup" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="Prompt" type="Label" parent="Center/Content/JoinSetup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Enter the access code from your host"
+horizontal_alignment = 1
+
+[node name="CodeRow" type="HBoxContainer" parent="Center/Content/JoinSetup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="JoinCodeInput" type="LineEdit" parent="Center/Content/JoinSetup/CodeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+placeholder_text = "Access code"
+alignment = 1
+max_length = 8
+
+[node name="PasteCode" type="Button" parent="Center/Content/JoinSetup/CodeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Paste"
+
+[node name="JoinConfirm" type="Button" parent="Center/Content/JoinSetup"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Join"
+
+[node name="JoinStatus" type="Label" parent="Center/Content/JoinSetup"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
+theme_override_font_sizes/font_size = 18
+text = ""
+horizontal_alignment = 1
+
+[node name="JoinBack" type="Button" parent="Center/Content/JoinSetup"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Back"
+
+[node name="OnlineLobby" type="VBoxContainer" parent="Center/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="CodePanel" type="PanelContainer" parent="Center/Content/OnlineLobby"]
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="Row" type="HBoxContainer" parent="Center/Content/OnlineLobby/CodePanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Code" type="VBoxContainer" parent="Center/Content/OnlineLobby/CodePanel/Row"]
+layout_mode = 2
+
+[node name="Caption" type="Label" parent="Center/Content/OnlineLobby/CodePanel/Row/Code"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "ACCESS CODE"
+horizontal_alignment = 1
+
+[node name="CodeLabel" type="Label" parent="Center/Content/OnlineLobby/CodePanel/Row/Code"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "------"
+horizontal_alignment = 1
+
+[node name="CopyCode" type="Button" parent="Center/Content/OnlineLobby/CodePanel/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 52)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 24
+text = "Copy"
+
+[node name="OnlineCards" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="OnlineStatus" type="Label" parent="Center/Content/OnlineLobby"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = ""
+horizontal_alignment = 1
+
+[node name="OnlineStart" type="Button" parent="Center/Content/OnlineLobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 52)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 24
+text = "Start (2+ players)"
+
+[node name="OnlineLeave" type="Button" parent="Center/Content/OnlineLobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Leave"

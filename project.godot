@@ -26,6 +26,7 @@ config/icon="uid://b7k3wfvekym8w"
 Global="*res://global.gd"
 Settings="*res://settings.gd"
 Players="*res://players.gd"
+Net="*res://net.gd"
 
 [debug]
 
@@ -41,8 +42,7 @@ window/stretch/mode="viewport"
 
 folder_colors={
 "res://3D/": "green",
-"res://Assets/": "teal",
-"res://_Multiplayer/": "orange"
+"res://Assets/": "teal"
 }
 
 [global_group]

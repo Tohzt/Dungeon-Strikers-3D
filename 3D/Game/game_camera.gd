@@ -25,6 +25,10 @@ var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
 var test_offset: float = 0.0
 
 func _ready() -> void:
+	# The headless server has no screen, and none of its players read local input.
+	if Net.is_server:
+		process_mode = Node.PROCESS_MODE_DISABLED
+		return
 	initial_transform = global_transform
 	#initial_fov = fov
 	

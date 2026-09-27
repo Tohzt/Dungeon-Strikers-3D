@@ -33,11 +33,12 @@ func _ready() -> void:
 			_base_actions.append(action_name)
 
 
-func join(device: int, team: int = -1) -> PlayerSlot:
+## index picks a specific seat (online play uses the session seat); -1 = next free.
+func join(device: int, team: int = -1, index: int = -1) -> PlayerSlot:
 	if slots.size() >= MAX_PLAYERS or get_slot_for_device(device):
 		return null
 	var slot := PlayerSlot.new()
-	slot.index = _next_free_index()
+	slot.index = index if index >= 0 else _next_free_index()
 	slot.device = device
 	slot.team = team if team >= 0 else slot.index
 	slot.color = TEAM_COLORS[slot.team % TEAM_COLORS.size()]

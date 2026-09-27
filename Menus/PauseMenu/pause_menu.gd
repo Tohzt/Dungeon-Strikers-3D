@@ -9,6 +9,9 @@ const MAIN_MENU := "res://Menus/MainMenu/main_menu.tscn"
 
 func _ready() -> void:
 	hide()
+	# Online, each machine runs its own copy: resetting just ours would desync.
+	%ResetBall.visible = not Net.in_session()
+	%ResetGame.visible = not Net.in_session()
 	resume_button.pressed.connect(resume)
 	%ResetBall.pressed.connect(_on_reset_ball)
 	%ResetGame.pressed.connect(_on_reset_game)
@@ -31,7 +34,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func pause() -> void:
 	show()
-	get_tree().paused = true
+	# Online, the match keeps running for everyone else, so it does here too.
+	get_tree().paused = not Net.in_session()
 	resume_button.grab_focus()
 
 
