@@ -39,6 +39,10 @@ const PORT := 25565
 ## told why they were turned away instead of just timing out.
 const MAX_CONNECTIONS := MAX_PLAYERS + 4
 const SERVER_ID := 1
+## Bump whenever networked code changes shape (RPC arguments, synced
+## properties, node names), so a game and server that don't match are told
+## so instead of silently ignoring each other's updates.
+const PROTOCOL_VERSION := 2
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -46,6 +50,9 @@ var is_host := false
 ## Verified players' peer ids in seat order (leader first). Never the server.
 var peers: Array[int] = []
 var in_match := false
+## Every machine has the match scene loaded, so match nodes (players, ball,
+## weapons) can send each other updates without hitting missing nodes.
+var match_synced := false
 ## True on the headless server.
 var is_server := false
 
@@ -126,6 +133,7 @@ func leave() -> void:
 	is_host = false
 	peers.clear()
 	in_match = false
+	match_synced = false
 	_request = ""
 
 
@@ -189,6 +197,7 @@ func _close_session() -> void:
 	access_code = ""
 	peers.clear()
 	in_match = false
+	match_synced = false
 	_loaded.clear()
 	_all_loaded_sent = false
 	get_tree().unload_current_scene()
@@ -231,9 +240,9 @@ func _check_all_loaded() -> void:
 
 func _on_connected_to_server() -> void:
 	if _request == "host":
-		_request_host.rpc_id(SERVER_ID, access_code)
+		_request_host.rpc_id(SERVER_ID, access_code, PROTOCOL_VERSION)
 	else:
-		_request_join.rpc_id(SERVER_ID, access_code)
+		_request_join.rpc_id(SERVER_ID, access_code, PROTOCOL_VERSION)
 
 
 func _on_connection_failed() -> void:
@@ -242,7 +251,13 @@ func _on_connection_failed() -> void:
 
 
 func _on_join_timeout(peer: MultiplayerPeer) -> void:
-	if _request and multiplayer.multiplayer_peer == peer:
+	if not _request or multiplayer.multiplayer_peer != peer:
+		return
+	# Connected but never answered: most likely a server too old to
+	# understand our request (and too old to say so itself).
+	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		_fail("The server didn't answer. It may be running a different version of the game.")
+	else:
 		_fail("Couldn't reach the server.")
 
 
@@ -283,11 +298,13 @@ func _end(reason: String) -> void:
 # ===== RPCS: players -> server =====
 
 @rpc("any_peer", "reliable")
-func _request_host(code: String) -> void:
+func _request_host(code: String, version: int) -> void:
 	if not is_server:
 		return
 	var id: int = multiplayer.get_remote_sender_id()
-	if not is_valid_code(code):
+	if version != PROTOCOL_VERSION:
+		_reject(id, _version_mismatch(version))
+	elif not is_valid_code(code):
 		_reject(id, code_rules())
 	elif access_code:
 		_reject(id, "The server already has a session going. Try again later.")
@@ -299,11 +316,13 @@ func _request_host(code: String) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _request_join(code: String) -> void:
+func _request_join(code: String, version: int) -> void:
 	if not is_server:
 		return
 	var id: int = multiplayer.get_remote_sender_id()
-	if not access_code or code != access_code:
+	if version != PROTOCOL_VERSION:
+		_reject(id, _version_mismatch(version))
+	elif not access_code or code != access_code:
 		_reject(id, "No session with that code.")
 	elif in_match:
 		_reject(id, "That match has already started.")
@@ -313,6 +332,11 @@ func _request_join(code: String) -> void:
 		peers.append(id)
 		print("Peer %d joined session %s." % [id, code])
 		_broadcast_peers()
+
+
+func _version_mismatch(version: int) -> String:
+	return "Your game (v%d) doesn't match the server (v%d). %s" % [version, PROTOCOL_VERSION,
+		"Update the game." if version < PROTOCOL_VERSION else "The server needs updating."]
 
 
 @rpc("any_peer", "reliable")
@@ -358,4 +382,5 @@ func _start_match() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _all_loaded() -> void:
+	match_synced = true
 	all_loaded.emit()

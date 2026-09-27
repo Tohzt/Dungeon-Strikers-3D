@@ -26,12 +26,22 @@ static func overlaps(world: World3D, shape: Shape3D, xform: Transform3D, exclude
 ## Hit `body` with an attack travelling along `dir`. Players take damage and
 ## get shoved (unless a raised shield faces the attack); other unfrozen
 ## physics bodies just get pushed. Returns true if a player took the hit.
+## Online, a hit on someone else's player is sent to its owner, who decides
+## whether it was blocked, so remote hits always report true.
 static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0) -> bool:
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
 	if body is PlayerClass3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
-	if body is RigidBody3D and not body.freeze:
-		var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
-		body.apply_central_impulse((dir + Vector3.UP * 0.3) * impulse)
+	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
+	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
+
+
+## Shove a loose physics object. Networked ones (ball, weapons) pass the push
+## on to whichever machine simulates them.
+static func push(body: Node3D, impulse: Vector3) -> void:
+	if body.has_method("receive_impulse"):
+		body.receive_impulse(impulse)
+	elif body is RigidBody3D and not body.freeze:
+		body.apply_central_impulse(impulse)

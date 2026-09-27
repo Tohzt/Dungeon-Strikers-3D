@@ -12,7 +12,7 @@ signal set_camera_active(TorF: bool)
 	Vector3(-8, 1, 0), Vector3(8, 1, 0), Vector3(-8, 1, 6), Vector3(8, 1, 6),
 ]
 
-@onready var ball: RigidBody3D = $Ball_3D
+@onready var ball: Ball3D = $Ball_3D
 @onready var HUD: HUD3D = $HUD
 
 var players: Array[PlayerClass3D] = []
@@ -51,6 +51,9 @@ func _spawn_online_players() -> void:
 			slot.team = seat
 			slot.color = Players.TEAM_COLORS[seat % Players.TEAM_COLORS.size()]
 		_spawn_player(slot, Net.peers[seat])
+	ball.setup_network()
+	for weapon: Weapon3D in weapons():
+		weapon.setup_network()
 	Net.all_loaded.connect(_on_net_all_loaded)
 	Net.peers_changed.connect(_on_net_peers_changed)
 	Net.report_loaded()
@@ -82,11 +85,33 @@ func _on_net_all_loaded() -> void:
 		player.start_network_sync()
 
 
-## An online player left mid-match: remove their player and HUD.
+## Loose and held weapons in the arena.
+func weapons() -> Array[Weapon3D]:
+	var found: Array[Weapon3D] = []
+	for child: Node in $Weapons.get_children():
+		if child is Weapon3D:
+			found.append(child)
+	return found
+
+
+## Online: the player controlled by this peer, if they're still here.
+func player_of_peer(peer_id: int) -> PlayerClass3D:
+	for player: PlayerClass3D in players:
+		if player.get_multiplayer_authority() == peer_id:
+			return player
+	return null
+
+
+## An online player left mid-match: remove their player and HUD, dropping
+## whatever they held. Every machine does this for itself.
 func _on_net_peers_changed() -> void:
+	for weapon: Weapon3D in weapons():
+		weapon.forget_departed_owner()
 	for player: PlayerClass3D in players.duplicate():
 		if Net.peers.has(player.get_multiplayer_authority()):
 			continue
+		if ball.holder == player:
+			ball.release(Vector3.ZERO)
 		players.erase(player)
 		if huds.get(player) != HUD:
 			huds[player].queue_free()

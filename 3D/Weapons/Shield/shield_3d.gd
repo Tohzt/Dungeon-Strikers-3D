@@ -31,7 +31,7 @@ func stop_block() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if is_blocking and is_held and not is_thrown:
+	if is_blocking and is_held and not is_thrown and simulates():
 		_physics_process_block(delta)
 	else:
 		super._physics_process(delta)

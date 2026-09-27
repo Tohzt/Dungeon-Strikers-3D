@@ -31,18 +31,34 @@ func attack(aim_direction: Vector3) -> void:
 	if not arrow_scene or not wielder:
 		return
 
-	var arrow : Node3D = arrow_scene.instantiate()
-	wielder.get_parent().add_child(arrow)
-	arrow.global_position = global_position \
+	var muzzle: Vector3 = global_position \
 		+ aim_direction.normalized() * muzzle_forward_offset \
 		+ Vector3.UP * muzzle_height_offset
+	_fire_arrow(muzzle, aim_direction, true)
+	if Net.match_synced:
+		_net_fire.rpc(muzzle, aim_direction)
+
+
+## `real` arrows hit things; online, everyone else's copy of a shot is just
+## for show, since the shooter's machine decides what it hit.
+func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
+	var arrow: Arrow3D = arrow_scene.instantiate()
+	arrow.deals_damage = real
+	wielder.get_parent().add_child(arrow)
+	arrow.global_position = muzzle
 	arrow.exclude_body(wielder)
 	arrow.exclude_body(self)
 	arrow.fire(aim_direction, arrow_speed)
 
 
+@rpc("any_peer", "reliable")
+func _net_fire(muzzle: Vector3, aim_direction: Vector3) -> void:
+	if _is_from_owner() and arrow_scene and wielder:
+		_fire_arrow(muzzle, aim_direction, false)
+
+
 func _physics_process(delta: float) -> void:
-	if is_held and not is_thrown and wielder:
+	if is_held and not is_thrown and wielder and simulates():
 		_physics_process_held_forward(delta)
 	else:
 		super._physics_process(delta)
