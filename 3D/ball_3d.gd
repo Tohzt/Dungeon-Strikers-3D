@@ -19,6 +19,10 @@ var speed_fast_threshold: float = max_ball_speed * 0.6
 
 @onready var mesh_instance: MeshInstance3D = get_node_or_null("MeshInstance3D")
 
+## Whether players can pick the ball up. Off for now; meant to be switched
+## on during the phases of a session that use it.
+@export var can_be_picked_up: bool = false
+
 ## Who has the ball in hand, if anyone. Set on every machine.
 var holder: PlayerClass3D = null
 var holder_hand_is_left: bool = false
@@ -33,6 +37,9 @@ var _grab_cooldown: float = 0.0
 const REQUEST_RETRY_MSEC := 250
 var _next_request_msec: int = 0
 var _last_sent_transform: Transform3D
+var _last_sent_msec: int = 0
+## Clients: the server's recent updates, played back smoothly.
+var _net_motion: NetInterpolator = null
 
 func _ready() -> void:
 	# Find mesh instance if not directly named
@@ -56,7 +63,11 @@ func _ready() -> void:
 	_update_ball_color(0)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _net_motion and not holder:
+		var sample: Array = _net_motion.sample(delta)
+		if not sample.is_empty():
+			global_transform = sample[0]
 	if mesh_instance:
 		var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
 		if not material:
@@ -82,6 +93,8 @@ func _physics_process(delta: float) -> void:
 func setup_network() -> void:
 	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	freeze = not Net.is_server
+	if not Net.is_server:
+		_net_motion = NetInterpolator.new()
 
 
 ## Whether this machine runs the ball's physics.
@@ -92,17 +105,20 @@ func _simulates() -> bool:
 func _send_state() -> void:
 	if not Net.is_server or not Net.match_synced or holder:
 		return
-	if global_transform.is_equal_approx(_last_sent_transform):
+	var now_msec: int = Time.get_ticks_msec()
+	if global_transform.is_equal_approx(_last_sent_transform) \
+			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC:
 		return  # Resting - nothing new to tell anyone
 	_last_sent_transform = global_transform
-	_net_state.rpc(global_transform, color_cur)
+	_last_sent_msec = now_msec
+	_net_state.rpc(NetInterpolator.now(), global_transform, color_cur)
 
 
 @rpc("authority", "unreliable_ordered")
-func _net_state(xform: Transform3D, color: Color) -> void:
+func _net_state(time: float, xform: Transform3D, color: Color) -> void:
 	if holder:
 		return  # Pinned to the holder's hand locally
-	global_transform = xform
+	_net_motion.push(time, xform)
 	color_cur = color
 
 
@@ -127,7 +143,7 @@ func _request_push(impulse: Vector3) -> void:
 ## `player` touched the ball with a free hand. Online the server decides, so
 ## two players can't grab it at once.
 func request_grab(player: PlayerClass3D, is_left: bool) -> void:
-	if holder:
+	if holder or not can_be_picked_up:
 		return
 	if not Net.in_session():
 		grab(player, is_left)
@@ -151,6 +167,8 @@ func grab(player: PlayerClass3D, is_left: bool) -> void:
 		release(Vector3.ZERO)
 	holder = player
 	holder_hand_is_left = is_left
+	if _net_motion:
+		_net_motion.clear()  # Play back from the release, not before the grab
 	player.held_ball = self
 	player.held_ball_hand_is_left = is_left
 	# Freeze the ball's physics and disable collision while it's carried
@@ -182,7 +200,7 @@ func release(impulse: Vector3) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_grab(is_left: bool) -> void:
-	if not Net.is_server or holder or _grab_cooldown > 0.0:
+	if not Net.is_server or holder or not can_be_picked_up or _grab_cooldown > 0.0:
 		return
 	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
 	if player and not player.is_hand_occupied(is_left):

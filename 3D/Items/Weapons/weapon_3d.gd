@@ -46,6 +46,13 @@ const REQUEST_RETRY_MSEC := 250
 var _next_request_msec: int = 0
 var _last_sent_transform: Transform3D
 var _last_sent_frame: int = -1
+var _last_sent_msec: int = 0
+## Replicas: the owner's recent poses, played back smoothly. While held they
+## are relative to the wielder, so the weapon moves rigidly with the
+## (also smoothed) body holding it.
+var _net_motion: NetInterpolator = null
+var _net_motion_is_local: bool = false
+var _net_motion_sender: int = 0
 
 
 func _ready() -> void:
@@ -55,6 +62,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_handle_pickup_cooldown(delta)
 	_send_pose()
+	# A held replica is posed by its wielder, right after the wielder moves
+	if not wielder:
+		follow_net_pose(delta)
 
 
 func _physics_process(delta: float) -> void:
@@ -185,6 +195,16 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 		Behavior.equip(new_wielder)
 
 
+## Jump straight to the holding hand, e.g. after the wielder teleports, so
+## the hand-follow spring doesn't fling it across the map to catch up.
+func snap_to_hand() -> void:
+	if not held_hand:
+		return
+	global_position = held_hand.global_position
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+
+
 ## High-level API: called when the weapon is dropped/unequipped.
 func unequip() -> void:
 	if Behavior:
@@ -279,6 +299,9 @@ func _set_net_owner(peer_id: int) -> void:
 	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	freeze = not is_multiplayer_authority()
 	_last_sent_transform = Transform3D()
+	if not _net_motion:
+		_net_motion = NetInterpolator.new(0.0 if Net.is_server else NetInterpolator.DELAY)
+	_net_motion.clear()
 
 
 ## Whoever simulated this weapon left: the server takes it back, out of
@@ -294,16 +317,22 @@ func forget_departed_owner() -> void:
 	_set_net_owner(Net.SERVER_ID)
 
 
-## Once per physics tick at most, and only when it moved.
+## Once per physics tick at most, and only when it moved. Held weapons
+## send their pose relative to the wielder.
 func _send_pose() -> void:
 	if not Net.match_synced or not is_multiplayer_authority():
 		return
 	var frame: int = Engine.get_physics_frames()
-	if frame == _last_sent_frame or global_transform.is_equal_approx(_last_sent_transform):
+	var is_local: bool = wielder != null
+	var xform: Transform3D = wielder.global_transform.affine_inverse() * global_transform if is_local else global_transform
+	var now_msec: int = Time.get_ticks_msec()
+	if frame == _last_sent_frame or (xform.is_equal_approx(_last_sent_transform) \
+			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC):
 		return
 	_last_sent_frame = frame
-	_last_sent_transform = global_transform
-	_net_pose.rpc(global_transform)
+	_last_sent_transform = xform
+	_last_sent_msec = now_msec
+	_net_pose.rpc(NetInterpolator.now(), xform, is_local)
 
 
 func _is_from_owner() -> bool:
@@ -311,9 +340,29 @@ func _is_from_owner() -> bool:
 
 
 @rpc("any_peer", "unreliable_ordered")
-func _net_pose(xform: Transform3D) -> void:
-	if _is_from_owner():
-		global_transform = xform
+func _net_pose(time: float, xform: Transform3D, is_local: bool) -> void:
+	if not _is_from_owner() or not _net_motion:
+		return
+	# Snapshots in the other space, or stamped by another machine's clock,
+	# can't be blended with these
+	var sender: int = multiplayer.get_remote_sender_id()
+	if is_local != _net_motion_is_local or sender != _net_motion_sender:
+		_net_motion.clear()
+		_net_motion_is_local = is_local
+		_net_motion_sender = sender
+	_net_motion.push(time, xform)
+
+
+## Replicas, once per rendered frame: move to where the owner had this a
+## moment ago.
+func follow_net_pose(delta: float) -> void:
+	if simulates() or not _net_motion:
+		return
+	if _net_motion_is_local != (wielder != null):
+		return  # e.g. just thrown here, world-space poses not in yet
+	var sample: Array = _net_motion.sample(delta)
+	if not sample.is_empty():
+		global_transform = wielder.global_transform * sample[0] if wielder else sample[0]
 
 
 @rpc("any_peer", "reliable")

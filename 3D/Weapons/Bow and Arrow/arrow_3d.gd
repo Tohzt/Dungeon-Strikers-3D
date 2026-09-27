@@ -16,6 +16,14 @@ class_name Arrow3D extends RigidBody3D
 @export var damage: float = 10.0
 @export var impact_impulse: float = 6.0
 @export var knockback: float = 10.0  # Shove speed given to a player it hits
+## Safety net: an arrow that somehow never hits anything is removed after this.
+@export var max_lifetime: float = 5.0
+
+## Walls and floor. The HitArea can't be relied on for these: areas don't
+## always report static bodies (Jolt skips them by default), and a fast arrow
+## can pass a thin wall between two physics ticks. So each tick casts a ray
+## along the distance just travelled instead.
+const WORLD_MASK := 0b1
 
 ## False for online copies of someone else's shot, which only show it.
 var deals_damage: bool = true
@@ -24,6 +32,8 @@ var deals_damage: bool = true
 
 var is_flying: bool = false
 var _excluded_bodies: Array[Node] = []
+var _age: float = 0.0
+var _last_tip: Vector3
 
 
 ## Exempts a body from ever registering as a hit. Used to keep the arrow
@@ -51,12 +61,34 @@ func fire(direction: Vector3, speed: float) -> void:
 	# would otherwise sit at its default spawn rotation - a visible flash of
 	# the wrong orientation before it snaps to match its velocity.
 	_align_to_velocity(linear_velocity)
+	_last_tip = _tip()
 
 
-func _physics_process(_delta: float) -> void:
-	if not is_flying or linear_velocity.length_squared() < 0.01:
+func _physics_process(delta: float) -> void:
+	if not is_flying:
+		return
+	_age += delta
+	if _age > max_lifetime:
+		queue_free()
+		return
+	if _hit_world():
+		queue_free()
+		return
+	if linear_velocity.length_squared() < 0.01:
 		return
 	_align_to_velocity(linear_velocity)
+
+
+## The arrowhead: the front of the shaft along its flight direction.
+func _tip() -> Vector3:
+	return global_position + linear_velocity.normalized() * 0.5
+
+
+func _hit_world() -> bool:
+	var tip: Vector3 = _tip()
+	var query := PhysicsRayQueryParameters3D.create(_last_tip, tip, WORLD_MASK)
+	_last_tip = tip
+	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 
 func _align_to_velocity(velocity: Vector3) -> void:

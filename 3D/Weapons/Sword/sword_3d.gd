@@ -25,6 +25,12 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 		prev_hand_pos = hand.global_position
 
 
+func snap_to_hand() -> void:
+	super.snap_to_hand()
+	if held_hand:
+		prev_hand_pos = held_hand.global_position
+
+
 #func _process(_delta: float) -> void:
 
 func _physics_process(delta: float) -> void:

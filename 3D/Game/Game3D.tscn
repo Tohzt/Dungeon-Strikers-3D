@@ -8,7 +8,6 @@
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
 [ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
-[ext_resource type="PackedScene" uid="uid://byuvh0e1ejilk" path="res://3D/Entities/Enemy/enemy.tscn" id="8_484l6"]
 [ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="8_cpoda"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="9_sboqw"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="10_uepvo"]
@@ -94,7 +93,7 @@ player_scene = ExtResource("5_sboqw")
 
 [node name="HUD" parent="." unique_id=347811869 instance=ExtResource("2_wodrl")]
 
-[node name="PauseMenu" parent="." instance=ExtResource("15_pause")]
+[node name="PauseMenu" parent="." unique_id=1958909121 instance=ExtResource("15_pause")]
 
 [node name="Camera3D" parent="." unique_id=1390694438 instance=ExtResource("3_dwu0v")]
 transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.86602545, 0, -0.86602545, 0.49999997, 0, 30, 17.36)
@@ -234,6 +233,3 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.186322, 1.5926104, -9.39999
 
 [node name="Bow_3D2" parent="Weapons" unique_id=1268025179 instance=ExtResource("14_gq62a")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.829128, 1.5926104, -9.399996)
-
-[node name="Enemy" parent="." unique_id=1664258252 instance=ExtResource("8_484l6")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.8671827, 1, 0.09756756)

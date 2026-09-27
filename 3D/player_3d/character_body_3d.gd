@@ -17,8 +17,7 @@ var slot: PlayerSlot = null
 
 ## Online: what the owning machine sends everyone else about this player.
 const SYNCED_PROPERTIES: Array[NodePath] = [
-	^":position", ^":rotation",
-	^"Appendages/Shoulder_Left:rotation", ^"Appendages/Shoulder_Right:rotation",
+	^":net_pose",
 	^"Entity:hp", ^"Entity:stamina",
 	# Lets each owner work out how hard someone else bumped into them
 	^":velocity",
@@ -27,6 +26,14 @@ const SYNCED_PROPERTIES: Array[NodePath] = [
 var net_sync: MultiplayerSynchronizer = null
 ## Online: another machine controls this player (see set_remote()).
 var is_remote: bool = false
+## Online: [time, transform, left shoulder yaw, right shoulder yaw], written
+## by the owner every physics tick and played back smoothly by remote copies.
+var net_pose: Array = []:
+	set(value):
+		net_pose = value
+		if is_remote and value.size() == 4:
+			_net_motion.push(value[0], value[1], PackedFloat32Array([value[2], value[3]]))
+var _net_motion: NetInterpolator = null
 
 var held_weapon_left: Weapon3D = null
 var held_weapon_right: Weapon3D = null
@@ -206,11 +213,10 @@ func start_network_sync() -> void:
 
 
 ## Online: another machine controls this player, so stop simulating it here
-## and let its synchronizer move it. Only what it's holding is still posed
-## locally (see _physics_process).
+## and play back its owner's updates instead (see _process_remote).
 func set_remote() -> void:
 	is_remote = true
-	set_process(false)
+	_net_motion = NetInterpolator.new(0.0 if Net.is_server else NetInterpolator.DELAY)
 	if Input_Handler:
 		Input_Handler.set_process(false)
 		Input_Handler.set_process_input(false)
@@ -218,8 +224,6 @@ func set_remote() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_remote:
-		_update_hand_mesh_position()
-		update_held_ball_position()
 		return
 	if not is_on_floor():
 		velocity += get_gravity() * delta
@@ -278,6 +282,9 @@ func _physics_process(delta: float) -> void:
 		held_ball.linear_velocity = Vector3.ZERO
 		held_ball.angular_velocity = Vector3.ZERO
 
+	if net_sync:
+		net_pose = [NetInterpolator.now(), global_transform, shoulder_left.rotation.y, shoulder_right.rotation.y]
+
 	for i in range(get_slide_collision_count()):
 		var collision: KinematicCollision3D = get_slide_collision(i)
 		var collider: Node3D = collision.get_collider()
@@ -286,7 +293,7 @@ func _physics_process(delta: float) -> void:
 
 		if collider.is_in_group("Weapon") and collider is Weapon3D and collider.can_pickup:
 			_pickup_weapon(collider)
-		elif collider is Ball3D and not held_ball and (not is_hand_occupied(false) or not is_hand_occupied(true)):
+		elif collider is Ball3D and collider.can_be_picked_up and not held_ball and (not is_hand_occupied(false) or not is_hand_occupied(true)):
 			# Prefer the right hand, same as weapons; fall back to the left if it's taken.
 			collider.request_grab(self, is_hand_occupied(false))
 
@@ -339,6 +346,9 @@ func _get_ball_radius(ball: RigidBody3D) -> float:
 
 
 func _process(delta: float) -> void:
+	if is_remote:
+		_process_remote(delta)
+		return
 	# Heavy input takes priority: if the hand holds a shield, it raises to
 	# block instead of following its usual tap-bump/hold-throw behavior.
 	_handle_hand_block(Input_Handler.action_heavy_left, true)
@@ -357,6 +367,23 @@ func _process(delta: float) -> void:
 	if Input_Handler:
 		_handle_target()
 		_handle_rotation(delta)
+
+
+## Remote copy, every rendered frame: move to where the owner was a moment
+## ago, then carry along what's in hand. Held weapons are posed from here
+## (relative to this body) rather than on their own, so they can't lag a
+## frame behind the hand holding them.
+func _process_remote(delta: float) -> void:
+	var sample: Array = _net_motion.sample(delta)
+	if not sample.is_empty():
+		global_transform = sample[0]
+		shoulder_left.rotation.y = sample[1][0]
+		shoulder_right.rotation.y = sample[1][1]
+	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
+		if weapon:
+			weapon.follow_net_pose(delta)
+	_update_hand_mesh_position()
+	update_held_ball_position()
 
 
 func _handle_hand_block(is_heavy_pressed: bool, is_left: bool) -> void:
@@ -628,7 +655,23 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 		var was_in_iframes: bool = Entity.is_in_iframes
 		Entity.take_hit(damage, knockback_velocity)
 		_share_iframes(was_in_iframes)
+		if Entity.hp <= 0:
+			respawn()
 	return true
+
+
+## Out of HP: back to where this player started, fully restored. Weapons
+## stay in hand; the ball is let go. Online only the owner calls this; the
+## new position and HP reach everyone through the usual sync.
+func respawn() -> void:
+	if held_ball:
+		held_ball.request_throw(self, Vector3.ZERO)
+	knockback = Vector3.ZERO
+	velocity = Vector3.ZERO
+	Entity.reset(true)  # Full stats, and moves us to Entity.spawn_pos
+	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
+		if weapon:
+			weapon.snap_to_hand()
 
 
 ## A shove with no damage (e.g. a fast ball), routed like receive_hit.
