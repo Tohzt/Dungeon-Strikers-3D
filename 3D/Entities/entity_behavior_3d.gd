@@ -28,10 +28,11 @@ var stamina_max: float = 5.0
 # Costs and Regens
 var mana_cost: float = 0.0
 var mana_cost_default: float = 0.0
-var stamina_regen_rate: float = 2.0
+var stamina_regen_rate: float = 3.0  # Stamina per second once regen kicks in
+var stamina_regen_delay: float = 1.0  # Seconds after last use before regen starts
 var stamina_cost: float = 1.0
 var stamina_cost_default: float = 1.0
-var stamina_regen_timer: Timer
+var _stamina_regen_wait: float = 0.0
 var stat_values: Dictionary = {}
 
 # Stat properties with automatic signal emission
@@ -52,9 +53,6 @@ var stamina: float:
 	set(value): 
 		stat_values["stamina"] = value
 		stamina_changed.emit(value, stamina_max)
-		# Restart stamina regeneration if we're below max
-		if value < stamina_max and stamina_regen_timer and stamina_regen_timer.is_stopped():
-			stamina_regen_timer.start()
 
 # ===== COMBAT & MOVEMENT =====
 var atk_pwr: float = 400.0  
@@ -82,7 +80,6 @@ func _is_active(TorF: bool) -> void:
 
 func _ready() -> void:
 	_setup_stat_properties()
-	_setup_stamina_regen_timer()
 
 
 func _setup_stat_properties() -> void:
@@ -92,22 +89,30 @@ func _setup_stat_properties() -> void:
 
 
 # ===== HEALTH SYSTEM FUNCTIONS =====
-func _setup_stamina_regen_timer() -> void:
-	stamina_regen_timer = Timer.new()
-	stamina_regen_timer.wait_time = 1.0 / stamina_regen_rate  # Convert rate to interval
-	stamina_regen_timer.timeout.connect(_on_stamina_regen_tick)
-	add_child(stamina_regen_timer)
-	stamina_regen_timer.start()
+func _process(delta: float) -> void:
+	_regen_stamina(delta)
 
-func _on_stamina_regen_tick() -> void:
-	if stamina < stamina_max:
-		stamina = min(stamina + 1.0, stamina_max)
-		# Stop timer if we're at max stamina
-		if stamina >= stamina_max:
-			stamina_regen_timer.stop()
-	# Restart timer if we're below max stamina
-	elif stamina < stamina_max and stamina_regen_timer.is_stopped():
-		stamina_regen_timer.start()
+
+## Spend stamina for an action. Returns false (spending nothing) if there
+## isn't enough.
+func use_stamina(amount: float) -> bool:
+	if stamina < amount:
+		return false
+	drain_stamina(amount)
+	return true
+
+
+## Drain stamina without needing the full amount (e.g. per-frame sprinting).
+func drain_stamina(amount: float) -> void:
+	stamina = max(stamina - amount, 0.0)
+	_stamina_regen_wait = stamina_regen_delay
+
+
+func _regen_stamina(delta: float) -> void:
+	if _stamina_regen_wait > 0.0:
+		_stamina_regen_wait -= delta
+	elif stamina < stamina_max:
+		stamina = min(stamina + stamina_regen_rate * delta, stamina_max)
 
 
 @rpc("any_peer", "call_local")
@@ -117,12 +122,25 @@ func take_damage(dmg: float, dir: Vector3) -> void:
 		hp -= int(dmg)
 	apply_knockback(dir, dmg*10)
 
+
+## Damage plus a shove given directly as a velocity (horizontal slide +
+## upward pop), for hits that want exact control over the knockback.
+func take_hit(dmg: float, knockback_velocity: Vector3) -> void:
+	if is_in_iframes: return
+	if hp > 0:
+		hp -= int(dmg)
+	apply_knockback(knockback_velocity, knockback_velocity.length())
+
 @rpc("any_peer")
 func apply_knockback(direction: Vector3, force: float) -> void:
 	if is_in_iframes: return
 	is_in_iframes = true
+	# Players keep shoves in their own knockback velocity (movement would
+	# overwrite a plain velocity change on the next frame)
+	if Master is PlayerClass3D:
+		Master.add_knockback(direction.normalized() * force)
 	# Apply knockback to the CharacterBody3D's velocity
-	if Master is CharacterBody3D:
+	elif Master is CharacterBody3D:
 		# Convert 3D direction to horizontal (X/Z) and apply force
 		var horizontal_dir: Vector3 = Vector3(direction.x, 0, direction.z).normalized()
 		Master.velocity += horizontal_dir * force
@@ -199,10 +217,7 @@ func reset(active_status: bool = true) -> void:
 	hp = hp_max
 	mana = mana_max
 	stamina = stamina_max
-	
-	if stamina_regen_timer:
-		stamina_regen_timer.stop()
-		stamina_regen_timer.start()
+	_stamina_regen_wait = 0.0
 	
 	Master.global_position = spawn_pos
 

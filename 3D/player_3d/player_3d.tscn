@@ -40,6 +40,7 @@ height = 0.2
 [node name="Player" type="CharacterBody3D" node_paths=PackedStringArray("Input_Handler") groups=["Player"]]
 collision_layer = 2
 collision_mask = 13
+platform_floor_layers = 1
 script = ExtResource("1_qu530")
 Properties = SubResource("Resource_x74e5")
 Input_Handler = NodePath("Input")

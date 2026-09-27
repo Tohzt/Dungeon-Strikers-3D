@@ -5,8 +5,8 @@ class_name WeaponBehavior3D extends Node
 
 @export_category("Core")
 @export var weapon_name: String = ""
-@export var base_damage: float = 10.0
-@export var knockback_force: float = 5.0
+@export var base_damage: float = 40.0  # Per hit (players have 500 HP); thrown hits do a bit more
+@export var knockback_force: float = 10.0  # Shove speed given to whoever gets hit
 
 @export_category("Owner & Attach")
 @export var attach_bone_name: String = ""  # Optional: name of hand/attach point if using skeletons

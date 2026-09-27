@@ -1,11 +1,11 @@
-[gd_scene load_steps=7 format=3 uid="uid://q6gtgqc5r26i"]
+[gd_scene format=3 uid="uid://q6gtgqc5r26i"]
 
 [ext_resource type="Script" uid="uid://c1ybujcli5ex2" path="res://3D/HUD/hud_3d.gd" id="1_hbyoa"]
-[ext_resource type="Texture2D" uid="uid://d1vg5ddc2gv5a" path="res://Game/HUD/Assets/HUD.png" id="2_5lrpt"]
-[ext_resource type="Texture2D" uid="uid://ttbsp48vq7eb" path="res://Game/HUD/Assets/HUD_Red.png" id="3_qprpc"]
-[ext_resource type="Texture2D" uid="uid://c8h0u6un7ryrw" path="res://Game/HUD/Assets/HUD_Green.png" id="4_0gfj1"]
+[ext_resource type="Texture2D" uid="uid://d1vg5ddc2gv5a" path="res://Menus/HUD/Assets/HUD.png" id="2_5lrpt"]
+[ext_resource type="Texture2D" uid="uid://ttbsp48vq7eb" path="res://Menus/HUD/Assets/HUD_Red.png" id="3_qprpc"]
+[ext_resource type="Texture2D" uid="uid://c8h0u6un7ryrw" path="res://Menus/HUD/Assets/HUD_Green.png" id="4_0gfj1"]
 [ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Entities/Player/Assets/Skribble Character_Inner.png" id="4_u5h0k"]
-[ext_resource type="Texture2D" uid="uid://83ys3ad7isxp" path="res://Game/HUD/Assets/HUD_Blue.png" id="5_2b0ky"]
+[ext_resource type="Texture2D" uid="uid://83ys3ad7isxp" path="res://Menus/HUD/Assets/HUD_Blue.png" id="5_2b0ky"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hbyoa")

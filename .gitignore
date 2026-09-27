@@ -3,3 +3,6 @@ _Exports/
 .godot/
 .godot/*
 
+
+# Godot editor leftovers
+*.tmp
