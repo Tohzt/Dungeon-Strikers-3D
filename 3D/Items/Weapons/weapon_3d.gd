@@ -1,4 +1,9 @@
 class_name Weapon3D extends RigidBody3D
+## Online, one machine simulates each weapon and streams its pose to the
+## rest, which just follow along. Loose weapons start with the server; the
+## server hands a weapon to whoever it lets pick it up, and that player's
+## machine keeps simulating it (held, thrown, lying where it landed) until
+## someone else picks it up. Only the simulating machine checks its hits.
 
 @export var Properties: WeaponProperties3D
 @export var Behavior: WeaponBehavior3D
@@ -36,6 +41,12 @@ const DEFAULT_THROW_FORCE: float = 15.0
 const DEFAULT_THROW_UPWARD_RATIO: float = 0.15
 const DEFAULT_THROW_SPIN_SPEED: float = 8.0
 
+## Client: don't ask the server again every frame we're touching the weapon.
+const REQUEST_RETRY_MSEC := 250
+var _next_request_msec: int = 0
+var _last_sent_transform: Transform3D
+var _last_sent_frame: int = -1
+
 
 func _ready() -> void:
 	_set_props()
@@ -43,9 +54,12 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_handle_pickup_cooldown(delta)
+	_send_pose()
 
 
 func _physics_process(delta: float) -> void:
+	if not simulates():
+		return
 	_handle_thrown_settle()
 	_update_hits(delta)
 	if is_thrown:
@@ -180,6 +194,7 @@ func unequip() -> void:
 		remove_collision_exception_with(wielder)
 		wielder.remove_collision_exception_with(self)
 
+	_clear_from_wielder()
 	wielder = null
 	held_hand = null
 	is_held = false
@@ -193,26 +208,9 @@ func unequip() -> void:
 ## charge-up-by-holding-the-button throw).
 func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0, force_multiplier: float = 1.0) -> void:
 	if !wielder: return
-
-	throw_spin_direction = spin_direction
-	thrower = wielder
-	swing_time_left = 0.0
-	_hit_this_action.clear()
-
-	if Behavior:
-		Behavior.unequip()
-
-	if wielder is PhysicsBody3D:
-		remove_collision_exception_with(wielder)
-		wielder.remove_collision_exception_with(self)
-
-	wielder = null
-	held_hand = null
-	is_held = false
-	is_thrown = true
-	can_pickup = false
-	can_pickup_cd = can_pickup_dur_in_sec
-	_update_collisions("projectile")
+	_let_go_thrown(spin_direction)
+	if Net.match_synced:
+		_net_thrown.rpc(spin_direction)
 
 	var throw_force: float = force if force > 0.0 else DEFAULT_THROW_FORCE
 	var upward_ratio: float = DEFAULT_THROW_UPWARD_RATIO
@@ -226,6 +224,150 @@ func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0,
 	var launch_dir: Vector3 = (horizontal_dir + Vector3.UP * upward_ratio).normalized()
 	linear_velocity = launch_dir * throw_force
 	angular_velocity = Vector3.ZERO
+
+
+## The part of a throw every machine does: out of the wielder's hand and
+## into the air. Only the simulating machine launches it.
+func _let_go_thrown(spin_direction: float) -> void:
+	throw_spin_direction = spin_direction
+	thrower = wielder
+	swing_time_left = 0.0
+	_hit_this_action.clear()
+
+	if Behavior:
+		Behavior.unequip()
+
+	if wielder is PhysicsBody3D:
+		remove_collision_exception_with(wielder)
+		wielder.remove_collision_exception_with(self)
+
+	_clear_from_wielder()
+	wielder = null
+	held_hand = null
+	is_held = false
+	is_thrown = true
+	can_pickup = false
+	can_pickup_cd = can_pickup_dur_in_sec
+	_update_collisions("projectile")
+
+
+## Empty whichever of the wielder's hands was holding this.
+func _clear_from_wielder() -> void:
+	if not is_instance_valid(wielder) or not wielder is PlayerClass3D:
+		return
+	if wielder.held_weapon_left == self:
+		wielder.held_weapon_left = null
+	if wielder.held_weapon_right == self:
+		wielder.held_weapon_right = null
+
+
+# ===== NETWORK =====
+
+## Online, on every machine: the server simulates loose weapons to begin
+## with. Call before the match starts syncing.
+func setup_network() -> void:
+	_set_net_owner(Net.SERVER_ID)
+
+
+## Whether this machine runs the weapon's physics (and checks its hits).
+func simulates() -> bool:
+	return not Net.in_session() or is_multiplayer_authority()
+
+
+func _set_net_owner(peer_id: int) -> void:
+	set_multiplayer_authority(peer_id)
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	freeze = not is_multiplayer_authority()
+	_last_sent_transform = Transform3D()
+
+
+## Whoever simulated this weapon left: the server takes it back, out of
+## their hand if they were holding it.
+func forget_departed_owner() -> void:
+	var peer_id: int = get_multiplayer_authority()
+	if peer_id == Net.SERVER_ID or Net.peers.has(peer_id):
+		return
+	if wielder:
+		unequip()
+	thrower = null
+	is_thrown = false
+	_set_net_owner(Net.SERVER_ID)
+
+
+## Once per physics tick at most, and only when it moved.
+func _send_pose() -> void:
+	if not Net.match_synced or not is_multiplayer_authority():
+		return
+	var frame: int = Engine.get_physics_frames()
+	if frame == _last_sent_frame or global_transform.is_equal_approx(_last_sent_transform):
+		return
+	_last_sent_frame = frame
+	_last_sent_transform = global_transform
+	_net_pose.rpc(global_transform)
+
+
+func _is_from_owner() -> bool:
+	return multiplayer.get_remote_sender_id() == get_multiplayer_authority()
+
+
+@rpc("any_peer", "unreliable_ordered")
+func _net_pose(xform: Transform3D) -> void:
+	if _is_from_owner():
+		global_transform = xform
+
+
+@rpc("any_peer", "reliable")
+func _net_thrown(spin_direction: float) -> void:
+	if _is_from_owner() and wielder:
+		_let_go_thrown(spin_direction)
+
+
+## Hit or shoved by something (see Combat.push).
+func receive_impulse(impulse: Vector3) -> void:
+	if simulates():
+		apply_central_impulse(impulse)
+	else:
+		_request_push.rpc_id(get_multiplayer_authority(), impulse)
+
+
+@rpc("any_peer", "reliable")
+func _request_push(impulse: Vector3) -> void:
+	if is_multiplayer_authority():
+		apply_central_impulse(impulse)
+
+
+## `player` touched this with a free hand. Online the server decides, so two
+## players can't pick up the same weapon.
+func request_equip(player: PlayerClass3D, is_left: bool) -> void:
+	if not Net.in_session():
+		player.equip_weapon(self, is_left)
+	elif Time.get_ticks_msec() >= _next_request_msec:
+		_next_request_msec = Time.get_ticks_msec() + REQUEST_RETRY_MSEC
+		_request_equip.rpc_id(Net.SERVER_ID, is_left)
+
+
+@rpc("any_peer", "reliable")
+func _request_equip(is_left: bool) -> void:
+	if not Net.is_server or wielder or not can_pickup:
+		return
+	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	if player and not player.is_hand_occupied(is_left):
+		_equipped.rpc(player.name, is_left)
+
+
+## Server -> everyone. Not "authority" mode: the weapon's authority is
+## whoever last held it, not the server.
+@rpc("any_peer", "call_local", "reliable")
+func _equipped(player_name: String, is_left: bool) -> void:
+	if multiplayer.get_remote_sender_id() != Net.SERVER_ID:
+		return
+	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	if not player:
+		return
+	if wielder:
+		unequip()
+	_set_net_owner(player.get_multiplayer_authority())
+	player.equip_weapon(self, is_left)
 
 
 func _update_collisions(state: String) -> void:

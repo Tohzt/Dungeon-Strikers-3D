@@ -1,4 +1,7 @@
-extends RigidBody3D
+class_name Ball3D extends RigidBody3D
+## Online the server simulates the ball and streams where it is; players ask
+## the server to grab, throw or push it. Every machine pins a held ball to
+## its holder's hand itself, so holding looks smooth for everyone.
 @onready var starting_position: Vector3 = self.global_position
 
 var max_ball_speed: float = 600.0 
@@ -15,6 +18,21 @@ var speed_medium_threshold: float = max_ball_speed * 0.3
 var speed_fast_threshold: float = max_ball_speed * 0.6
 
 @onready var mesh_instance: MeshInstance3D = get_node_or_null("MeshInstance3D")
+
+## Who has the ball in hand, if anyone. Set on every machine.
+var holder: PlayerClass3D = null
+var holder_hand_is_left: bool = false
+var _free_collision_layer: int = 0
+var _free_collision_mask: int = 0
+
+## Server: after a throw nobody can grab the ball for a moment, so the
+## thrower's grab request (sent before they saw the throw) doesn't catch it.
+const GRAB_COOLDOWN := 0.3
+var _grab_cooldown: float = 0.0
+## Client: don't ask the server again every frame we're touching the ball.
+const REQUEST_RETRY_MSEC := 250
+var _next_request_msec: int = 0
+var _last_sent_transform: Transform3D
 
 func _ready() -> void:
 	# Find mesh instance if not directly named
@@ -47,10 +65,146 @@ func _process(_delta: float) -> void:
 		material.albedo_color = color_cur
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	if not _simulates():
+		return  # The server's updates move and color it
+	_grab_cooldown = max(_grab_cooldown - delta, 0.0)
 	if linear_velocity.length() > max_ball_speed:
 		linear_velocity = linear_velocity.normalized() * max_ball_speed
 	_update_ball_color(linear_velocity.length())
+	_send_state()
+
+
+# ===== NETWORK =====
+
+## Online, on every machine: only the server's ball simulates physics; the
+## others follow its updates. Call before the match starts syncing.
+func setup_network() -> void:
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	freeze = not Net.is_server
+
+
+## Whether this machine runs the ball's physics.
+func _simulates() -> bool:
+	return not Net.in_session() or Net.is_server
+
+
+func _send_state() -> void:
+	if not Net.is_server or not Net.match_synced or holder:
+		return
+	if global_transform.is_equal_approx(_last_sent_transform):
+		return  # Resting - nothing new to tell anyone
+	_last_sent_transform = global_transform
+	_net_state.rpc(global_transform, color_cur)
+
+
+@rpc("authority", "unreliable_ordered")
+func _net_state(xform: Transform3D, color: Color) -> void:
+	if holder:
+		return  # Pinned to the holder's hand locally
+	global_transform = xform
+	color_cur = color
+
+
+## Hit or shoved by something (see Combat.push).
+func receive_impulse(impulse: Vector3) -> void:
+	if holder:
+		return
+	if _simulates():
+		apply_central_impulse(impulse)
+	else:
+		_request_push.rpc_id(Net.SERVER_ID, impulse)
+
+
+@rpc("any_peer", "reliable")
+func _request_push(impulse: Vector3) -> void:
+	if Net.is_server and not holder:
+		apply_central_impulse(impulse)
+
+
+# ===== HOLDING =====
+
+## `player` touched the ball with a free hand. Online the server decides, so
+## two players can't grab it at once.
+func request_grab(player: PlayerClass3D, is_left: bool) -> void:
+	if holder:
+		return
+	if not Net.in_session():
+		grab(player, is_left)
+	elif Time.get_ticks_msec() >= _next_request_msec:
+		_next_request_msec = Time.get_ticks_msec() + REQUEST_RETRY_MSEC
+		_request_grab.rpc_id(Net.SERVER_ID, is_left)
+
+
+## `player` (the holder) lets go with this impulse.
+func request_throw(player: PlayerClass3D, impulse: Vector3) -> void:
+	if holder != player:
+		return
+	if not Net.in_session():
+		release(impulse)
+	else:
+		_request_throw.rpc_id(Net.SERVER_ID, impulse)
+
+
+func grab(player: PlayerClass3D, is_left: bool) -> void:
+	if holder:
+		release(Vector3.ZERO)
+	holder = player
+	holder_hand_is_left = is_left
+	player.held_ball = self
+	player.held_ball_hand_is_left = is_left
+	# Freeze the ball's physics and disable collision while it's carried
+	_free_collision_layer = collision_layer
+	_free_collision_mask = collision_mask
+	freeze = true
+	collision_layer = 0
+	collision_mask = 0
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	player.update_held_ball_position()
+
+
+## Drop the ball from the holder's hand, launching it with `impulse`.
+func release(impulse: Vector3) -> void:
+	if not holder:
+		return
+	if is_instance_valid(holder) and holder.held_ball == self:
+		holder.held_ball = null
+	holder = null
+	collision_layer = _free_collision_layer
+	collision_mask = _free_collision_mask
+	freeze = not _simulates()
+	if _simulates():
+		apply_impulse(impulse)
+	_grab_cooldown = GRAB_COOLDOWN
+	_last_sent_transform = Transform3D()
+
+
+@rpc("any_peer", "reliable")
+func _request_grab(is_left: bool) -> void:
+	if not Net.is_server or holder or _grab_cooldown > 0.0:
+		return
+	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	if player and not player.is_hand_occupied(is_left):
+		_grabbed.rpc(player.name, is_left)
+
+
+@rpc("any_peer", "reliable")
+func _request_throw(impulse: Vector3) -> void:
+	if Net.is_server and holder and holder.get_multiplayer_authority() == multiplayer.get_remote_sender_id():
+		_released.rpc(impulse)
+
+
+@rpc("authority", "call_local", "reliable")
+func _grabbed(player_name: String, is_left: bool) -> void:
+	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	if player:
+		grab(player, is_left)
+
+
+@rpc("authority", "call_local", "reliable")
+func _released(impulse: Vector3) -> void:
+	release(impulse)
 
 
 func _update_ball_color(speed: float) -> void:
@@ -70,8 +224,10 @@ func _update_ball_color(speed: float) -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if body is CharacterBody3D:
-		var player: CharacterBody3D = body as CharacterBody3D
+	if not _simulates():
+		return
+	if body is PlayerClass3D:
+		var player: PlayerClass3D = body as PlayerClass3D
 		# Check if it has EB (EntityBehavior3D)
 		if player.Entity:
 			var ball_speed: float = linear_velocity.length()
@@ -82,7 +238,7 @@ func _on_body_entered(body: Node) -> void:
 			if ball_speed > effective_min_velocity:
 				var knockback_force: float = ball_speed * knockback_strength
 				# Apply knockback
-				player.Entity.apply_knockback(ball_to_player, knockback_force)
+				player.shove(ball_to_player, knockback_force)
 	
 	# Handle weapon/projectile collisions to move the ball
 	if body.is_in_group("Weapon") and body is Weapon3D:

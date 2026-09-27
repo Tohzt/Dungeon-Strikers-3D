@@ -115,7 +115,6 @@ func _regen_stamina(delta: float) -> void:
 		stamina = min(stamina + stamina_regen_rate * delta, stamina_max)
 
 
-@rpc("any_peer", "call_local")
 func take_damage(dmg: float, dir: Vector3) -> void:
 	if is_in_iframes: return
 	if hp > 0:
@@ -131,10 +130,9 @@ func take_hit(dmg: float, knockback_velocity: Vector3) -> void:
 		hp -= int(dmg)
 	apply_knockback(knockback_velocity, knockback_velocity.length())
 
-@rpc("any_peer")
+
 func apply_knockback(direction: Vector3, force: float) -> void:
 	if is_in_iframes: return
-	is_in_iframes = true
 	# Players keep shoves in their own knockback velocity (movement would
 	# overwrite a plain velocity change on the next frame)
 	if Master is PlayerClass3D:
@@ -151,7 +149,13 @@ func apply_knockback(direction: Vector3, force: float) -> void:
 		# Fallback for other body types
 		if Master.has_method("get") and Master.get("Input_Handler"):
 			Master.Input_Handler.velocity += direction * force
-	
+	start_iframes()
+
+
+## Brief invulnerability after a hit, shown by fading the player's meshes.
+## Online, other machines call this on their copy to show the same fade.
+func start_iframes() -> void:
+	is_in_iframes = true
 	# Visual feedback for iframes - apply alpha to mesh materials
 	if Master is PlayerClass3D and Master.mesh_instance_3d:
 		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
@@ -190,7 +194,6 @@ func set_color(color: Color = Color.WHITE) -> void:
 				material.albedo_color = color
 
 
-@rpc("any_peer")
 func reset(active_status: bool = true) -> void:
 	is_active = active_status
 	has_control = active_status

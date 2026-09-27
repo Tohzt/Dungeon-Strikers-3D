@@ -17,6 +17,9 @@ class_name Arrow3D extends RigidBody3D
 @export var impact_impulse: float = 6.0
 @export var knockback: float = 10.0  # Shove speed given to a player it hits
 
+## False for online copies of someone else's shot, which only show it.
+var deals_damage: bool = true
+
 @onready var hit_area: Area3D = $HitArea
 
 var is_flying: bool = false
@@ -72,6 +75,7 @@ func _on_body_entered(body: Node) -> void:
 
 	# Players take damage + knockback (unless shield-blocked); physics props
 	# (the ball, a placeholder dummy) just get shoved - same as every attack.
-	Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse)
+	if deals_damage:
+		Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse)
 
 	queue_free()

@@ -30,7 +30,7 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 
-	if not is_held or is_thrown or not held_hand:
+	if not simulates() or not is_held or is_thrown or not held_hand:
 		return
 
 	var target_pos: Vector3 = held_hand.global_position

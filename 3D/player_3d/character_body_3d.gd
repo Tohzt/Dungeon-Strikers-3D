@@ -20,16 +20,18 @@ const SYNCED_PROPERTIES: Array[NodePath] = [
 	^":position", ^":rotation",
 	^"Appendages/Shoulder_Left:rotation", ^"Appendages/Shoulder_Right:rotation",
 	^"Entity:hp", ^"Entity:stamina",
+	# Lets each owner work out how hard someone else bumped into them
+	^":velocity",
 ]
 ## Online only; sends SYNCED_PROPERTIES from this player's owner.
 var net_sync: MultiplayerSynchronizer = null
+## Online: another machine controls this player (see set_remote()).
+var is_remote: bool = false
 
 var held_weapon_left: Weapon3D = null
 var held_weapon_right: Weapon3D = null
-var held_ball: RigidBody3D = null
+var held_ball: Ball3D = null
 var held_ball_hand_is_left: bool = false
-var original_collision_layer: int = 0
-var original_collision_mask: int = 0
 var was_attack_left: bool = false
 var was_attack_right: bool = false
 
@@ -195,15 +197,19 @@ func setup_network(peer_id: int) -> void:
 
 
 ## Online, once every machine has spawned its copy: the owner starts sending.
+## Every copy turns visibility on, not just the owner's, because Godot also
+## uses a node's synchronizer visibility to decide who it may send RPCs to
+## (hits sent to this player's owner would be refused otherwise).
 func start_network_sync() -> void:
-	if net_sync and is_multiplayer_authority():
+	if net_sync:
 		net_sync.public_visibility = true
 
 
 ## Online: another machine controls this player, so stop simulating it here
-## and let its synchronizer move it.
+## and let its synchronizer move it. Only what it's holding is still posed
+## locally (see _physics_process).
 func set_remote() -> void:
-	set_physics_process(false)
+	is_remote = true
 	set_process(false)
 	if Input_Handler:
 		Input_Handler.set_process(false)
@@ -211,6 +217,10 @@ func set_remote() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if is_remote:
+		_update_hand_mesh_position()
+		update_held_ball_position()
+		return
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 
@@ -264,7 +274,7 @@ func _physics_process(delta: float) -> void:
 	_update_hand_mesh_position()
 
 	if held_ball:
-		_update_held_ball_position()
+		update_held_ball_position()
 		held_ball.linear_velocity = Vector3.ZERO
 		held_ball.angular_velocity = Vector3.ZERO
 
@@ -276,12 +286,13 @@ func _physics_process(delta: float) -> void:
 
 		if collider.is_in_group("Weapon") and collider is Weapon3D and collider.can_pickup:
 			_pickup_weapon(collider)
-		elif collider.is_in_group("Ball") and collider is RigidBody3D and not held_ball and (not _is_hand_occupied(false) or not _is_hand_occupied(true)):
-			_pickup_ball(collider)
+		elif collider is Ball3D and not held_ball and (not is_hand_occupied(false) or not is_hand_occupied(true)):
+			# Prefer the right hand, same as weapons; fall back to the left if it's taken.
+			collider.request_grab(self, is_hand_occupied(false))
 
 
 ## A hand is occupied if it holds a weapon or is the hand currently gripping the ball.
-func _is_hand_occupied(is_left: bool) -> bool:
+func is_hand_occupied(is_left: bool) -> bool:
 	if is_left:
 		return held_weapon_left != null or (held_ball != null and held_ball_hand_is_left)
 	else:
@@ -289,32 +300,26 @@ func _is_hand_occupied(is_left: bool) -> bool:
 
 
 func _pickup_weapon(weapon: Weapon3D) -> void:
-	if not _is_hand_occupied(false):
-		held_weapon_right = weapon
-		weapon.equip(self, hand_right)
-	elif not _is_hand_occupied(true):
-		held_weapon_left = weapon
-		weapon.equip(self, hand_left)
+	if not is_hand_occupied(false):
+		weapon.request_equip(self, false)
+	elif not is_hand_occupied(true):
+		weapon.request_equip(self, true)
 	# else both hands are full - leave it on the ground
 
 
-func _pickup_ball(ball: RigidBody3D) -> void:
-	held_ball = ball
-	# Prefer the right hand, same as weapons; fall back to the left if it's taken.
-	held_ball_hand_is_left = _is_hand_occupied(false)
-	original_collision_layer = ball.collision_layer
-	original_collision_mask = ball.collision_mask
-	# Freeze the ball's physics and disable collision
-	ball.freeze = true
-	ball.collision_layer = 0
-	ball.collision_mask = 0
-	_update_held_ball_position()
+## Put `weapon` in a hand (online, once the server has said we got it).
+func equip_weapon(weapon: Weapon3D, is_left: bool) -> void:
+	if is_left:
+		held_weapon_left = weapon
+	else:
+		held_weapon_right = weapon
+	weapon.equip(self, hand_left if is_left else hand_right)
 
 
 ## Keeps the ball's surface resting against the hand instead of the hand
 ## sitting inside the ball's center: offset the ball outward from the hand,
 ## away from the player's body, by its own radius.
-func _update_held_ball_position() -> void:
+func update_held_ball_position() -> void:
 	if not held_ball: return
 	var ball_hand: Area3D = hand_left if held_ball_hand_is_left else hand_right
 	var radius: float = _get_ball_radius(held_ball)
@@ -478,11 +483,6 @@ func _get_aim_direction() -> Vector3:
 func throw_ball(force_multiplier: float = 1.0) -> void:
 	if not held_ball: return
 
-	var ball: RigidBody3D = held_ball
-	ball.collision_layer = original_collision_layer
-	ball.collision_mask = original_collision_mask
-	ball.freeze = false
-
 	# Calculate forward direction based on player's rotation
 	var forward_direction: Vector3 = Vector3(
 		sin(rotation.y),
@@ -491,19 +491,14 @@ func throw_ball(force_multiplier: float = 1.0) -> void:
 	).normalized()
 
 	var throw_direction: Vector3 = (forward_direction + Vector3.UP * (UPWARD_FORCE / THROW_FORCE)).normalized()
-	ball.apply_impulse(throw_direction * THROW_FORCE * force_multiplier)
-
-	# Clear held ball reference
-	held_ball = null
+	# Online the ball stays in hand until the server lets it go
+	held_ball.request_throw(self, throw_direction * THROW_FORCE * force_multiplier)
 
 
 ## Let go of the ball without throwing it (e.g. when the ball is reset).
 func drop_ball() -> void:
-	if not held_ball: return
-	held_ball.collision_layer = original_collision_layer
-	held_ball.collision_mask = original_collision_mask
-	held_ball.freeze = false
-	held_ball = null
+	if held_ball:
+		held_ball.release(Vector3.ZERO)
 
 
 # ===== KNOCKBACK, BUMPING & FISTS =====
@@ -535,12 +530,17 @@ func _update_knockback(delta: float) -> void:
 ## a swinging sword under someone's feet would launch them), so overlap is
 ## resolved here instead: bodies are pushed apart, and on first contact each
 ## gets shoved by how fast the other was moving into them.
+## Online each owner only moves its own player (using the other's synced
+## velocity), and the other side's owner does the same from their end.
 func _bump_other_players(delta: float) -> void:
 	bump_cooldown = max(bump_cooldown - delta, 0.0)
+	var online: bool = Net.in_session()
 	for node: Node in get_tree().get_nodes_in_group("Player"):
 		var other: PlayerClass3D = node as PlayerClass3D
-		# Each pair is handled once, by the player with the lower instance id
-		if not other or other == self or get_instance_id() > other.get_instance_id():
+		if not other or other == self:
+			continue
+		# Offline each pair is handled once, by the player with the lower instance id
+		if not online and get_instance_id() > other.get_instance_id():
 			continue
 		var offset: Vector3 = other.global_position - global_position
 		if abs(offset.y) > BODY_RADIUS * 3.0:
@@ -554,16 +554,18 @@ func _bump_other_players(delta: float) -> void:
 		# Push apart (move_and_collide so nobody gets shoved into a wall)
 		var overlap: float = BODY_RADIUS * 2.0 - dist
 		move_and_collide(-normal * overlap * 0.5)
-		other.move_and_collide(normal * overlap * 0.5)
+		if not online:
+			other.move_and_collide(normal * overlap * 0.5)
 
-		if bump_cooldown > 0.0 or other.bump_cooldown > 0.0:
+		if bump_cooldown > 0.0 or (not online and other.bump_cooldown > 0.0):
 			continue
 		bump_cooldown = BUMP_COOLDOWN
-		other.bump_cooldown = BUMP_COOLDOWN
-		var my_push: float = max(velocity.dot(normal), 0.0)
 		var their_push: float = max(-other.velocity.dot(normal), 0.0)
-		other.add_knockback(normal * (BUMP_BASE + my_push * BUMP_CLOSING_TRANSFER) + Vector3.UP * BUMP_POP)
 		add_knockback(-normal * (BUMP_BASE + their_push * BUMP_CLOSING_TRANSFER) + Vector3.UP * BUMP_POP)
+		if not online:
+			other.bump_cooldown = BUMP_COOLDOWN
+			var my_push: float = max(velocity.dot(normal), 0.0)
+			other.add_knockback(normal * (BUMP_BASE + my_push * BUMP_CLOSING_TRANSFER) + Vector3.UP * BUMP_POP)
 
 
 func _start_punch(is_left: bool) -> void:
@@ -612,13 +614,61 @@ func _check_fist_hits(hand: Area3D, already_hit: Array[Node]) -> void:
 
 ## Called by Combat.strike for every attack that lands on this player.
 ## `dir` is the direction the attack travels. Returns false if blocked.
+## Online the hit is decided on this player's owner, so a remote copy just
+## passes it on (and can't know yet whether it was blocked).
 func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bool:
+	if not _is_local():
+		if Net.match_synced:
+			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity)
+		return true
 	if _is_blocking_from(dir):
 		add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
 		return false
 	if Entity:
+		var was_in_iframes: bool = Entity.is_in_iframes
 		Entity.take_hit(damage, knockback_velocity)
+		_share_iframes(was_in_iframes)
 	return true
+
+
+## A shove with no damage (e.g. a fast ball), routed like receive_hit.
+func shove(direction: Vector3, force: float) -> void:
+	if not _is_local():
+		if Net.match_synced:
+			_net_shove.rpc_id(get_multiplayer_authority(), direction, force)
+	elif Entity:
+		var was_in_iframes: bool = Entity.is_in_iframes
+		Entity.apply_knockback(direction, force)
+		_share_iframes(was_in_iframes)
+
+
+## Whether this machine controls this player (always, offline).
+func _is_local() -> bool:
+	return not Net.in_session() or is_multiplayer_authority()
+
+
+## If that hit just started our iframes, show the fade on everyone's copy.
+func _share_iframes(was_in_iframes: bool) -> void:
+	if Net.match_synced and not was_in_iframes and Entity.is_in_iframes:
+		_net_iframes.rpc()
+
+
+@rpc("any_peer", "reliable")
+func _net_receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> void:
+	if is_multiplayer_authority():
+		receive_hit(dir, damage, knockback_velocity)
+
+
+@rpc("any_peer", "reliable")
+func _net_shove(direction: Vector3, force: float) -> void:
+	if is_multiplayer_authority():
+		shove(direction, force)
+
+
+@rpc("any_peer", "unreliable")
+func _net_iframes() -> void:
+	if Entity and multiplayer.get_remote_sender_id() == get_multiplayer_authority():
+		Entity.start_iframes()
 
 
 func _is_blocking_from(attack_dir: Vector3) -> bool:
@@ -782,8 +832,8 @@ func _arm_sway_target(is_left: bool) -> float:
 ## attack button is held, ramping up over WINDUP_RAMP_DURATION (matching the
 ## throw-charge window) and relaxing back to rest otherwise.
 func _update_weapon_windups(delta: float) -> void:
-	windup_left = _update_hand_windup(windup_left, delta, Input_Handler.action_left and attack_left_armed, attack_left_press_time, _is_hand_occupied(true))
-	windup_right = _update_hand_windup(windup_right, delta, Input_Handler.action_right and attack_right_armed, attack_right_press_time, _is_hand_occupied(false))
+	windup_left = _update_hand_windup(windup_left, delta, Input_Handler.action_left and attack_left_armed, attack_left_press_time, is_hand_occupied(true))
+	windup_right = _update_hand_windup(windup_right, delta, Input_Handler.action_right and attack_right_armed, attack_right_press_time, is_hand_occupied(false))
 
 
 func _update_hand_windup(current: float, delta: float, is_pressed: bool, press_time: float, has_throwable: bool) -> float:

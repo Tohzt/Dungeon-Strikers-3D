@@ -46,6 +46,9 @@ var is_host := false
 ## Verified players' peer ids in seat order (leader first). Never the server.
 var peers: Array[int] = []
 var in_match := false
+## Every machine has the match scene loaded, so match nodes (players, ball,
+## weapons) can send each other updates without hitting missing nodes.
+var match_synced := false
 ## True on the headless server.
 var is_server := false
 
@@ -126,6 +129,7 @@ func leave() -> void:
 	is_host = false
 	peers.clear()
 	in_match = false
+	match_synced = false
 	_request = ""
 
 
@@ -189,6 +193,7 @@ func _close_session() -> void:
 	access_code = ""
 	peers.clear()
 	in_match = false
+	match_synced = false
 	_loaded.clear()
 	_all_loaded_sent = false
 	get_tree().unload_current_scene()
@@ -358,4 +363,5 @@ func _start_match() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _all_loaded() -> void:
+	match_synced = true
 	all_loaded.emit()
