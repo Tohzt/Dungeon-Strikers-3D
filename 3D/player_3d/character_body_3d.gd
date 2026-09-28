@@ -66,6 +66,10 @@ var swipe_timer_right: float = 0.0
 const SWIPE_DURATION := 0.25
 var original_shoulder_rotation_left: Vector3
 var original_shoulder_rotation_right: Vector3
+# Wrist: during a swing the blade first cocks back behind the arm, then whips
+# through ahead of it, so the slash isn't all shoulder.
+const WRIST_COCK_ANGLE := deg_to_rad(35)
+const WRIST_SNAP_ANGLE := deg_to_rad(60)
 
 # Wind-up: while a hand holding something throwable (weapon or ball) is
 # pressed, the arm pulls back progressively instead of sitting static, so a
@@ -829,6 +833,24 @@ func _update_weapon_swipes(delta: float) -> void:
 	var sway_angle: float = sin(sway_phase * TAU) * sway_amount * SWAY_MAX_ANGLE
 	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left, sway_angle * sway_weight_left)
 	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right, sway_angle * sway_weight_right)
+	# The wrist turns the same way the shoulder swings (see _update_shoulder_swipe)
+	if held_weapon_left is WeaponClass3D:
+		held_weapon_left.wrist_yaw = -_swing_wrist_angle(swipe_timer_left)
+	if held_weapon_right is WeaponClass3D:
+		held_weapon_right.wrist_yaw = _swing_wrist_angle(swipe_timer_right)
+
+
+## How far the wrist has turned the blade along the swing: dips back (cocked)
+## early on, then accelerates past the arm to WRIST_SNAP_ANGLE as the arm
+## reaches full swing, and relaxes with the arm on the way back.
+func _swing_wrist_angle(timer: float) -> float:
+	if timer <= 0.0:
+		return 0.0
+	var t: float = clamp(1.0 - (timer / SWIPE_DURATION), 0.0, 1.0)
+	if t < 0.5:
+		var p: float = t * 2.0
+		return WRIST_SNAP_ANGLE * p * p - WRIST_COCK_ANGLE * sin(PI * p)
+	return lerp(WRIST_SNAP_ANGLE, 0.0, (t - 0.5) * 2.0)
 
 
 func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float, sway: float = 0.0) -> float:

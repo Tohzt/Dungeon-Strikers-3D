@@ -14,6 +14,9 @@ class_name WeaponClass3D extends Weapon3D
 @export var held_pitch: float = deg_to_rad(90)
 
 var prev_hand_pos: Vector3
+# Extra yaw at the wrist on top of the arm's angle, set by the wielder while
+# swinging so the blade whips through instead of staying in line with the arm.
+var wrist_yaw: float = 0.0
 
 
 ## Reset the hand-follow tracking to the real hand position the moment we're
@@ -21,6 +24,7 @@ var prev_hand_pos: Vector3
 ## Vector3.ZERO to the hand and flings the weapon away before it corrects.
 func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 	super.equip(new_wielder, hand)
+	wrist_yaw = 0.0
 	if hand:
 		prev_hand_pos = hand.global_position
 
@@ -81,5 +85,5 @@ func _physics_process(delta: float) -> void:
 		if horizontal_dir.length() > 0.001:
 			# atan2(x, z) gives us the yaw angle in Godot's coordinate system
 			var yaw: float = atan2(horizontal_dir.x, horizontal_dir.y)
-			rotation.y = yaw
+			rotation.y = yaw + wrist_yaw
 			rotation.x = held_pitch
