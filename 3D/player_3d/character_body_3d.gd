@@ -71,6 +71,26 @@ var original_shoulder_rotation_right: Vector3
 const WRIST_COCK_ANGLE := deg_to_rad(35)
 const WRIST_SNAP_ANGLE := deg_to_rad(60)
 
+## A swing that connected: the arm holds still for a moment (hit-stop), then,
+## if it hit something solid, springs back from where it stopped instead of
+## carrying on through.
+class SwingContact:
+	var hitstop: float = 0.0
+	var rebound: float = 0.0  # Time left springing back; 0 = following through
+	var shoulder_from: float = 0.0  # Shoulder yaw offset from rest where it stopped
+	var wrist_from: float = 0.0
+
+	## 1 where it stopped, easing to 0 back at rest (quick off the target).
+	func rebound_weight() -> float:
+		var r: float = rebound / REBOUND_DURATION
+		return r * r
+
+const REBOUND_DURATION := 0.18
+var contact_left := SwingContact.new()
+var contact_right := SwingContact.new()
+## Just got hit: frozen for a moment (see Combat.HITSTOP).
+var hitstop: float = 0.0
+
 # Wind-up: while a hand holding something throwable (weapon or ball) is
 # pressed, the arm pulls back progressively instead of sitting static, so a
 # throw doesn't just fire from a resting pose. Ramps up over the same
@@ -228,6 +248,9 @@ func set_remote() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_remote:
+		return
+	if hitstop > 0.0:
+		hitstop -= delta
 		return
 	if not is_on_floor():
 		velocity += get_gravity() * delta
@@ -635,14 +658,14 @@ func _update_punches() -> void:
 	if punching_left:
 		punching_left = swipe_timer_left > 0.0
 		if punching_left:
-			_check_fist_hits(hand_left, punch_hits_left)
+			_check_fist_hits(hand_left, punch_hits_left, true)
 	if punching_right:
 		punching_right = swipe_timer_right > 0.0
 		if punching_right:
-			_check_fist_hits(hand_right, punch_hits_right)
+			_check_fist_hits(hand_right, punch_hits_right, false)
 
 
-func _check_fist_hits(hand: Area3D, already_hit: Array[Node]) -> void:
+func _check_fist_hits(hand: Area3D, already_hit: Array[Node], is_left: bool) -> void:
 	if not hand: return
 	var sphere := SphereShape3D.new()
 	sphere.radius = FIST_REACH
@@ -650,14 +673,20 @@ func _check_fist_hits(hand: Area3D, already_hit: Array[Node]) -> void:
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon:
 			exclude.append(weapon.get_rid())
+	var contact: bool = false
+	var solid: bool = false
 	for body: Node3D in Combat.overlaps(get_world_3d(), sphere, Transform3D(Basis(), hand.global_position), exclude):
 		if body in already_hit:
 			continue
 		already_hit.append(body)
+		contact = true
+		solid = solid or Combat.is_solid(body)
 		if Combat.strike(body, body.global_position - global_position, FIST_DAMAGE, FIST_KNOCKBACK, FIST_POP, FIST_OBJECT_IMPULSE):
 			var recoil: Vector3 = global_position - body.global_position
 			recoil.y = 0
 			add_knockback(recoil.normalized() * FIST_RECOIL)
+	if contact:
+		_start_swing_contact(is_left, solid)
 
 
 ## Called by Combat.strike for every attack that lands on this player.
@@ -676,6 +705,8 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 		var was_in_iframes: bool = Entity.is_in_iframes
 		Entity.take_hit(damage, knockback_velocity)
 		_share_iframes(was_in_iframes)
+		if not was_in_iframes:
+			hitstop = Combat.HITSTOP
 		if Entity.hp <= 0:
 			respawn()
 	return true
@@ -831,13 +862,45 @@ func _update_weapon_swipes(delta: float) -> void:
 	# Rotating both shoulders the same way around Y swings one hand forward
 	# and the other back, which is exactly the opposed walking arm swing.
 	var sway_angle: float = sin(sway_phase * TAU) * sway_amount * SWAY_MAX_ANGLE
-	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left, sway_angle * sway_weight_left)
-	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right, sway_angle * sway_weight_right)
+	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left, contact_left, sway_angle * sway_weight_left)
+	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right, contact_right, sway_angle * sway_weight_right)
 	# The wrist turns the same way the shoulder swings (see _update_shoulder_swipe)
 	if held_weapon_left is WeaponClass3D:
-		held_weapon_left.wrist_yaw = -_swing_wrist_angle(swipe_timer_left)
+		held_weapon_left.wrist_yaw = -_wrist_angle(swipe_timer_left, contact_left)
 	if held_weapon_right is WeaponClass3D:
-		held_weapon_right.wrist_yaw = _swing_wrist_angle(swipe_timer_right)
+		held_weapon_right.wrist_yaw = _wrist_angle(swipe_timer_right, contact_right)
+
+
+## A held weapon's swing connected (see Weapon3D._swing_contact).
+func swing_contact(weapon: Weapon3D, solid: bool) -> void:
+	_start_swing_contact(weapon == held_weapon_left, solid)
+
+
+## Stop that arm where it is for a moment; off something solid, spring it
+## back from there afterwards instead of finishing the swing.
+func _start_swing_contact(is_left: bool, solid: bool) -> void:
+	var contact: SwingContact = contact_left if is_left else contact_right
+	if contact.hitstop > 0.0 or contact.rebound > 0.0:
+		return  # Already stopped
+	contact.hitstop = Combat.HITSTOP if solid else Combat.HITSTOP_LIGHT
+	if not solid:
+		return
+	var shoulder: Node3D = shoulder_left if is_left else shoulder_right
+	var base: Vector3 = original_shoulder_rotation_left if is_left else original_shoulder_rotation_right
+	contact.rebound = REBOUND_DURATION
+	contact.shoulder_from = shoulder.rotation.y - base.y
+	contact.wrist_from = _swing_wrist_angle(swipe_timer_left if is_left else swipe_timer_right)
+	# A fist springing back off someone shouldn't punch anyone on the way
+	if is_left:
+		punching_left = false
+	else:
+		punching_right = false
+
+
+func _wrist_angle(timer: float, contact: SwingContact) -> float:
+	if contact.rebound > 0.0:
+		return contact.wrist_from * contact.rebound_weight()
+	return _swing_wrist_angle(timer)
 
 
 ## How far the wrist has turned the blade along the swing: dips back (cocked)
@@ -853,8 +916,16 @@ func _swing_wrist_angle(timer: float) -> float:
 	return lerp(WRIST_SNAP_ANGLE, 0.0, (t - 0.5) * 2.0)
 
 
-func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float, sway: float = 0.0) -> float:
+func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float, contact: SwingContact, sway: float = 0.0) -> float:
 	if not shoulder: return timer
+
+	if contact.hitstop > 0.0:
+		contact.hitstop -= delta
+		return timer  # Held where it connected
+	if contact.rebound > 0.0:
+		contact.rebound = max(contact.rebound - delta, 0.0)
+		shoulder.rotation.y = base_rotation.y + contact.shoulder_from * contact.rebound_weight()
+		return contact.rebound  # Still mid-swing until it's back at rest
 
 	if timer > 0.0:
 		timer -= delta

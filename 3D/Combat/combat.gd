@@ -6,6 +6,12 @@ const HIT_MASK := 0b110  # Player + Enemy layers (the ball is on Enemy)
 ## Loose physics objects (ball, enemies) get this fraction of the knockback
 ## speed as an impulse, unless the attack passes its own.
 const OBJECT_IMPULSE_RATIO := 0.45
+const WORLD_MASK := 0b1
+## A swing that connects freezes the arm (and whoever got hit) this long, so
+## the contact reads as a solid thunk instead of the blade passing through.
+const HITSTOP := 0.08
+## Light things (the ball) barely slow a swing down.
+const HITSTOP_LIGHT := 0.04
 
 
 ## Physics bodies overlapping `shape` placed at `xform`, minus `exclude`.
@@ -21,6 +27,31 @@ static func overlaps(world: World3D, shape: Shape3D, xform: Transform3D, exclude
 		if body and not bodies.has(body):
 			bodies.append(body)
 	return bodies
+
+
+## Whether a swing stops dead on `body` and springs back (players, blades,
+## walls), rather than following through it (the ball).
+static func is_solid(body: Node3D) -> bool:
+	return not body is Ball3D
+
+
+## Whether `shape` at `xform` is inside a wall. Floors don't count, so a low
+## swing can graze the ground.
+static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> bool:
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = xform
+	query.collision_mask = WORLD_MASK
+	var exclude: Array[RID] = []
+	for i in 4:
+		query.exclude = exclude
+		var info: Dictionary = world.direct_space_state.get_rest_info(query)
+		if info.is_empty():
+			return false
+		if info.normal.y < 0.7:
+			return true
+		exclude.append(info.rid)
+	return false
 
 
 ## Hit `body` with an attack travelling along `dir`. Players take damage and

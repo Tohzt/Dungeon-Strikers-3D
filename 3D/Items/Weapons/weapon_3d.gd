@@ -36,6 +36,20 @@ var swing_time_left: float = 0.0
 var thrower: Node3D = null  # Who threw it, so it can't hit them mid-flight
 var _hit_this_action: Array[Node] = []
 
+# A swing knocks things the way the blade is moving (not just away from the
+# wielder), harder the faster it's going: SWING_REFERENCE_SPEED hits for the
+# weapon's usual knockback, scaled within SWING_POWER_MIN..MAX.
+const SWING_REFERENCE_SPEED := 18.0
+const SWING_POWER_MIN := 0.6
+const SWING_POWER_MAX := 1.0
+const SOLID_BOUNCE := 0.25
+var _blade_velocity: Vector3 = Vector3.ZERO
+var _blade_prev_pos: Vector3
+var _blade_tracked: bool = false
+## Clang off a wall only when the blade swings into it, not when a sword
+## resting against it starts a swing already inside.
+var _blade_in_wall: bool = false
+
 const THROWN_SETTLE_SPEED: float = 0.4
 const DEFAULT_THROW_FORCE: float = 15.0
 const DEFAULT_THROW_UPWARD_RATIO: float = 0.15
@@ -122,15 +136,44 @@ func _handle_thrown_settle() -> void:
 func start_swing(duration: float) -> void:
 	swing_time_left = duration
 	_hit_this_action.clear()
+	_blade_tracked = false
+	_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
 
 
 func _update_hits(delta: float) -> void:
 	if swing_time_left > 0.0:
 		swing_time_left -= delta
 		if is_held and wielder:
+			_track_blade(delta)
 			_hit_overlapping(wielder, 1.0, false)
+			var was_in_wall: bool = _blade_in_wall
+			_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
+			if swing_time_left > 0.0 and _blade_in_wall and not was_in_wall:
+				_swing_contact(true)
 	elif is_thrown and linear_velocity.length() > THROWN_HIT_MIN_SPEED:
 		_hit_overlapping(thrower, THROWN_DAMAGE_MULTIPLIER, true)
+
+
+## How fast the blade itself is moving mid-swing. The swing mostly turns the
+## weapon rather than pushing it, so its linear_velocity misses most of it.
+func _track_blade(delta: float) -> void:
+	var pos: Vector3 = Collision.global_position
+	_blade_velocity = (pos - _blade_prev_pos) / delta if _blade_tracked else Vector3.ZERO
+	_blade_prev_pos = pos
+	_blade_tracked = true
+
+
+## The swing met something: tell the wielder's arm to stop for a moment
+## (and spring back off anything solid), and stop hitting on the way back.
+func _swing_contact(solid: bool) -> void:
+	if solid:
+		swing_time_left = 0.0
+		# Stop dead instead of sliding on through it, with a little kick back
+		linear_velocity *= -SOLID_BOUNCE
+	else:
+		swing_time_left += Combat.HITSTOP_LIGHT  # The arm pauses; keep the window open as long
+	if wielder is PlayerClass3D:
+		wielder.swing_contact(self, solid)
 
 
 func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) -> void:
@@ -138,6 +181,8 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 	var exclude: Array[RID] = [get_rid()]
 	if attacker is CollisionObject3D:
 		exclude.append(attacker.get_rid())
+	var contact: bool = false
+	var solid: bool = false
 	for body: Node3D in Combat.overlaps(get_world_3d(), Collision.shape, Collision.global_transform, exclude):
 		# Never hit our own side's gear (e.g. the wielder's other-hand weapon)
 		if body in _hit_this_action or (body is Weapon3D and attacker and body.wielder == attacker):
@@ -146,8 +191,25 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 		var dir: Vector3 = linear_velocity if thrown else body.global_position - attacker.global_position
 		var damage: float = (Behavior.get_damage() if Behavior else 10.0) * damage_multiplier
 		var knockback: float = Behavior.knockback_force if Behavior else 8.0
+		if not thrown:
+			dir = _swing_hit_direction(dir)
+			knockback *= clamp(_blade_velocity.length() / SWING_REFERENCE_SPEED, SWING_POWER_MIN, SWING_POWER_MAX)
+			contact = true
+			solid = solid or Combat.is_solid(body)
 		if Combat.strike(body, dir, damage, knockback, HIT_POP) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
+	if contact:
+		_swing_contact(solid)
+
+
+## Half away from the wielder, half along the blade's travel, so a slash
+## sends things off to the side it was swung toward.
+func _swing_hit_direction(away: Vector3) -> Vector3:
+	var travel := Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
+	away.y = 0.0
+	if travel.length() < 0.5 or away.length() < 0.01:
+		return away
+	return away.normalized() + travel.normalized()
 
 
 ## High-level API: called when a quick tap resolves to an attack rather than a
