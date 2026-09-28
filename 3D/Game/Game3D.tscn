@@ -8,11 +8,8 @@
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
 [ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
-[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="8_cpoda"]
-[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="9_sboqw"]
-[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="10_uepvo"]
+[ext_resource type="PackedScene" uid="uid://k7wywaa0oom" path="res://3D/Weapons/weapon_stand.tscn" id="9_wodrl"]
 [ext_resource type="PackedScene" uid="uid://cqdd6x0yvjqmx" path="res://3D/Weapons/Shield/Shield_3D.tscn" id="12_uepvo"]
-[ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://3D/Weapons/Bow and Arrow/arrow_3d.tscn" id="13_484l6"]
 [ext_resource type="PackedScene" uid="uid://gwtg3n8y37dp" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="14_gq62a"]
 [ext_resource type="PackedScene" path="res://Menus/PauseMenu/pause_menu.tscn" id="15_pause"]
 
@@ -53,39 +50,6 @@ size = Vector3(106.99121, 10, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_uqeks"]
 size = Vector3(1, 10, 34.92383)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_w1tv4"]
-albedo_color = Color(0.57070744, 0.37050173, 0.23154527, 1)
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_gvrid"]
-material = SubResource("StandardMaterial3D_w1tv4")
-radius = 0.1
-height = 0.6
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_gvrid"]
-size = Vector3(0.15, 1.5, 0.15)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_al1ea"]
-albedo_color = Color(0, 1, 1, 1)
-metallic = 1.0
-metallic_specular = 0.87
-roughness = 0.55
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_484l6"]
-material = SubResource("StandardMaterial3D_al1ea")
-radius = 0.1
-height = 1.5
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gq62a"]
-albedo_color = Color(1, 0, 0.42745098, 1)
-metallic = 1.0
-metallic_specular = 0.87
-roughness = 0.55
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_drgkw"]
-material = SubResource("StandardMaterial3D_gq62a")
-radius = 0.1
-height = 1.5
 
 [node name="Game3d" type="Node3D" unique_id=998231224]
 script = ExtResource("1_kwiv5")
@@ -162,74 +126,18 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
 
 [node name="Weapons" type="Node" parent="." unique_id=456536771]
 
-[node name="Sword_3D" parent="Weapons" unique_id=802568974 instance=ExtResource("7_al1ea")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 4.707629)
-follow_strength = 80.0
+[node name="WeaponStand" parent="Weapons" unique_id=1310319628 instance=ExtResource("9_wodrl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.916049, -9.536743e-07, -11.361845)
+weapon_scene = ExtResource("7_al1ea")
 
-[node name="Sword_3D2" type="RigidBody3D" parent="Weapons" unique_id=1827205174 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 6.2843537)
-collision_layer = 8
-collision_mask = 7
-axis_lock_angular_x = true
-axis_lock_angular_y = true
-axis_lock_angular_z = true
-script = ExtResource("8_cpoda")
-follow_strength = 80.0
-Properties = NodePath("WeaponProperties")
-Behavior = NodePath("WeaponBehavior")
+[node name="WeaponStand2" parent="Weapons" unique_id=1367793971 instance=ExtResource("9_wodrl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.916049, -9.536743e-07, 11.716673)
+weapon_scene = ExtResource("14_gq62a")
 
-[node name="WeaponBehavior" parent="Weapons/Sword_3D2" unique_id=1934706997 instance=ExtResource("9_sboqw")]
+[node name="WeaponStand3" parent="Weapons" unique_id=2058698556 instance=ExtResource("9_wodrl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.0674486, -9.536743e-07, 11.716673)
+weapon_scene = ExtResource("7_al1ea")
 
-[node name="WeaponProperties" parent="Weapons/Sword_3D2" unique_id=1809870708 instance=ExtResource("10_uepvo")]
-
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="Weapons/Sword_3D2" unique_id=178687410]
-transform = Transform3D(1.9106855e-15, 4.371139e-08, 1, 1, -4.371139e-08, 0, 4.371139e-08, 1, -4.371139e-08, 0, 0.18893492, 0)
-mesh = SubResource("CapsuleMesh_gvrid")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/Sword_3D2" unique_id=224338604]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.47944963, 0)
-shape = SubResource("BoxShape3D_gvrid")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Weapons/Sword_3D2/CollisionShape3D" unique_id=1423754701]
-mesh = SubResource("CapsuleMesh_484l6")
-skeleton = NodePath("../..")
-
-[node name="Sword_3D3" type="RigidBody3D" parent="Weapons" unique_id=588807636 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 7.543426)
-collision_layer = 8
-collision_mask = 7
-axis_lock_angular_x = true
-axis_lock_angular_y = true
-axis_lock_angular_z = true
-script = ExtResource("8_cpoda")
-follow_strength = 80.0
-Properties = NodePath("WeaponProperties")
-Behavior = NodePath("WeaponBehavior")
-
-[node name="WeaponBehavior" parent="Weapons/Sword_3D3" unique_id=1466554296 instance=ExtResource("9_sboqw")]
-
-[node name="WeaponProperties" parent="Weapons/Sword_3D3" unique_id=906453494 instance=ExtResource("10_uepvo")]
-
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="Weapons/Sword_3D3" unique_id=1193061058]
-transform = Transform3D(1.9106855e-15, 4.371139e-08, 1, 1, -4.371139e-08, 0, 4.371139e-08, 1, -4.371139e-08, 0, 0.18893492, 0)
-mesh = SubResource("CapsuleMesh_gvrid")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/Sword_3D3" unique_id=1554168426]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.47944963, 0)
-shape = SubResource("BoxShape3D_gvrid")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Weapons/Sword_3D3/CollisionShape3D" unique_id=1249429144]
-mesh = SubResource("CapsuleMesh_drgkw")
-skeleton = NodePath("../..")
-
-[node name="Shield3d" parent="Weapons" unique_id=956456063 instance=ExtResource("12_uepvo")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8102303, -4.600742)
-
-[node name="Arrow_3D" parent="Weapons" unique_id=1688206367 instance=ExtResource("13_484l6")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5703564, 2.1806288, -8.299206)
-
-[node name="Bow_3D" parent="Weapons" unique_id=92531580 instance=ExtResource("14_gq62a")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.186322, 1.5926104, -9.399996)
-
-[node name="Bow_3D2" parent="Weapons" unique_id=1268025179 instance=ExtResource("14_gq62a")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.829128, 1.5926104, -9.399996)
+[node name="WeaponStand4" parent="Weapons" unique_id=523108490 instance=ExtResource("9_wodrl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.0674486, -9.536743e-07, -11.400484)
+weapon_scene = ExtResource("12_uepvo")

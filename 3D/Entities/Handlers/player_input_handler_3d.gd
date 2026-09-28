@@ -66,6 +66,9 @@ func _process(delta: float) -> void:
 	# Update action_left to track current held state (for ball throwing and other actions)
 	action_left = Input.is_action_pressed(action("attack_left"))
 	move_jump = Input.is_action_just_pressed(action("move_jump"))
+	# Stays set until the player acts on it
+	if Input.is_action_just_pressed(action("interact")):
+		interact = true
 	_handle_input_dodge(delta)
 	_handle_input_look(delta)
 
@@ -144,9 +147,6 @@ func _input(event: InputEvent) -> void:
 
 	if event.is_action(action("move_dodge")):
 		move_dodge = event.is_action_pressed(action("move_dodge"))
-	
-	if event.is_action(action("interact")):
-		interact = event.is_action_pressed(action("interact"))
 	
 	if event.is_action(action("target")):
 		target_toggle = event.is_action_pressed(action("target"))

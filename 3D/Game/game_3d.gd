@@ -94,6 +94,12 @@ func weapons() -> Array[Weapon3D]:
 	return found
 
 
+## A weapon made mid-match (e.g. taken off a stand) joins the others, so
+## it's looked after like them when its owner leaves.
+func add_weapon(weapon: Weapon3D) -> void:
+	$Weapons.add_child(weapon)
+
+
 ## Online: the player controlled by this peer, if they're still here.
 func player_of_peer(peer_id: int) -> PlayerClass3D:
 	for player: PlayerClass3D in players:

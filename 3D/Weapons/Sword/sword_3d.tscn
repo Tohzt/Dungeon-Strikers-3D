@@ -36,7 +36,7 @@ axis_lock_angular_x = true
 axis_lock_angular_y = true
 axis_lock_angular_z = true
 script = ExtResource("1_gvrid")
-follow_strength = 2000.0
+follow_strength = 80.0
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 

@@ -233,6 +233,13 @@ func _physics_process(delta: float) -> void:
 		direction = Input_Handler.move_dir
 	_update_sprint(direction, delta)
 
+	# Interact shares the controller's A button with jump, so taking a weapon
+	# off a stand doesn't also hop
+	if Input_Handler.interact:
+		Input_Handler.interact = false
+		if _take_from_nearest_stand():
+			Input_Handler.move_jump = false
+
 	# Apply jump velocity multiplier only when jump is initiated, not every frame
 	if Input_Handler.move_jump and is_on_floor():
 		var jump_multiplier: float = 1.0
@@ -312,6 +319,16 @@ func _pickup_weapon(weapon: Weapon3D) -> void:
 	elif not is_hand_occupied(true):
 		weapon.request_equip(self, true)
 	# else both hands are full - leave it on the ground
+
+
+## Returns whether a stand in reach is giving us its weapon.
+func _take_from_nearest_stand() -> bool:
+	var nearest: WeaponStand3D = null
+	for stand: WeaponStand3D in get_tree().get_nodes_in_group("WeaponStand"):
+		if stand.can_give_to(self) and (not nearest \
+				or global_position.distance_to(stand.global_position) < global_position.distance_to(nearest.global_position)):
+			nearest = stand
+	return nearest != null and nearest.request_take(self)
 
 
 ## Put `weapon` in a hand (online, once the server has said we got it).

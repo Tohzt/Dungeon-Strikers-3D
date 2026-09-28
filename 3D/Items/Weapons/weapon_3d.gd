@@ -411,11 +411,17 @@ func _equipped(player_name: String, is_left: bool) -> void:
 	if multiplayer.get_remote_sender_id() != Net.SERVER_ID:
 		return
 	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
-	if not player:
-		return
+	if player:
+		hand_to(player, is_left)
+
+
+## Put this in `player`'s hand. Online, every machine does this once the
+## server has decided, and that player's machine simulates it from then on.
+func hand_to(player: PlayerClass3D, is_left: bool) -> void:
 	if wielder:
 		unequip()
-	_set_net_owner(player.get_multiplayer_authority())
+	if Net.in_session():
+		_set_net_owner(player.get_multiplayer_authority())
 	player.equip_weapon(self, is_left)
 
 
