@@ -29,6 +29,10 @@ var holder_hand_is_left: bool = false
 var _free_collision_layer: int = 0
 var _free_collision_mask: int = 0
 
+## A boss the ball is locked inside until it's beaten (see capture()).
+## Set on every machine.
+var captor: Node3D = null
+
 ## Server: after a throw nobody can grab the ball for a moment, so the
 ## thrower's grab request (sent before they saw the throw) doesn't catch it.
 const GRAB_COOLDOWN := 0.3
@@ -77,7 +81,7 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not _simulates():
+	if not _simulates() or captor:
 		return  # The server's updates move and color it
 	_grab_cooldown = max(_grab_cooldown - delta, 0.0)
 	if linear_velocity.length() > max_ball_speed:
@@ -92,7 +96,7 @@ func _physics_process(delta: float) -> void:
 ## others follow its updates. Call before the match starts syncing.
 func setup_network() -> void:
 	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	freeze = not Net.is_server
+	freeze = not Net.is_server or captor != null
 	if not Net.is_server:
 		_net_motion = NetInterpolator.new()
 
@@ -124,7 +128,7 @@ func _net_state(time: float, xform: Transform3D, color: Color) -> void:
 
 ## Hit or shoved by something (see Combat.push).
 func receive_impulse(impulse: Vector3) -> void:
-	if holder:
+	if holder or captor:
 		return
 	if _simulates():
 		apply_central_impulse(impulse)
@@ -134,7 +138,7 @@ func receive_impulse(impulse: Vector3) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_push(impulse: Vector3) -> void:
-	if Net.is_server and not holder:
+	if Net.is_server and not holder and not captor:
 		apply_central_impulse(impulse)
 
 
@@ -143,7 +147,7 @@ func _request_push(impulse: Vector3) -> void:
 ## `player` touched the ball with a free hand. Online the server decides, so
 ## two players can't grab it at once.
 func request_grab(player: PlayerClass3D, is_left: bool) -> void:
-	if holder or not can_be_picked_up:
+	if holder or captor or not can_be_picked_up:
 		return
 	if not Net.in_session():
 		grab(player, is_left)
@@ -200,7 +204,7 @@ func release(impulse: Vector3) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_grab(is_left: bool) -> void:
-	if not Net.is_server or holder or not can_be_picked_up or _grab_cooldown > 0.0:
+	if not Net.is_server or holder or captor or not can_be_picked_up or _grab_cooldown > 0.0:
 		return
 	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
 	if player and not player.is_hand_occupied(is_left):
@@ -223,6 +227,42 @@ func _grabbed(player_name: String, is_left: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _released(impulse: Vector3) -> void:
 	release(impulse)
+
+
+# ===== CAPTURED BY A BOSS =====
+
+## Lock the ball away inside `boss`: hidden, frozen and untouchable until
+## free_from_captor(). Call on every machine.
+func capture(boss: Node3D) -> void:
+	if holder:
+		release(Vector3.ZERO)
+	captor = boss
+	visible = false
+	freeze = true
+	_free_collision_layer = collision_layer
+	_free_collision_mask = collision_mask
+	collision_layer = 0
+	collision_mask = 0
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+
+
+## The boss holding the ball was beaten: it drops out at `pos`, launched
+## with `impulse` (by whoever simulates it). Call on every machine.
+func free_from_captor(pos: Vector3, impulse: Vector3) -> void:
+	if not captor:
+		return
+	captor = null
+	visible = true
+	collision_layer = _free_collision_layer
+	collision_mask = _free_collision_mask
+	global_position = pos
+	if _net_motion:
+		_net_motion.clear()  # Don't play back where it sat while hidden
+	_last_sent_transform = Transform3D()
+	freeze = not _simulates()
+	if _simulates():
+		apply_central_impulse(impulse)
 
 
 func _update_ball_color(speed: float) -> void:

@@ -55,14 +55,17 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 
 
 ## Hit `body` with an attack travelling along `dir`. Players take damage and
-## get shoved (unless a raised shield faces the attack); other unfrozen
-## physics bodies just get pushed. Returns true if a player took the hit.
+## get shoved (unless a raised shield faces the attack), bosses take damage;
+## other unfrozen physics bodies just get pushed. Returns true if a player
+## or boss took the hit.
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
 static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0) -> bool:
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
 	if body is PlayerClass3D:
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
+	if body is Boss3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
 	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
 	push(body, (dir + Vector3.UP * 0.3) * impulse)

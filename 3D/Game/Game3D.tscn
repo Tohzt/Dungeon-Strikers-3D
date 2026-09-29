@@ -10,24 +10,23 @@
 [ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
 [ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="8_al1ea"]
-[ext_resource type="PackedScene" uid="uid://k7wywaa0oom" path="res://3D/Weapons/weapon_stand.tscn" id="9_wodrl"]
-[ext_resource type="PackedScene" uid="uid://cqdd6x0yvjqmx" path="res://3D/Weapons/Shield/Shield_3D.tscn" id="12_uepvo"]
 [ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="13_uepvo"]
-[ext_resource type="PackedScene" uid="uid://gwtg3n8y37dp" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="14_gq62a"]
 [ext_resource type="PackedScene" path="res://Menus/PauseMenu/pause_menu.tscn" id="15_pause"]
 [ext_resource type="PackedScene" path="res://3D/HUD/scoreboard.tscn" id="16_score"]
+[ext_resource type="PackedScene" uid="uid://dq1toy2g128vu" path="res://3D/Entities/Boss/boss.tscn" id="17_boss"]
+[ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="18_bossbar"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_xvsmf"]
-sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
-ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_uepvo"]
+sky_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
+ground_bottom_color = Color(0.071674235, 0.102232955, 0.1433199, 1)
+ground_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
 
-[sub_resource type="Sky" id="Sky_v8n5r"]
-sky_material = SubResource("ProceduralSkyMaterial_xvsmf")
+[sub_resource type="Sky" id="Sky_al1ea"]
+sky_material = SubResource("ProceduralSkyMaterial_uepvo")
 
-[sub_resource type="Environment" id="Environment_jrsk6"]
+[sub_resource type="Environment" id="Environment_484l6"]
 background_mode = 2
-sky = SubResource("Sky_v8n5r")
-tonemap_mode = 2
+sky = SubResource("Sky_al1ea")
 glow_enabled = true
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_qgpjc"]
@@ -75,8 +74,8 @@ transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.86602545, 0, -0.86602545, 0.49
 transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 23.241423, 0)
 shadow_enabled = true
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1060067142]
-environment = SubResource("Environment_jrsk6")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1774885226]
+environment = SubResource("Environment_484l6")
 
 [node name="Walls" type="Node" parent="." unique_id=252799667]
 
@@ -143,22 +142,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
 
 [node name="Weapons" type="Node" parent="." unique_id=456536771]
 
-[node name="WeaponStand" parent="Weapons" unique_id=1310319628 instance=ExtResource("9_wodrl")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.916049, -9.536743e-07, -11.361845)
-weapon_scene = ExtResource("7_al1ea")
-
-[node name="WeaponStand2" parent="Weapons" unique_id=1367793971 instance=ExtResource("9_wodrl")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.916049, -9.536743e-07, 11.716673)
-weapon_scene = ExtResource("14_gq62a")
-
-[node name="WeaponStand3" parent="Weapons" unique_id=2058698556 instance=ExtResource("9_wodrl")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.0674486, -9.536743e-07, 11.716673)
-weapon_scene = ExtResource("7_al1ea")
-
-[node name="WeaponStand4" parent="Weapons" unique_id=523108490 instance=ExtResource("9_wodrl")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.0674486, -9.536743e-07, -11.400484)
-weapon_scene = ExtResource("12_uepvo")
-
 [node name="Altar" parent="." unique_id=2138990566 instance=ExtResource("13_uepvo")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -42.80662, 0, 0)
 weapon_scene = ExtResource("7_al1ea")
@@ -167,3 +150,9 @@ weapon_scene = ExtResource("7_al1ea")
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 32.855274, 0, 0)
 owner_team = 1
 weapon_scene = ExtResource("7_al1ea")
+
+[node name="Boss" parent="." unique_id=183138971 instance=ExtResource("17_boss")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10)
+
+[node name="BossHealthBar" parent="." unique_id=730215984 node_paths=PackedStringArray("boss") instance=ExtResource("18_bossbar")]
+boss = NodePath("../Boss")
