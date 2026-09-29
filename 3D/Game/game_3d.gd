@@ -1,6 +1,8 @@
 class_name Game3D_Class extends Node3D
 
 signal set_camera_active(TorF: bool)
+## A point was just awarded to `team`. On every machine.
+signal goal_scored(team: int)
 
 @export var player_scene: PackedScene
 ## How many players to seat automatically when no menu has joined anyone
@@ -14,10 +16,16 @@ signal set_camera_active(TorF: bool)
 
 @onready var ball: Ball3D = $Ball_3D
 @onready var HUD: HUD3D = $HUD
+@onready var scoreboard: Scoreboard3D = $Scoreboard
 
 var players: Array[PlayerClass3D] = []
 ## Each player's HUD, so it can go when an online player leaves.
 var huds: Dictionary[PlayerClass3D, HUD3D] = {}
+## Points per team, for every team that has a goal to attack.
+var scores: Dictionary[int, int] = {}
+## Server/offline: ignore the ball re-entering a net until it's been reset.
+const GOAL_LOCKOUT_MSEC := 1000
+var _goal_lock_until_msec: int = 0
 ## First player, kept for code that only knows about one.
 var Player: PlayerClass3D:
 	get: return players[0] if not players.is_empty() else null
@@ -25,6 +33,7 @@ var Player: PlayerClass3D:
 func _enter_tree() -> void: Global.Game3D = self
 
 func _ready() -> void:
+	_setup_scores()
 	if Net.in_session():
 		_spawn_online_players()
 	else:
@@ -126,6 +135,41 @@ func _on_net_peers_changed() -> void:
 
 
 func _process(_delta: float) -> void: pass
+
+
+func _setup_scores() -> void:
+	var teams: Array[int] = []
+	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		if not teams.has(goal.scoring_team):
+			teams.append(goal.scoring_team)
+	teams.sort()
+	for team: int in teams:
+		scores[team] = 0
+	scoreboard.setup(teams)
+
+
+## Server/offline: the ball went into a goal attacked by `team`. Award the
+## point everywhere and put the ball back in the middle.
+func score_goal(team: int) -> void:
+	if Net.in_session() and not (Net.is_server and Net.match_synced):
+		return
+	if Time.get_ticks_msec() < _goal_lock_until_msec:
+		return
+	_goal_lock_until_msec = Time.get_ticks_msec() + GOAL_LOCKOUT_MSEC
+	var new_score: int = scores.get(team, 0) + 1
+	if Net.in_session():
+		_goal_scored.rpc(team, new_score)
+	else:
+		_goal_scored(team, new_score)
+	# Called from a physics callback; move the ball once the step is done.
+	reset_ball.call_deferred()
+
+
+@rpc("authority", "call_local", "reliable")
+func _goal_scored(team: int, new_score: int) -> void:
+	scores[team] = new_score
+	scoreboard.set_score(team, new_score)
+	goal_scored.emit(team)
 
 
 ## Put the ball back at its starting spot, taking it from whoever holds it.

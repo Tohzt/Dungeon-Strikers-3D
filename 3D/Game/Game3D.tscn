@@ -8,10 +8,13 @@
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
 [ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
+[ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="8_al1ea"]
 [ext_resource type="PackedScene" uid="uid://k7wywaa0oom" path="res://3D/Weapons/weapon_stand.tscn" id="9_wodrl"]
 [ext_resource type="PackedScene" uid="uid://cqdd6x0yvjqmx" path="res://3D/Weapons/Shield/Shield_3D.tscn" id="12_uepvo"]
+[ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="13_uepvo"]
 [ext_resource type="PackedScene" uid="uid://gwtg3n8y37dp" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="14_gq62a"]
 [ext_resource type="PackedScene" path="res://Menus/PauseMenu/pause_menu.tscn" id="15_pause"]
+[ext_resource type="PackedScene" path="res://3D/HUD/scoreboard.tscn" id="16_score"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_xvsmf"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
@@ -37,7 +40,7 @@ uv1_scale = Vector3(-3, 2, 0)
 
 [sub_resource type="BoxMesh" id="BoxMesh_sjtsc"]
 material = SubResource("StandardMaterial3D_uqeks")
-size = Vector3(100, 0.5, 30)
+size = Vector3(106.45117, 0.5, 34.520508)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_p6jv2"]
 size = Vector2(107, 35)
@@ -56,6 +59,8 @@ script = ExtResource("1_kwiv5")
 player_scene = ExtResource("5_sboqw")
 
 [node name="HUD" parent="." unique_id=347811869 instance=ExtResource("2_wodrl")]
+
+[node name="Scoreboard" parent="." instance=ExtResource("16_score")]
 
 [node name="PauseMenu" parent="." unique_id=1958909121 instance=ExtResource("15_pause")]
 
@@ -121,6 +126,14 @@ data = {
 "cells": PackedInt32Array(65530, 4, 2, 65531, 4, 2, 65532, 4, 2, 65533, 4, 2, 65534, 4, 2, 65535, 4, 2, 0, 4, 2, 1, 4, 2, 2, 4, 2, 3, 4, 2, 4, 4, 2, 5, 4, 2, 6, 4, 2, 7, 4, 2, 8, 4, 2, 9, 4, 2, 10, 4, 2, 11, 4, 2, 12, 4, 2, 65529, 4, 2, 65528, 4, 2, 65527, 4, 2, 65526, 4, 2, 65525, 4, 2, 65524, 4, 2, 65523, 4, 2, 65523, 65531, 2, 65524, 65531, 2, 65525, 65531, 2, 65526, 65531, 2, 65527, 65531, 2, 65528, 65531, 2, 65529, 65531, 2, 65530, 65531, 2, 65531, 65531, 2, 65532, 65531, 2, 65533, 65531, 2, 65534, 65531, 2, 65535, 65531, 2, 0, 65531, 2, 1, 65531, 2, 2, 65531, 2, 3, 65531, 2, 4, 65531, 2, 5, 65531, 2, 6, 65531, 2, 7, 65531, 2, 8, 65531, 2, 9, 65531, 2, 10, 65531, 2, 11, 65531, 2, 12, 65531, 2, 65522, 3, 1441794, 65522, 2, 1441794, 65522, 65532, 1441794, 65522, 65533, 1441794, 65522, 65534, 1441794, 65522, 65535, 1441794, 65522, 0, 1441794, 65522, 1, 1441794, 13, 65532, 1441794, 13, 65533, 1441794, 13, 65534, 1441794, 13, 65535, 1441794, 13, 0, 1441794, 13, 1, 1441794, 13, 2, 1441794, 13, 3, 1441794, 13, 4, 1441795, 65522, 4, 655363, 65522, 65531, 1048579, 13, 65531, 3)
 }
 
+[node name="Goal" parent="Walls" unique_id=424337427 instance=ExtResource("8_al1ea")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52.93036, 1.6864624, 0)
+
+[node name="Goal2" parent="Walls" unique_id=961314483 instance=ExtResource("8_al1ea")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -52.93, 1.686, 0)
+scoring_team = 1
+owner_team = 0
+
 [node name="Ball_3D" parent="." unique_id=1631300372 instance=ExtResource("6_uepvo")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
 
@@ -141,3 +154,10 @@ weapon_scene = ExtResource("7_al1ea")
 [node name="WeaponStand4" parent="Weapons" unique_id=523108490 instance=ExtResource("9_wodrl")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.0674486, -9.536743e-07, -11.400484)
 weapon_scene = ExtResource("12_uepvo")
+
+[node name="Altar" parent="." unique_id=2138990566 instance=ExtResource("13_uepvo")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -42.80662, 0, 0)
+
+[node name="Altar2" parent="." unique_id=827922923 instance=ExtResource("13_uepvo")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 32.855274, 0, 0)
+owner_team = 1

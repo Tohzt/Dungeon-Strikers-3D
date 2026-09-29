@@ -55,8 +55,19 @@ func _build_display() -> void:
 
 ## Whether `player` could take this stand's weapon right now.
 func can_give_to(player: PlayerClass3D) -> bool:
-	return weapon_scene != null and cooldown_left <= 0.0 and reach.overlaps_body(player) \
+	return _is_stocked() and _may_take(player) and reach.overlaps_body(player) \
 		and (not player.is_hand_occupied(false) or not player.is_hand_occupied(true))
+
+
+## Whether there's a weapon here ready to hand out.
+func _is_stocked() -> bool:
+	return weapon_scene != null and cooldown_left <= 0.0
+
+
+## Whether `player` is allowed this stand's weapons at all. Anyone, here;
+## altars limit it to their team.
+func _may_take(_player: PlayerClass3D) -> bool:
+	return true
 
 
 ## `player` pressed interact here. Returns whether they're getting (or, online,
@@ -79,10 +90,10 @@ func _next_weapon_name() -> String:
 
 @rpc("any_peer", "reliable")
 func _request_take(is_left: bool) -> void:
-	if not Net.is_server or not weapon_scene or cooldown_left > 0.0:
+	if not Net.is_server or not _is_stocked():
 		return
 	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and not player.is_hand_occupied(is_left):
+	if player and _may_take(player) and not player.is_hand_occupied(is_left):
 		_given.rpc(player.name, is_left, _next_weapon_name())
 
 
@@ -90,15 +101,25 @@ func _request_take(is_left: bool) -> void:
 ## hand and start the cooldown.
 @rpc("authority", "call_local", "reliable")
 func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
-	cooldown_left = cooldown
+	cooldown_left = _cooldown_after_take()
 	if _display:
 		_display.visible = false
 	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
-	if not player:
-		return
-	var weapon: Weapon3D = weapon_scene.instantiate()
-	weapon.name = weapon_name
-	Global.Game3D.add_weapon(weapon)
-	weapon.name = weapon_name  # Its _ready renames it after its Properties
-	weapon.global_transform = display_anchor.global_transform
-	weapon.hand_to(player, is_left)
+	if player:
+		var weapon: Weapon3D = weapon_scene.instantiate()
+		weapon.name = weapon_name
+		Global.Game3D.add_weapon(weapon)
+		weapon.name = weapon_name  # Its _ready renames it after its Properties
+		weapon.global_transform = display_anchor.global_transform
+		weapon.hand_to(player, is_left)
+	_after_given()
+
+
+## Seconds the stand stays empty after its weapon is taken.
+func _cooldown_after_take() -> float:
+	return cooldown
+
+
+## Runs on every machine once a weapon has been handed out.
+func _after_given() -> void:
+	pass

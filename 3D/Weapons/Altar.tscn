@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://de71j64imtbg0"]
+
+[ext_resource type="Script" path="res://3D/Weapons/Altar/altar_3d.gd" id="1_altar"]
+[ext_resource type="Script" path="res://3D/Weapons/Altar/altar_tier.gd" id="2_tier"]
+[ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="3_sword"]
+[ext_resource type="PackedScene" uid="uid://cqdd6x0yvjqmx" path="res://3D/Weapons/Shield/Shield_3D.tscn" id="4_shield"]
+[ext_resource type="PackedScene" uid="uid://gwtg3n8y37dp" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="5_bow"]
+
+[sub_resource type="Resource" id="AltarTier_1"]
+script = ExtResource("2_tier")
+weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield")])
+arming_time = 0.0
+respawn_delay = 3.0
+
+[sub_resource type="Resource" id="AltarTier_2"]
+script = ExtResource("2_tier")
+weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield"), ExtResource("5_bow")])
+arming_time = 3.0
+respawn_delay = 3.0
+
+[sub_resource type="Resource" id="AltarTier_3"]
+script = ExtResource("2_tier")
+weapons = Array[PackedScene]([ExtResource("5_bow")])
+arming_time = 6.0
+respawn_delay = 2.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_p6jv2"]
+size = Vector3(2, 1, 1)
+
+[sub_resource type="TorusMesh" id="TorusMesh_ring"]
+inner_radius = 0.55
+outer_radius = 0.65
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_reach"]
+radius = 2.0
+
+[node name="Altar" type="Node3D" unique_id=2138990566 groups=["WeaponStand"]]
+script = ExtResource("1_altar")
+tiers = Array[ExtResource("2_tier")]([SubResource("AltarTier_1"), SubResource("AltarTier_2"), SubResource("AltarTier_3")])
+seconds_per_tier = 60.0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1231958200]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("BoxMesh_p6jv2")
+
+[node name="ArmingRing" type="MeshInstance3D" parent="." unique_id=1745120931]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0)
+mesh = SubResource("TorusMesh_ring")
+
+[node name="WeaponDisplay" type="Marker3D" parent="." unique_id=1745120932]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+
+[node name="Reach" type="Area3D" parent="." unique_id=1745120933]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Reach" unique_id=1745120934]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("SphereShape3D_reach")
