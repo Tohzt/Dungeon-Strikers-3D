@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/Game/game_3d.gd" id="1_kwiv5"]
 [ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_wodrl"]
 [ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="3_dwu0v"]
+[ext_resource type="Script" uid="uid://cgp742w6j8vmw" path="res://3D/Game/tools.gd" id="3_gq62a"]
 [ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_cpoda"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
@@ -58,9 +59,12 @@ size = Vector3(1, 10, 34.92383)
 script = ExtResource("1_kwiv5")
 player_scene = ExtResource("5_sboqw")
 
+[node name="Tools" type="Node" parent="." unique_id=198446725]
+script = ExtResource("3_gq62a")
+
 [node name="HUD" parent="." unique_id=347811869 instance=ExtResource("2_wodrl")]
 
-[node name="Scoreboard" parent="." instance=ExtResource("16_score")]
+[node name="Scoreboard" parent="." unique_id=58592400 instance=ExtResource("16_score")]
 
 [node name="PauseMenu" parent="." unique_id=1958909121 instance=ExtResource("15_pause")]
 
@@ -157,7 +161,9 @@ weapon_scene = ExtResource("12_uepvo")
 
 [node name="Altar" parent="." unique_id=2138990566 instance=ExtResource("13_uepvo")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -42.80662, 0, 0)
+weapon_scene = ExtResource("7_al1ea")
 
 [node name="Altar2" parent="." unique_id=827922923 instance=ExtResource("13_uepvo")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 32.855274, 0, 0)
 owner_team = 1
+weapon_scene = ExtResource("7_al1ea")

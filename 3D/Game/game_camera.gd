@@ -19,6 +19,9 @@ var can_zoom: bool = true
 @export var group_padding: float = 3.0  # World units kept visible around each player
 @export var group_max_fov: float = 70.0  # Furthest the camera zooms out to fit everyone
 @export var group_zoom_speed: float = 3.0
+@export var frame_ball: bool = true  # Also keep the ball on screen
+@export var goal_frame_distance: float = 15.0  # Pull a goal into view once a player or the ball is this close
+@export var goal_half_width: float = 3.5  # Goal centre to each post
 
 var initial_transform: Transform3D
 var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
@@ -54,16 +57,41 @@ func _input(event: InputEvent) -> void:
 				test_offset+=1
 
 
-## Who to keep in view: the exported target if one is set, else every player.
+## Who to keep in view: the exported target if one is set; online, just our
+## own player (the others are on their own screens); else every local player.
 func _get_targets() -> Array[Node3D]:
 	var targets: Array[Node3D] = []
 	if target:
 		targets.append(target)
 	elif Global.Game3D:
 		for player: Node3D in Global.Game3D.players:
-			if is_instance_valid(player):
-				targets.append(player)
+			if not is_instance_valid(player):
+				continue
+			if Net.in_session() and not player.is_multiplayer_authority():
+				continue
+			targets.append(player)
 	return targets
+
+
+## Everything the group view should fit: the players, the ball, and any goal
+## that one of those is close to (both posts, so the whole mouth shows).
+func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	for t: Node3D in targets:
+		points.append(t.global_position)
+	var ball: Node3D = Global.Game3D.ball if Global.Game3D else null
+	if frame_ball and is_instance_valid(ball):
+		points.append(ball.global_position)
+
+	var near_points: Array[Vector3] = points.duplicate()
+	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
+		var goal_flat := Vector2(goal.global_position.x, goal.global_position.z)
+		for p: Vector3 in near_points:
+			if Vector2(p.x, p.z).distance_to(goal_flat) <= goal_frame_distance:
+				points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
+				points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
+				break
+	return points
 
 
 func _process(delta: float) -> void:
@@ -77,7 +105,7 @@ func _process(delta: float) -> void:
 
 	var targets := _get_targets()
 	if targets.size() > 1:
-		_frame_group(targets, delta)
+		_frame_group(_get_group_points(targets), delta)
 		return
 
 	# Single player: fixed zoom, camera pulled toward where they're aiming.
@@ -149,24 +177,24 @@ func _process(delta: float) -> void:
 
 
 ## Several players: center on the group and widen the FOV just enough to keep
-## everyone (plus padding) on screen, never tighter than the single-player view.
-func _frame_group(targets: Array[Node3D], delta: float) -> void:
-	var min_pos: Vector3 = targets[0].global_position
+## every point (plus padding) on screen, never tighter than the single-player view.
+func _frame_group(points: Array[Vector3], delta: float) -> void:
+	var min_pos: Vector3 = points[0]
 	var max_pos: Vector3 = min_pos
-	for t: Node3D in targets:
-		min_pos = min_pos.min(t.global_position)
-		max_pos = max_pos.max(t.global_position)
+	for p: Vector3 in points:
+		min_pos = min_pos.min(p)
+		max_pos = max_pos.max(p)
 	var ideal_pos: Vector3 = _ideal_position((min_pos + max_pos) * 0.5)
 
-	# Measure each player from where the camera is heading, in camera space,
+	# Measure each point from where the camera is heading, in camera space,
 	# and find the half-angle (as a tangent) needed to fit them. FOV is
 	# vertical, so horizontal extents are divided by the aspect ratio.
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var aspect: float = viewport_size.x / viewport_size.y
 	var to_camera_space: Basis = initial_transform.basis.inverse()
 	var needed_tan: float = tan(deg_to_rad(initial_fov) * 0.5)
-	for t: Node3D in targets:
-		var local: Vector3 = to_camera_space * (t.global_position - ideal_pos)
+	for p: Vector3 in points:
+		var local: Vector3 = to_camera_space * (p - ideal_pos)
 		var depth: float = -local.z
 		if depth <= 0.01: continue
 		needed_tan = max(needed_tan,
