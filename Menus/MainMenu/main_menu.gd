@@ -6,7 +6,6 @@ extends Control
 
 const GAME_SCENE := "res://3D/Game/Game3D.tscn"
 const MIN_LOBBY_PLAYERS := 2
-const NO_DEVICE := -2
 const COPIED_FEEDBACK_TIME := 1.5
 
 @onready var home: Control = %Home
@@ -31,8 +30,12 @@ const COPIED_FEEDBACK_TIME := 1.5
 
 ## Last joypad that sent input, so "Controller" picks the pad that pressed it.
 var last_joypad: int = -1
-## Device that last sent input; seats the local player in an online match.
+## Device that last sent input; seats the local player in an online match
+## if they never picked one in the online lobby.
 var last_device: int = PlayerSlot.KEYBOARD_MOUSE
+## Device picked in the online lobby (A or Enter on it), which can differ
+## from whatever is driving the menus.
+var online_device: int = Players.NO_DEVICE
 var card_styles: Array[StyleBoxFlat] = []
 var card_labels: Array[Label] = []
 var online_card_styles: Array[StyleBoxFlat] = []
@@ -145,51 +148,43 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey or event is InputEventMouseButton:
 		last_device = PlayerSlot.KEYBOARD_MOUSE
 
-	if not lobby.visible or not event.is_pressed() or event.is_echo():
+	if not event.is_pressed() or event.is_echo():
 		return
-	var device: int = _device_of(event)
-	if device == NO_DEVICE:
+	var device: int = Players.device_of(event)
+	if device == Players.NO_DEVICE:
 		return
+	if lobby.visible:
+		_lobby_input(event, device)
+	elif online_lobby.visible:
+		_online_lobby_input(event, device)
 
-	# Consume join/leave presses so they don't also click the focused button.
-	# Presses from players already seated fall through to the UI (e.g. Start).
+
+## Consume join/leave presses so they don't also click the focused button.
+## Presses from players already seated fall through to the UI (e.g. Start).
+func _lobby_input(event: InputEvent, device: int) -> void:
 	var slot: PlayerSlot = Players.get_slot_for_device(device)
-	if not slot and _is_join_press(event):
+	if not slot and Players.is_join_press(event):
 		Players.join(device)
 		accept_event()
-	elif slot and _is_back_press(event):
+	elif slot and Players.is_back_press(event):
 		Players.leave(slot)
 		accept_event()
 
 
+## A or Enter on any device picks it to play with; the menus themselves can
+## still be driven by anything (e.g. the mouse). Presses from the picked
+## device fall through to the UI, so it can press Start.
+func _online_lobby_input(event: InputEvent, device: int) -> void:
+	if device != online_device and Players.is_join_press(event):
+		online_device = device
+		accept_event()
+		_refresh_online_lobby()
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_pressed() and not event.is_echo() and _is_back_press(event) and not home.visible:
+	if event.is_pressed() and not event.is_echo() and Players.is_back_press(event) and not home.visible:
 		_go_back()
 		accept_event()
-
-
-func _device_of(event: InputEvent) -> int:
-	if event is InputEventJoypadButton:
-		return event.device
-	if event is InputEventKey:
-		return PlayerSlot.KEYBOARD_MOUSE
-	return NO_DEVICE
-
-
-func _is_join_press(event: InputEvent) -> bool:
-	if event is InputEventJoypadButton:
-		return event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]
-	if event is InputEventKey:
-		return event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]
-	return false
-
-
-func _is_back_press(event: InputEvent) -> bool:
-	if event is InputEventJoypadButton:
-		return event.button_index in [JOY_BUTTON_B, JOY_BUTTON_BACK]
-	if event is InputEventKey:
-		return event.physical_keycode == KEY_ESCAPE
-	return false
 
 
 func _build_cards(container: HBoxContainer, styles: Array[StyleBoxFlat], labels: Array[Label]) -> void:
@@ -220,18 +215,11 @@ func _refresh_lobby() -> void:
 				slot = s
 		if slot:
 			card_styles[i].bg_color = slot.color.darkened(0.35)
-			card_labels[i].text = "P%d\n%s" % [i + 1, _device_name(slot.device)]
+			card_labels[i].text = "P%d\n%s" % [i + 1, Players.device_name(slot.device)]
 		else:
 			card_styles[i].bg_color = Color(1, 1, 1, 0.06)
 			card_labels[i].text = "Press A or Enter\nto join"
 	start_button.disabled = Players.slots.size() < MIN_LOBBY_PLAYERS
-
-
-func _device_name(device: int) -> String:
-	if device == PlayerSlot.KEYBOARD_MOUSE:
-		return "Keyboard & Mouse"
-	var pad_name: String = Input.get_joy_name(device)
-	return pad_name if pad_name != "" else "Controller %d" % (device + 1)
 
 
 # ===== ONLINE =====
@@ -275,11 +263,15 @@ func _join() -> void:
 	Net.join(join_code_input.text)
 
 
+## Copy the code straight away so it's ready to paste to friends.
 func _on_net_hosted(_code: String) -> void:
+	online_device = Players.NO_DEVICE
 	_show(online_lobby, online_start)
+	_on_copy_code()
 
 
 func _on_net_joined(_code: String) -> void:
+	online_device = Players.NO_DEVICE
 	%JoinConfirm.disabled = false
 	_show(online_lobby, %OnlineLeave)
 
@@ -311,23 +303,31 @@ func _refresh_online_lobby() -> void:
 		if i < Net.peers.size():
 			var id: int = Net.peers[i]
 			online_card_styles[i].bg_color = Players.TEAM_COLORS[i].darkened(0.35)
-			online_card_labels[i].text = "P%d\n%s%s" % [i + 1, "Host" if i == 0 else "Guest", " (You)" if id == my_id else ""]
+			var text: String = "P%d\n%s" % [i + 1, "Host" if i == 0 else "Guest"]
+			if id == my_id:
+				text += " (You)\n" + ("Press A or Enter\nto pick your device" if online_device == Players.NO_DEVICE
+					else Players.device_name(online_device))
+			online_card_labels[i].text = text
 		else:
 			online_card_styles[i].bg_color = Color(1, 1, 1, 0.06)
 			online_card_labels[i].text = "Waiting for\nplayer..."
 	online_start.visible = Net.is_host
-	online_start.disabled = Net.peers.size() < MIN_LOBBY_PLAYERS
-	if Net.is_host:
+	online_start.disabled = Net.peers.size() < MIN_LOBBY_PLAYERS or online_device == Players.NO_DEVICE
+	if online_device == Players.NO_DEVICE:
+		online_status.text = "Press A or Enter on the device you'll play with."
+	elif Net.is_host:
 		online_status.text = "Send the code to your friends."
 	else:
 		online_status.text = "Waiting for the host to start."
 
 
 ## Each machine seats only its own player, in its session seat; Game3D
-## spawns everyone else as remote players.
+## spawns everyone else as remote players. A guest who never picked a device
+## gets the last one they touched (and can change it from the pause menu).
 func _on_match_started() -> void:
 	Players.leave_all()
-	Players.join(last_device, Net.local_seat(), Net.local_seat())
+	var device: int = online_device if online_device != Players.NO_DEVICE else last_device
+	Players.join(device, Net.local_seat(), Net.local_seat())
 	_start_game()
 
 

@@ -79,14 +79,27 @@ func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
 	var points: Array[Vector3] = []
 	for t: Node3D in targets:
 		points.append(t.global_position)
-	var ball: Node3D = Global.Game3D.ball if Global.Game3D else null
-	if frame_ball and is_instance_valid(ball):
-		points.append(ball.global_position)
+	if frame_ball:
+		points.append_array(_ball_points())
+	points.append_array(_goal_points_near(points))
+	return points
 
-	var near_points: Array[Vector3] = points.duplicate()
+
+## The ball's position, if there is one (as an array so it can be empty).
+func _ball_points() -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	var ball: Node3D = Global.Game3D.ball if Global.Game3D else null
+	if is_instance_valid(ball):
+		points.append(ball.global_position)
+	return points
+
+
+## Both posts of every goal within goal_frame_distance of any of `sources`.
+func _goal_points_near(sources: Array[Vector3]) -> Array[Vector3]:
+	var points: Array[Vector3] = []
 	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
 		var goal_flat := Vector2(goal.global_position.x, goal.global_position.z)
-		for p: Vector3 in near_points:
+		for p: Vector3 in sources:
 			if Vector2(p.x, p.z).distance_to(goal_flat) <= goal_frame_distance:
 				points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
 				points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
@@ -108,10 +121,11 @@ func _process(delta: float) -> void:
 		_frame_group(_get_group_points(targets), delta)
 		return
 
-	# Single player: fixed zoom, camera pulled toward where they're aiming.
-	# Eases back in rather than snapping if the group just shrank to one.
-	fov = lerp(fov, initial_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
-	if targets.is_empty(): return
+	# Single player: fixed zoom, camera pulled toward where they're aiming,
+	# widening only while the ball is near a goal.
+	if targets.is_empty():
+		fov = lerp(fov, initial_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
+		return
 	var focus: Node3D = targets[0]
 	var handler: PlayerInputHandler3D = focus.get("Input_Handler")
 	var uses_mouse: bool = handler.uses_mouse() if handler else Global.input_type != "Controller"
@@ -171,7 +185,21 @@ func _process(delta: float) -> void:
 	
 	# Ensure look_target is at player's height
 	look_target.y = target_pos.y
-	
+
+	# Ball closing in on a goal: widen to show that goal and the ball, still
+	# keeping the player and where they're aiming in view.
+	var ball_points: Array[Vector3] = _ball_points()
+	var goal_points: Array[Vector3] = _goal_points_near(ball_points)
+	if not goal_points.is_empty():
+		var points: Array[Vector3] = [target_pos, look_target]
+		points.append_array(ball_points)
+		points.append_array(goal_points)
+		_frame_group(points, delta)
+		return
+
+	# Eases back in rather than snapping after the ball leaves a goal, or the
+	# group shrinks to one.
+	fov = lerp(fov, initial_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 	# Smoothly move camera position (panning only, no rotation)
 	global_position = global_position.lerp(_ideal_position(look_target), delta * follow_speed)
 

@@ -47,6 +47,7 @@ func get_aim_stick() -> Vector2:
 
 
 func _ready() -> void:
+	Players.slot_changed.connect(_on_slot_changed)
 	# Find camera in scene
 	camera = get_viewport().get_camera_3d()
 	if not camera:
@@ -56,6 +57,20 @@ func _ready() -> void:
 			camera = parent.get_node_or_null("Camera3D")
 			if not camera:
 				camera = get_tree().get_first_node_in_group("camera")
+
+
+## Our slot moved to another device: the old device's release events will
+## never arrive, so let go of anything it was holding.
+func _on_slot_changed(changed: PlayerSlot) -> void:
+	if changed != slot:
+		return
+	action_left = false
+	action_right = false
+	action_heavy_left = false
+	action_heavy_right = false
+	move_dodge = false
+	look_dir = Vector3.ZERO
+	aim_release_timer = 0.0
 
 
 func _process(delta: float) -> void:
