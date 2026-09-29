@@ -196,7 +196,7 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			knockback *= clamp(_blade_velocity.length() / SWING_REFERENCE_SPEED, SWING_POWER_MIN, SWING_POWER_MAX)
 			contact = true
 			solid = solid or Combat.is_solid(body)
-		if Combat.strike(body, dir, damage, knockback, HIT_POP) and thrown:
+		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
 	if contact:
 		_swing_contact(solid)

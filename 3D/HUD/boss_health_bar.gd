@@ -2,7 +2,7 @@ class_name BossHealthBar3D extends CanvasLayer
 ## Souls-style boss bar along the bottom of the screen: the boss's name over
 ## a long red bar, with a pale strip that lingers where the HP just was and
 ## then drains down to it. Appears when the fight starts; says so when the
-## boss falls.
+## boss falls. Game3D binds each new boss to it.
 
 @export var boss: Boss3D
 
@@ -28,10 +28,19 @@ func _ready() -> void:
 	root.modulate.a = 0.0
 	root.visible = false
 	banner.modulate.a = 0.0
-	if not boss:
-		boss = get_tree().get_first_node_in_group("Boss") as Boss3D
-	if not boss:
+	if boss:
+		bind(boss)
+
+
+## Follow `new_boss` from now on (hidden until it wakes up).
+func bind(new_boss: Boss3D) -> void:
+	if boss and boss != new_boss and is_instance_valid(boss):
+		boss.hp_changed.disconnect(_on_hp_changed)
+		boss.awakened.disconnect(_show)
+		boss.defeated.disconnect(_on_defeated)
+	if boss == new_boss and boss.hp_changed.is_connected(_on_hp_changed):
 		return
+	boss = new_boss
 	name_label.text = boss.display_name
 	for bar: ProgressBar in [trail_bar, health_bar]:
 		bar.max_value = boss.max_hp
@@ -39,6 +48,8 @@ func _ready() -> void:
 	boss.hp_changed.connect(_on_hp_changed)
 	boss.awakened.connect(_show)
 	boss.defeated.connect(_on_defeated)
+	if boss.is_awake:
+		_show()
 
 
 func _process(delta: float) -> void:
@@ -65,7 +76,7 @@ func _show() -> void:
 	_fade(root, 1.0)
 
 
-func _on_defeated() -> void:
+func _on_defeated(_killer: PlayerClass3D) -> void:
 	health_bar.value = 0.0
 	_trail_wait = 0.0
 	var tween: Tween = _fade(root, 0.0, 1.5)

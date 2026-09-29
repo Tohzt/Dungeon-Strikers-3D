@@ -32,6 +32,8 @@ var deals_damage: bool = true
 
 var is_flying: bool = false
 var _excluded_bodies: Array[Node] = []
+## Who fired it, for perks and kill credit.
+var shooter: Node3D = null
 var _age: float = 0.0
 var _last_tip: Vector3
 
@@ -108,6 +110,6 @@ func _on_body_entered(body: Node) -> void:
 	# Players take damage + knockback (unless shield-blocked); physics props
 	# (the ball, a placeholder dummy) just get shoved - same as every attack.
 	if deals_damage:
-		Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse)
+		Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
 
 	queue_free()

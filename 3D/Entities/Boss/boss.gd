@@ -3,8 +3,7 @@ class_name Boss3D extends CharacterBody3D
 ## lands on or bumps into, leaps up for a big stomp when a player is close,
 ## and when it finds itself near the ball it dribbles it into whichever goal
 ## it's nearest, so it's a threat to both teams.
-## It can also hold the ball inside it (floating in its core); beating it
-## lets the ball loose.
+## A ball floats in its core; beating it drops a fresh ball into play.
 ## Online the server runs it and streams where it is (like the ball);
 ## everyone else just plays that back.
 
@@ -24,8 +23,9 @@ enum State {
 signal hp_changed(hp: float, max_hp: float)
 ## The fight has started (the start delay ran out). On every machine.
 signal awakened
-## Beaten. On every machine.
-signal defeated
+## Beaten, by `killer` (the player who landed the last hit; null if
+## unknown). On every machine.
+signal defeated(killer: PlayerClass3D)
 
 # ===== SIZE =====
 const RADIUS := 3.0
@@ -86,9 +86,9 @@ const DRIBBLE_SETUP_OFFSET := RADIUS + BALL_RADIUS + 0.5
 @export_category("Health")
 @export var display_name: String = "Gelatinous Colossus"
 @export var max_hp: float = 1200.0
-## Lock the arena's ball inside the core; beating the boss releases it.
-@export var holds_ball: bool = true
-## How hard the freed ball pops out.
+## Drop a ball into play when beaten (shown floating in the core until then).
+@export var drops_ball: bool = true
+## How hard the dropped ball pops out.
 @export var release_impulse: float = 1.5
 ## Hits tint the slime this bright for a moment.
 const HIT_FLASH_TIME := 0.15
@@ -153,9 +153,7 @@ func _ready() -> void:
 		ring.bottom_radius = stomp_radius
 	_stomp_cooldown = stomp_cooldown * 0.5
 	hp = max_hp
-	core.visible = holds_ball
-	if holds_ball:
-		_capture_ball.call_deferred()  # Game3D finds its ball after we're ready
+	core.visible = drops_ball
 	if Net.in_session() and not Net.is_server:
 		_net_motion = NetInterpolator.new()
 
@@ -280,7 +278,7 @@ func _state_stomp_rise(delta: float) -> void:
 		_set_state(State.STOMP_HANG)
 
 
-func _state_stomp_hang(delta: float) -> void:
+func _state_stomp_hang(_delta: float) -> void:
 	# Drift over the target, slowly enough that a quick player can get out
 	var target: Node3D = _nearest_player()
 	if target:
@@ -429,16 +427,10 @@ func _touch_ball() -> void:
 	Combat.push(ball, goal_dir * kick_impulse + Vector3.UP * kick_lift)
 
 
-func _capture_ball() -> void:
-	if Global.Game3D and Global.Game3D.ball:
-		Global.Game3D.ball.capture(self)
-	else:
-		core.visible = false
-
-
-## Called by Combat.strike for every attack that lands on the boss. Online
-## the server keeps the HP, so other machines pass their hits on to it.
-func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3) -> bool:
+## Called by Combat.strike for every attack that lands on the boss.
+## `attacker` gets the kill if this hit finishes it. Online the server keeps
+## the HP, so other machines pass their hits on to it.
+func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
 	if is_defeated:
 		return false
 	if not _simulates():
@@ -448,10 +440,11 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3) -> b
 	receive_impulse(knockback_velocity * HIT_SHOVE_RATIO)
 	_set_hp(hp - damage)
 	if hp <= 0.0:
+		var killer: String = String(attacker.name) if attacker is PlayerClass3D else ""
 		if Net.in_session():
-			_net_defeated.rpc()
+			_net_defeated.rpc(killer)
 		else:
-			_defeat()
+			_defeat(killer)
 	return true
 
 
@@ -464,8 +457,8 @@ func _set_hp(value: float) -> void:
 		_net_hp.rpc(hp)
 
 
-## Beaten, on every machine: stop, deflate, and let the ball out.
-func _defeat() -> void:
+## Beaten, on every machine: stop, deflate, and drop the ball.
+func _defeat(killer_name: String) -> void:
 	if is_defeated:
 		return
 	is_defeated = true
@@ -473,12 +466,14 @@ func _defeat() -> void:
 	velocity = Vector3(0.0, min(velocity.y, 0.0), 0.0)
 	collision_layer = 0  # Players and the ball pass through; it still lands on the floor
 	telegraph.visible = false
-	var ball: Ball3D = Global.Game3D.ball if Global.Game3D else null
-	if ball and ball.captor == self:
+	if drops_ball and Global.Game3D:
 		core.visible = false
 		var dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
-		ball.free_from_captor(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse)
-	defeated.emit()
+		Global.Game3D.spawn_ball(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse)
+	var killer: PlayerClass3D = null
+	if Global.Game3D and killer_name != "":
+		killer = Global.Game3D.get_node_or_null(killer_name) as PlayerClass3D
+	defeated.emit(killer)
 	await get_tree().create_timer(DEATH_TIME).timeout
 	visible = false
 	set_process(false)
@@ -549,12 +544,20 @@ func _nearest_player() -> PlayerClass3D:
 	return best
 
 
-## The ball, if it's loose on the pitch (not in someone's hands).
+## The nearest ball that's loose on the pitch (not in someone's hands).
 func _free_ball() -> Ball3D:
-	var ball: Ball3D = Global.Game3D.ball if Global.Game3D else null
-	if ball and not ball.holder and not ball.captor:
-		return ball
-	return null
+	if not Global.Game3D:
+		return null
+	var best: Ball3D = null
+	var best_dist: float = INF
+	for ball: Ball3D in Global.Game3D.balls:
+		if not is_instance_valid(ball) or not ball.is_inside_tree() or ball.holder:
+			continue
+		var dist: float = global_position.distance_to(ball.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best = ball
+	return best
 
 
 ## Where to send the ball: the net of whichever goal the slime is nearest.
@@ -678,14 +681,16 @@ func _net_hp(value: float) -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _net_defeated() -> void:
-	_defeat()
+func _net_defeated(killer_name: String) -> void:
+	_defeat(killer_name)
 
 
+## A client's player hit the boss; the sender's player gets the credit.
 @rpc("any_peer", "reliable")
 func _request_hit(damage: float, knockback_velocity: Vector3) -> void:
 	if Net.is_server:
-		receive_hit(Vector3.ZERO, damage, knockback_velocity)
+		var attacker: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+		receive_hit(Vector3.ZERO, damage, knockback_velocity, attacker)
 
 
 @rpc("any_peer", "reliable")

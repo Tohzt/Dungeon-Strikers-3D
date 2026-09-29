@@ -29,7 +29,7 @@ func _ready() -> void:
 
 func _on_net_body_entered(body: Node3D) -> void:
 	if body is Ball3D and (not Net.in_session() or Net.is_server):
-		Global.Game3D.score_goal(scoring_team)
+		Global.Game3D.score_goal(scoring_team, body)
 
 
 ## Tints the net with the owning team's color, keeping its transparency.

@@ -64,6 +64,12 @@ func _ready() -> void:
 func _on_slot_changed(changed: PlayerSlot) -> void:
 	if changed != slot:
 		return
+	release_all()
+
+
+## Let go of every held button, e.g. after input was ignored for a while
+## (a perk pick paused the game) and its release events were missed.
+func release_all() -> void:
 	action_left = false
 	action_right = false
 	action_heavy_left = false
@@ -71,6 +77,8 @@ func _on_slot_changed(changed: PlayerSlot) -> void:
 	move_dodge = false
 	look_dir = Vector3.ZERO
 	aim_release_timer = 0.0
+	interact = false
+	move_jump = false
 
 
 func _process(delta: float) -> void:

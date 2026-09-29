@@ -47,6 +47,7 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
 	wielder.get_parent().add_child(arrow)
 	arrow.global_position = muzzle
 	arrow.exclude_body(wielder)
+	arrow.shooter = wielder
 	arrow.exclude_body(self)
 	arrow.fire(aim_direction, arrow_speed)
 

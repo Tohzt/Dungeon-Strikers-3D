@@ -4,6 +4,8 @@ class_name Altar3D extends WeaponStand3D
 ## weapon at a time and restocks only once that one is taken; stronger tiers
 ## make the new weapon sit "charging" for a while before it can be taken.
 ## Online the server picks every restock and every tier change.
+## During the intermission between rounds it's also where each of its
+## team's players picks a perk (see PerkDirector): interact opens the cards.
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
 
@@ -31,6 +33,8 @@ var arming_left: float = 0.0
 var _arming_total: float = 0.0
 ## Server/offline: time toward the next automatic tier-up.
 var _tier_timer: float = 0.0
+## Floats over the altar while one of its team has perk cards waiting.
+var _perk_sign: Label3D = null
 
 
 func _ready() -> void:
@@ -44,6 +48,8 @@ func _ready() -> void:
 			arming_left = _arming_total
 	super()
 	_apply_team_color()
+	if not Engine.is_editor_hint():
+		_make_perk_sign()
 
 
 func _process(delta: float) -> void:
@@ -53,7 +59,48 @@ func _process(delta: float) -> void:
 	if cooldown_left <= 0.0 and arming_left > 0.0:
 		arming_left = max(arming_left - delta, 0.0)
 	_update_arming_visual()
+	_update_perk_sign()
 	_tick_tier_timer(delta)
+
+
+# ===== PERKS =====
+
+## Perk cards come first: if `player` has some waiting, interact opens them.
+func can_give_to(player: PlayerClass3D) -> bool:
+	return _has_perks_for(player) or super(player)
+
+
+func request_take(player: PlayerClass3D) -> bool:
+	if _has_perks_for(player):
+		Global.Game3D.perks.open_for(player)
+		return true
+	return super(player)
+
+
+func _has_perks_for(player: PlayerClass3D) -> bool:
+	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
+	return perks != null and perks.can_open(player) and _may_take(player) and reach.overlaps_body(player)
+
+
+func _make_perk_sign() -> void:
+	_perk_sign = Label3D.new()
+	_perk_sign.text = "CHOOSE A PERK"
+	_perk_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_perk_sign.no_depth_test = true
+	_perk_sign.font_size = 64
+	_perk_sign.outline_size = 16
+	_perk_sign.modulate = Color(0.95, 0.8, 0.4)
+	_perk_sign.position = Vector3(0, 3.2, 0)
+	_perk_sign.visible = false
+	add_child(_perk_sign)
+
+
+func _update_perk_sign() -> void:
+	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
+	_perk_sign.visible = perks != null and perks.team_has_offer(owner_team)
+	if _perk_sign.visible:
+		var t: float = Time.get_ticks_msec() / 1000.0
+		_perk_sign.position.y = 3.2 + sin(t * 3.0) * 0.15
 
 
 func _is_stocked() -> bool:

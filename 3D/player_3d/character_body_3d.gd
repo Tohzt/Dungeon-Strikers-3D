@@ -15,6 +15,9 @@ class_name PlayerClass3D extends CharacterBody3D
 ## before the player enters the tree; null = listen to every device.
 var slot: PlayerSlot = null
 
+## Rogue-lite perks taken at the altar. The same on every machine.
+var perks := PerkSet.new()
+
 ## Online: what the owning machine sends everyone else about this player.
 const SYNCED_PROPERTIES: Array[NodePath] = [
 	^":net_pose",
@@ -272,7 +275,7 @@ func _physics_process(delta: float) -> void:
 		var jump_multiplier: float = 1.0
 		if is_sprinting:
 			jump_multiplier = 1.5  # Sprint jump multiplier
-		velocity.y = JUMP_VELOCITY * jump_multiplier
+		velocity.y = JUMP_VELOCITY * jump_multiplier * perk_stat(&"jump")
 
 	if is_sprinting:
 		Properties.speed_mod.x = 2.0
@@ -281,7 +284,7 @@ func _physics_process(delta: float) -> void:
 		Properties.speed_mod = Vector3.ONE
 
 	# Walking velocity (speed_mod applies only to horizontal, not vertical)
-	var speed: float = Entity.SPEED if Entity else 5.0
+	var speed: float = (Entity.SPEED if Entity else 5.0) * perk_stat(&"move_speed")
 	var walk: Vector3 = direction * speed
 	if Properties:
 		walk.x *= Properties.speed_mod.x
@@ -535,7 +538,7 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 
 func _throw_weapon(weapon: Weapon3D, is_left: bool, charge_ratio: float = 1.0) -> void:
 	var spin_direction: float = -1.0 if is_left else 1.0
-	var force_multiplier: float = lerp(THROW_FORCE_MIN_RATIO, THROW_FORCE_MAX_RATIO, charge_ratio)
+	var force_multiplier: float = lerp(THROW_FORCE_MIN_RATIO, THROW_FORCE_MAX_RATIO, charge_ratio) * perk_stat(&"throw_power")
 	weapon.throw(_get_aim_direction(), -1.0, spin_direction, force_multiplier)
 	if is_left:
 		held_weapon_left = null
@@ -563,7 +566,7 @@ func throw_ball(force_multiplier: float = 1.0) -> void:
 
 	var throw_direction: Vector3 = (forward_direction + Vector3.UP * (UPWARD_FORCE / THROW_FORCE)).normalized()
 	# Online the ball stays in hand until the server lets it go
-	held_ball.request_throw(self, throw_direction * THROW_FORCE * force_multiplier)
+	held_ball.request_throw(self, throw_direction * THROW_FORCE * force_multiplier * perk_stat(&"throw_power"))
 
 
 ## Let go of the ball without throwing it (e.g. when the ball is reset).
@@ -681,7 +684,7 @@ func _check_fist_hits(hand: Area3D, already_hit: Array[Node], is_left: bool) -> 
 		already_hit.append(body)
 		contact = true
 		solid = solid or Combat.is_solid(body)
-		if Combat.strike(body, body.global_position - global_position, FIST_DAMAGE, FIST_KNOCKBACK, FIST_POP, FIST_OBJECT_IMPULSE):
+		if Combat.strike(body, body.global_position - global_position, FIST_DAMAGE, FIST_KNOCKBACK, FIST_POP, FIST_OBJECT_IMPULSE, self):
 			var recoil: Vector3 = global_position - body.global_position
 			recoil.y = 0
 			add_knockback(recoil.normalized() * FIST_RECOIL)
@@ -698,6 +701,10 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 		if Net.match_synced:
 			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity)
 		return true
+	damage *= perk_stat(&"damage_taken")
+	var knockback_taken: float = perk_stat(&"knockback_taken")
+	knockback_velocity.x *= knockback_taken
+	knockback_velocity.z *= knockback_taken
 	if _is_blocking_from(dir):
 		add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
 		return false
@@ -733,8 +740,23 @@ func shove(direction: Vector3, force: float) -> void:
 			_net_shove.rpc_id(get_multiplayer_authority(), direction, force)
 	elif Entity:
 		var was_in_iframes: bool = Entity.is_in_iframes
-		Entity.apply_knockback(direction, force)
+		Entity.apply_knockback(direction, force * perk_stat(&"knockback_taken"))
 		_share_iframes(was_in_iframes)
+
+
+# ===== PERKS =====
+
+## This player's multiplier for a perk stat (see PerkSet.STATS).
+func perk_stat(stat_name: StringName) -> float:
+	return perks.stat(stat_name)
+
+
+## Take a perk. Max HP/stamina grow at once, keeping how full they were.
+## Call on every machine.
+func add_perk(perk: Perk) -> void:
+	perks.add(perk)
+	if Entity:
+		Entity.refresh_max_stats()
 
 
 ## Whether this machine controls this player (always, offline).

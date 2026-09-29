@@ -97,12 +97,14 @@ func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
 	return points
 
 
-## The ball's position, if there is one (as an array so it can be empty).
+## Every ball in play (none between rounds).
 func _ball_points() -> Array[Vector3]:
 	var points: Array[Vector3] = []
-	var ball: Node3D = Global.Game3D.ball if Global.Game3D else null
-	if is_instance_valid(ball):
-		points.append(ball.global_position)
+	if not Global.Game3D:
+		return points
+	for ball: Ball3D in Global.Game3D.balls:
+		if is_instance_valid(ball) and ball.is_inside_tree():
+			points.append(ball.global_position)
 	return points
 
 

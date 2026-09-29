@@ -58,18 +58,36 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 ## get shoved (unless a raised shield faces the attack), bosses take damage;
 ## other unfrozen physics bodies just get pushed. Returns true if a player
 ## or boss took the hit.
+## `attacker` is the player behind the attack, if any: their perks scale it,
+## and bosses remember who dealt the killing blow.
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
-static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0) -> bool:
+static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null) -> bool:
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
+	if attacker is PlayerClass3D:
+		damage *= attacker.perk_stat(&"damage")
+		knockback *= attacker.perk_stat(&"knockback")
+		impulse *= attacker.perk_stat(&"ball_power" if body is Ball3D else &"knockback")
+		if body is Boss3D:
+			damage *= attacker.perk_stat(&"boss_damage")
+		elif body is PlayerClass3D and _is_ahead_of(body, attacker):
+			damage *= attacker.perk_stat(&"damage_vs_leader")
 	if body is PlayerClass3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
 	if body is Boss3D:
-		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
-	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
+
+
+## Whether `player`'s team has more points than `other`'s.
+static func _is_ahead_of(player: PlayerClass3D, other: PlayerClass3D) -> bool:
+	if not Global.Game3D or not player.slot or not other.slot:
+		return false
+	var scores: Dictionary[int, int] = Global.Game3D.scores
+	return scores.get(player.slot.team, 0) > scores.get(other.slot.team, 0)
 
 
 ## Shove a loose physics object. Networked ones (ball, weapons) pass the push

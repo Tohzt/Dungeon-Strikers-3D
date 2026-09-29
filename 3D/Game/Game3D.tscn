@@ -7,7 +7,6 @@
 [ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_cpoda"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
-[ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
 [ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="8_al1ea"]
 [ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="13_uepvo"]
@@ -15,6 +14,8 @@
 [ext_resource type="PackedScene" path="res://3D/HUD/scoreboard.tscn" id="16_score"]
 [ext_resource type="PackedScene" uid="uid://dq1toy2g128vu" path="res://3D/Entities/Boss/boss.tscn" id="17_boss"]
 [ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="18_bossbar"]
+[ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="19_perks"]
+[ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="20_picker"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_uepvo"]
 sky_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
@@ -137,9 +138,6 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -52.
 scoring_team = 1
 owner_team = 0
 
-[node name="Ball_3D" parent="." unique_id=1631300372 instance=ExtResource("6_uepvo")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
-
 [node name="Weapons" type="Node" parent="." unique_id=456536771]
 
 [node name="Altar" parent="." unique_id=2138990566 instance=ExtResource("13_uepvo")]
@@ -152,7 +150,12 @@ owner_team = 1
 weapon_scene = ExtResource("7_al1ea")
 
 [node name="Boss" parent="." unique_id=183138971 instance=ExtResource("17_boss")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10)
 
 [node name="BossHealthBar" parent="." unique_id=730215984 node_paths=PackedStringArray("boss") instance=ExtResource("18_bossbar")]
 boss = NodePath("../Boss")
+
+[node name="PerkPicker" parent="." unique_id=1502938471 instance=ExtResource("20_picker")]
+
+[node name="Perks" type="Node" parent="." unique_id=884120395 node_paths=PackedStringArray("picker")]
+script = ExtResource("19_perks")
+picker = NodePath("../PerkPicker")
