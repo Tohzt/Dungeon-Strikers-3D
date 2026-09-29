@@ -35,6 +35,7 @@ var _arming_total: float = 0.0
 var _tier_timer: float = 0.0
 ## Floats over the altar while one of its team has perk cards waiting.
 var _perk_sign: Label3D = null
+const PERK_SIGN_HEIGHT := 4.0
 
 
 func _ready() -> void:
@@ -87,10 +88,12 @@ func _make_perk_sign() -> void:
 	_perk_sign.text = "CHOOSE A PERK"
 	_perk_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_perk_sign.no_depth_test = true
-	_perk_sign.font_size = 64
-	_perk_sign.outline_size = 16
+	# Big enough to read from the zoomed-out match camera
+	_perk_sign.pixel_size = 0.01
+	_perk_sign.font_size = 96
+	_perk_sign.outline_size = 24
 	_perk_sign.modulate = Color(0.95, 0.8, 0.4)
-	_perk_sign.position = Vector3(0, 3.2, 0)
+	_perk_sign.position = Vector3(0, PERK_SIGN_HEIGHT, 0)
 	_perk_sign.visible = false
 	add_child(_perk_sign)
 
@@ -100,7 +103,7 @@ func _update_perk_sign() -> void:
 	_perk_sign.visible = perks != null and perks.team_has_offer(owner_team)
 	if _perk_sign.visible:
 		var t: float = Time.get_ticks_msec() / 1000.0
-		_perk_sign.position.y = 3.2 + sin(t * 3.0) * 0.15
+		_perk_sign.position.y = PERK_SIGN_HEIGHT + sin(t * 3.0) * 0.15
 
 
 func _is_stocked() -> bool:
