@@ -115,19 +115,12 @@ func _regen_stamina(delta: float) -> void:
 		stamina = min(stamina + stamina_regen_rate * _perk_stat(&"stamina_regen") * delta, stamina_max)
 
 
-func take_damage(dmg: float, dir: Vector3) -> void:
-	if is_in_iframes: return
-	if hp > 0:
-		hp -= int(dmg)
-	apply_knockback(dir, dmg*10)
-
-
 ## Damage plus a shove given directly as a velocity (horizontal slide +
 ## upward pop), for hits that want exact control over the knockback.
 func take_hit(dmg: float, knockback_velocity: Vector3) -> void:
 	if is_in_iframes: return
 	if hp > 0:
-		hp -= int(dmg)
+		hp -= dmg
 	apply_knockback(knockback_velocity, knockback_velocity.length())
 
 
@@ -255,6 +248,3 @@ func end_iframes() -> void:
 			if material is StandardMaterial3D:
 				material.albedo_color.a = 1.0
 
-
-func set_target() -> void:
-	print("setting target from EB")

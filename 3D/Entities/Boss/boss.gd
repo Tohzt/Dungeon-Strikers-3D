@@ -475,9 +475,7 @@ func _defeat(killer_name: String) -> void:
 		killer = Global.Game3D.get_node_or_null(killer_name) as PlayerClass3D
 	defeated.emit(killer)
 	await get_tree().create_timer(DEATH_TIME).timeout
-	visible = false
-	set_process(false)
-	set_physics_process(false)
+	queue_free()
 
 
 ## Hit by a punch, sword or thrown weapon (see Combat.push). It's heavy, so

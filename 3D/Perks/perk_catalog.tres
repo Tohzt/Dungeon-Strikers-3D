@@ -200,6 +200,15 @@ mods = Dictionary[StringName, float]({
 &"damage_taken": -0.1
 })
 
+[sub_resource type="Resource" id="Perk_sure_hands"]
+script = ExtResource("1_perk")
+title = "Sure Hands"
+description = "+50% grip on the ball. Punches no longer knock it loose."
+category = 2
+mods = Dictionary[StringName, float]({
+&"ball_grip": 0.5
+})
+
 [resource]
 script = ExtResource("2_catalog")
-perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will")])
+perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands")])

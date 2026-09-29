@@ -36,6 +36,19 @@ var _tier_timer: float = 0.0
 ## Floats over the altar while one of its team has perk cards waiting.
 var _perk_sign: Label3D = null
 const PERK_SIGN_HEIGHT := 4.0
+## Tier pips: a column at each end of the altar's top, one pip per tier,
+## lit in the team's color up to the current tier.
+var _tier_pips: Array[MeshInstance3D] = []
+var _pip_lit: StandardMaterial3D
+var _pip_unlit: StandardMaterial3D
+const PIP_SIZE := Vector3(0.3, 0.08, 0.22)
+const PIP_SPACING := 0.3
+const PIP_END_X := 1.2  # Clear of the arming ring in the middle
+const PIP_TOP_Y := 1.54
+## A tier-up makes the pips pop this much bigger, easing back over PIP_POP_TIME.
+const PIP_POP_SCALE := 1.8
+const PIP_POP_TIME := 0.5
+var _pip_pop: float = 0.0
 
 
 func _ready() -> void:
@@ -48,6 +61,7 @@ func _ready() -> void:
 			_arming_total = first.arming_time
 			arming_left = _arming_total
 	super()
+	_make_tier_pips()
 	_apply_team_color()
 	if not Engine.is_editor_hint():
 		_make_perk_sign()
@@ -61,6 +75,7 @@ func _process(delta: float) -> void:
 		arming_left = max(arming_left - delta, 0.0)
 	_update_arming_visual()
 	_update_perk_sign()
+	_update_pip_pop(delta)
 	_tick_tier_timer(delta)
 
 
@@ -160,6 +175,8 @@ func upgrade(levels: int = 1) -> void:
 @rpc("authority", "call_local", "reliable")
 func _set_tier(new_tier: int) -> void:
 	tier = new_tier
+	_update_tier_pips()
+	_pip_pop = PIP_POP_TIME
 
 
 func _tick_tier_timer(delta: float) -> void:
@@ -177,6 +194,40 @@ func _current_tier() -> AltarTier:
 	if tiers.is_empty():
 		return null
 	return tiers[clampi(tier, 0, tiers.size() - 1)]
+
+
+# ===== TIER PIPS =====
+
+func _make_tier_pips() -> void:
+	for pip: MeshInstance3D in _tier_pips:
+		pip.queue_free()
+	_tier_pips.clear()
+	var mesh := BoxMesh.new()
+	mesh.size = PIP_SIZE
+	for end_x: float in [-PIP_END_X, PIP_END_X]:
+		for i in tiers.size():
+			var pip := MeshInstance3D.new()
+			pip.mesh = mesh
+			pip.position = Vector3(end_x, PIP_TOP_Y, (i - (tiers.size() - 1) * 0.5) * PIP_SPACING)
+			add_child(pip)
+			_tier_pips.append(pip)
+
+
+func _update_tier_pips() -> void:
+	if not _pip_lit:
+		return
+	for i in _tier_pips.size():
+		var pip_tier: int = i % tiers.size()
+		_tier_pips[i].material_override = _pip_lit if pip_tier <= tier else _pip_unlit
+
+
+func _update_pip_pop(delta: float) -> void:
+	if _pip_pop <= 0.0:
+		return
+	_pip_pop = max(_pip_pop - delta, 0.0)
+	var pop: float = lerpf(1.0, PIP_POP_SCALE, _pip_pop / PIP_POP_TIME)
+	for pip: MeshInstance3D in _tier_pips:
+		pip.scale = Vector3.ONE * pop
 
 
 ## Ring grows while the weapon charges and glows fully once it's takeable.
@@ -206,3 +257,7 @@ func _apply_team_color() -> void:
 	ring_material.emission = color
 	ring_material.emission_energy_multiplier = 2.0
 	arming_ring.material_override = ring_material
+	_pip_lit = ring_material
+	_pip_unlit = StandardMaterial3D.new()
+	_pip_unlit.albedo_color = color.darkened(0.8)
+	_update_tier_pips()

@@ -9,6 +9,7 @@ const STATS: Dictionary[StringName, String] = {
 	&"damage_vs_leader": "Extra damage dealt to players whose team is ahead",
 	&"ball_power": "How hard hits send the ball",
 	&"throw_power": "How hard weapons and the ball are thrown",
+	&"ball_grip": "How big a hit it takes to knock the ball loose",
 	&"move_speed": "Walking and sprinting speed",
 	&"jump": "Jump height",
 	&"max_hp": "Max health",

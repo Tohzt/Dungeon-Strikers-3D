@@ -24,7 +24,6 @@ config/icon="uid://b7k3wfvekym8w"
 [autoload]
 
 Global="*res://global.gd"
-Settings="*res://settings.gd"
 Players="*res://players.gd"
 Net="*res://net.gd"
 

@@ -172,9 +172,6 @@ func _on_net_peers_changed() -> void:
 		player.queue_free()
 
 
-func _process(_delta: float) -> void: pass
-
-
 func _setup_scores() -> void:
 	var teams: Array[int] = []
 	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
