@@ -15,6 +15,9 @@ class_name PlayerClass3D extends CharacterBody3D
 ## before the player enters the tree; null = listen to every device.
 var slot: PlayerSlot = null
 
+## Rogue-lite perks taken at the altar. The same on every machine.
+var perks := PerkSet.new()
+
 ## Online: what the owning machine sends everyone else about this player.
 const SYNCED_PROPERTIES: Array[NodePath] = [
 	^":net_pose",
@@ -37,8 +40,8 @@ var _net_motion: NetInterpolator = null
 
 var held_weapon_left: Weapon3D = null
 var held_weapon_right: Weapon3D = null
+## Carried in both hands, so it can only be picked up with nothing else held.
 var held_ball: Ball3D = null
-var held_ball_hand_is_left: bool = false
 var was_attack_left: bool = false
 var was_attack_right: bool = false
 
@@ -66,6 +69,30 @@ var swipe_timer_right: float = 0.0
 const SWIPE_DURATION := 0.25
 var original_shoulder_rotation_left: Vector3
 var original_shoulder_rotation_right: Vector3
+# Wrist: during a swing the blade first cocks back behind the arm, then whips
+# through ahead of it, so the slash isn't all shoulder.
+const WRIST_COCK_ANGLE := deg_to_rad(35)
+const WRIST_SNAP_ANGLE := deg_to_rad(60)
+
+## A swing that connected: the arm holds still for a moment (hit-stop), then,
+## if it hit something solid, springs back from where it stopped instead of
+## carrying on through.
+class SwingContact:
+	var hitstop: float = 0.0
+	var rebound: float = 0.0  # Time left springing back; 0 = following through
+	var shoulder_from: float = 0.0  # Shoulder yaw offset from rest where it stopped
+	var wrist_from: float = 0.0
+
+	## 1 where it stopped, easing to 0 back at rest (quick off the target).
+	func rebound_weight() -> float:
+		var r: float = rebound / REBOUND_DURATION
+		return r * r
+
+const REBOUND_DURATION := 0.18
+var contact_left := SwingContact.new()
+var contact_right := SwingContact.new()
+## Just got hit: frozen for a moment (see Combat.HITSTOP).
+var hitstop: float = 0.0
 
 # Wind-up: while a hand holding something throwable (weapon or ball) is
 # pressed, the arm pulls back progressively instead of sitting static, so a
@@ -120,6 +147,15 @@ var knockback: Vector3 = Vector3.ZERO
 # Bumping into other players: both get shoved apart, harder the faster you
 # were closing in (so a sprinting player bowls a walking one over).
 const BODY_RADIUS := 0.5
+## How far from the player's center the ball can be to pick it up.
+const BALL_REACH := 2.0
+## Carrying the ball costs something: no sprinting, and a slower walk.
+const BALL_CARRY_SPEED := 0.8
+## A hit dealing at least this much damage knocks the ball loose (a punch
+## is 10). The ball_grip perk stat raises it.
+const BALL_FUMBLE_DAMAGE := 8.0
+## How hard a fumbled ball pops out, along the hit.
+const BALL_FUMBLE_IMPULSE := 4.0
 const BUMP_BASE := 3.0
 const BUMP_CLOSING_TRANSFER := 0.9  # Share of closing speed passed on as shove
 const BUMP_SELF_RATIO := 0.5  # Bumper recoils with this fraction of the shove
@@ -225,6 +261,9 @@ func set_remote() -> void:
 func _physics_process(delta: float) -> void:
 	if is_remote:
 		return
+	if hitstop > 0.0:
+		hitstop -= delta
+		return
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 
@@ -233,12 +272,19 @@ func _physics_process(delta: float) -> void:
 		direction = Input_Handler.move_dir
 	_update_sprint(direction, delta)
 
+	# Interact shares the controller's A button with jump, so picking up the
+	# ball or taking a weapon off a stand doesn't also hop
+	if Input_Handler.interact:
+		Input_Handler.interact = false
+		if _grab_nearest_ball() or _take_from_nearest_stand():
+			Input_Handler.move_jump = false
+
 	# Apply jump velocity multiplier only when jump is initiated, not every frame
 	if Input_Handler.move_jump and is_on_floor():
 		var jump_multiplier: float = 1.0
 		if is_sprinting:
 			jump_multiplier = 1.5  # Sprint jump multiplier
-		velocity.y = JUMP_VELOCITY * jump_multiplier
+		velocity.y = JUMP_VELOCITY * jump_multiplier * perk_stat(&"jump")
 
 	if is_sprinting:
 		Properties.speed_mod.x = 2.0
@@ -247,7 +293,9 @@ func _physics_process(delta: float) -> void:
 		Properties.speed_mod = Vector3.ONE
 
 	# Walking velocity (speed_mod applies only to horizontal, not vertical)
-	var speed: float = Entity.SPEED if Entity else 5.0
+	var speed: float = (Entity.SPEED if Entity else 5.0) * perk_stat(&"move_speed")
+	if held_ball:
+		speed *= BALL_CARRY_SPEED
 	var walk: Vector3 = direction * speed
 	if Properties:
 		walk.x *= Properties.speed_mod.x
@@ -293,17 +341,34 @@ func _physics_process(delta: float) -> void:
 
 		if collider.is_in_group("Weapon") and collider is Weapon3D and collider.can_pickup:
 			_pickup_weapon(collider)
-		elif collider is Ball3D and collider.can_be_picked_up and not held_ball and (not is_hand_occupied(false) or not is_hand_occupied(true)):
-			# Prefer the right hand, same as weapons; fall back to the left if it's taken.
-			collider.request_grab(self, is_hand_occupied(false))
 
 
-## A hand is occupied if it holds a weapon or is the hand currently gripping the ball.
+## A hand is occupied if it holds a weapon, or both hands carry the ball.
 func is_hand_occupied(is_left: bool) -> bool:
-	if is_left:
-		return held_weapon_left != null or (held_ball != null and held_ball_hand_is_left)
-	else:
-		return held_weapon_right != null or (held_ball != null and not held_ball_hand_is_left)
+	if held_ball:
+		return true
+	return (held_weapon_left if is_left else held_weapon_right) != null
+
+
+## Whether this player could pick up `ball` right now: both hands empty and
+## the ball within `reach`.
+func can_grab_ball(ball: Ball3D, reach: float = BALL_REACH) -> bool:
+	return not ball.holder and not is_hand_occupied(false) and not is_hand_occupied(true) \
+		and global_position.distance_to(ball.global_position) <= reach
+
+
+## Returns whether we're picking up (or, online, have asked for) a ball.
+func _grab_nearest_ball() -> bool:
+	if not Global.Game3D:
+		return false
+	var nearest: Ball3D = null
+	for ball: Ball3D in Global.Game3D.balls:
+		if ball.is_inside_tree() and can_grab_ball(ball) and (not nearest \
+				or global_position.distance_to(ball.global_position) < global_position.distance_to(nearest.global_position)):
+			nearest = ball
+	if nearest:
+		nearest.request_grab(self)
+	return nearest != null
 
 
 func _pickup_weapon(weapon: Weapon3D) -> void:
@@ -312,6 +377,16 @@ func _pickup_weapon(weapon: Weapon3D) -> void:
 	elif not is_hand_occupied(true):
 		weapon.request_equip(self, true)
 	# else both hands are full - leave it on the ground
+
+
+## Returns whether a stand in reach is giving us its weapon.
+func _take_from_nearest_stand() -> bool:
+	var nearest: WeaponStand3D = null
+	for stand: WeaponStand3D in get_tree().get_nodes_in_group("WeaponStand"):
+		if stand.can_give_to(self) and (not nearest \
+				or global_position.distance_to(stand.global_position) < global_position.distance_to(nearest.global_position)):
+			nearest = stand
+	return nearest != null and nearest.request_take(self)
 
 
 ## Put `weapon` in a hand (online, once the server has said we got it).
@@ -323,19 +398,16 @@ func equip_weapon(weapon: Weapon3D, is_left: bool) -> void:
 	weapon.equip(self, hand_left if is_left else hand_right)
 
 
-## Keeps the ball's surface resting against the hand instead of the hand
-## sitting inside the ball's center: offset the ball outward from the hand,
-## away from the player's body, by its own radius.
+## Holds the ball between both hands, pushed out in front by its own radius
+## so its surface rests against them instead of its center.
 func update_held_ball_position() -> void:
 	if not held_ball: return
-	var ball_hand: Area3D = hand_left if held_ball_hand_is_left else hand_right
-	var radius: float = _get_ball_radius(held_ball)
-	var outward_dir: Vector3 = ball_hand.global_position - global_position
+	var between_hands: Vector3 = (hand_left.global_position + hand_right.global_position) * 0.5
+	var outward_dir: Vector3 = between_hands - global_position
 	outward_dir.y = 0
 	if outward_dir.length() < 0.01:
-		outward_dir = -global_transform.basis.z
-	outward_dir = outward_dir.normalized()
-	held_ball.global_position = ball_hand.global_position + outward_dir * radius
+		outward_dir = global_transform.basis.z
+	held_ball.global_position = between_hands + outward_dir.normalized() * _get_ball_radius(held_ball)
 
 
 func _get_ball_radius(ball: RigidBody3D) -> float:
@@ -354,19 +426,14 @@ func _process(delta: float) -> void:
 	_handle_hand_block(Input_Handler.action_heavy_left, true)
 	_handle_hand_block(Input_Handler.action_heavy_right, false)
 
-	# Handle each hand independently: whichever hand holds the ball throws it
-	# on release (charged by hold duration); whichever holds a weapon swings
-	# it on a quick tap or throws it on a hold-then-release past the threshold.
+	# Handle each hand independently: while carrying the ball either button
+	# throws it on release (charged by hold duration); a hand holding a weapon
+	# swings it on a quick tap or throws it on a hold-then-release past the threshold.
 	_handle_hand_input(Input_Handler.action_left, was_attack_left, true)
 	was_attack_left = Input_Handler.action_left
 
 	_handle_hand_input(Input_Handler.action_right, was_attack_right, false)
 	was_attack_right = Input_Handler.action_right
-
-	# Handle targeting
-	if Input_Handler:
-		_handle_target()
-		_handle_rotation(delta)
 
 
 ## Remote copy, every rendered frame: move to where the owner was a moment
@@ -408,7 +475,7 @@ func _handle_hand_input(is_pressed: bool, was_pressed: bool, is_left: bool) -> v
 			return  # Pressed while blocking - nothing to release
 		_set_attack_armed(is_left, false)
 
-	if held_ball and held_ball_hand_is_left == is_left:
+	if held_ball:
 		_handle_ball_hand(is_pressed, was_pressed, is_left)
 	else:
 		_handle_hand_attack(weapon, is_pressed, was_pressed, is_left)
@@ -491,7 +558,7 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 
 func _throw_weapon(weapon: Weapon3D, is_left: bool, charge_ratio: float = 1.0) -> void:
 	var spin_direction: float = -1.0 if is_left else 1.0
-	var force_multiplier: float = lerp(THROW_FORCE_MIN_RATIO, THROW_FORCE_MAX_RATIO, charge_ratio)
+	var force_multiplier: float = lerp(THROW_FORCE_MIN_RATIO, THROW_FORCE_MAX_RATIO, charge_ratio) * perk_stat(&"throw_power")
 	weapon.throw(_get_aim_direction(), -1.0, spin_direction, force_multiplier)
 	if is_left:
 		held_weapon_left = null
@@ -519,7 +586,7 @@ func throw_ball(force_multiplier: float = 1.0) -> void:
 
 	var throw_direction: Vector3 = (forward_direction + Vector3.UP * (UPWARD_FORCE / THROW_FORCE)).normalized()
 	# Online the ball stays in hand until the server lets it go
-	held_ball.request_throw(self, throw_direction * THROW_FORCE * force_multiplier)
+	held_ball.request_throw(self, throw_direction * THROW_FORCE * force_multiplier * perk_stat(&"throw_power"))
 
 
 ## Let go of the ball without throwing it (e.g. when the ball is reset).
@@ -614,14 +681,14 @@ func _update_punches() -> void:
 	if punching_left:
 		punching_left = swipe_timer_left > 0.0
 		if punching_left:
-			_check_fist_hits(hand_left, punch_hits_left)
+			_check_fist_hits(hand_left, punch_hits_left, true)
 	if punching_right:
 		punching_right = swipe_timer_right > 0.0
 		if punching_right:
-			_check_fist_hits(hand_right, punch_hits_right)
+			_check_fist_hits(hand_right, punch_hits_right, false)
 
 
-func _check_fist_hits(hand: Area3D, already_hit: Array[Node]) -> void:
+func _check_fist_hits(hand: Area3D, already_hit: Array[Node], is_left: bool) -> void:
 	if not hand: return
 	var sphere := SphereShape3D.new()
 	sphere.radius = FIST_REACH
@@ -629,14 +696,20 @@ func _check_fist_hits(hand: Area3D, already_hit: Array[Node]) -> void:
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon:
 			exclude.append(weapon.get_rid())
+	var contact: bool = false
+	var solid: bool = false
 	for body: Node3D in Combat.overlaps(get_world_3d(), sphere, Transform3D(Basis(), hand.global_position), exclude):
 		if body in already_hit:
 			continue
 		already_hit.append(body)
-		if Combat.strike(body, body.global_position - global_position, FIST_DAMAGE, FIST_KNOCKBACK, FIST_POP, FIST_OBJECT_IMPULSE):
+		contact = true
+		solid = solid or Combat.is_solid(body)
+		if Combat.strike(body, body.global_position - global_position, FIST_DAMAGE, FIST_KNOCKBACK, FIST_POP, FIST_OBJECT_IMPULSE, self):
 			var recoil: Vector3 = global_position - body.global_position
 			recoil.y = 0
 			add_knockback(recoil.normalized() * FIST_RECOIL)
+	if contact:
+		_start_swing_contact(is_left, solid)
 
 
 ## Called by Combat.strike for every attack that lands on this player.
@@ -648,6 +721,10 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 		if Net.match_synced:
 			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity)
 		return true
+	damage *= perk_stat(&"damage_taken")
+	var knockback_taken: float = perk_stat(&"knockback_taken")
+	knockback_velocity.x *= knockback_taken
+	knockback_velocity.z *= knockback_taken
 	if _is_blocking_from(dir):
 		add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
 		return false
@@ -655,6 +732,10 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 		var was_in_iframes: bool = Entity.is_in_iframes
 		Entity.take_hit(damage, knockback_velocity)
 		_share_iframes(was_in_iframes)
+		if not was_in_iframes:
+			hitstop = Combat.HITSTOP
+			if held_ball and damage >= BALL_FUMBLE_DAMAGE * perk_stat(&"ball_grip"):
+				held_ball.request_throw(self, (dir + Vector3.UP * 0.5) * BALL_FUMBLE_IMPULSE)
 		if Entity.hp <= 0:
 			respawn()
 	return true
@@ -681,8 +762,34 @@ func shove(direction: Vector3, force: float) -> void:
 			_net_shove.rpc_id(get_multiplayer_authority(), direction, force)
 	elif Entity:
 		var was_in_iframes: bool = Entity.is_in_iframes
-		Entity.apply_knockback(direction, force)
+		Entity.apply_knockback(direction, force * perk_stat(&"knockback_taken"))
 		_share_iframes(was_in_iframes)
+
+
+# ===== CONTROL SCHEME =====
+
+## Souls-like controls follow `cam` (camera-relative movement, lock-on);
+## null returns to the usual top-down controls. Local players only.
+func set_souls_camera(cam: SoulsCamera3D) -> void:
+	if Input_Handler:
+		Input_Handler.souls_camera = cam
+	if not cam and Entity:
+		Entity.target = null
+
+
+# ===== PERKS =====
+
+## This player's multiplier for a perk stat (see PerkSet.STATS).
+func perk_stat(stat_name: StringName) -> float:
+	return perks.stat(stat_name)
+
+
+## Take a perk. Max HP/stamina grow at once, keeping how full they were.
+## Call on every machine.
+func add_perk(perk: Perk) -> void:
+	perks.add(perk)
+	if Entity:
+		Entity.refresh_max_stats()
 
 
 ## Whether this machine controls this player (always, offline).
@@ -734,51 +841,12 @@ func _update_sprint(direction: Vector3, delta: float) -> void:
 		return
 	if sprint_exhausted and Entity.stamina >= Entity.stamina_max * SPRINT_RECOVER_RATIO:
 		sprint_exhausted = false
-	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted
+	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted \
+		and not held_ball
 	if is_sprinting:
 		Entity.drain_stamina(SPRINT_STAMINA_PER_SEC * delta)
 		if Entity.stamina <= 0.0:
 			sprint_exhausted = true
-
-func _handle_target() -> void:
-	if not Input_Handler or not Entity: return
-	## Handle target scrolling (cycle through targets)
-	#if Entity.target and Input_Handler.target_scroll:
-		#Input_Handler.target_scroll = false
-		## Get nearest entity, excluding the current target if it's still valid
-		#var exclude_target: Node3D = Entity.target if is_instance_valid(Entity.target) else null
-		#var nearest := Global.get_nearest_3d(global_position, "Entity", INF, exclude_target)
-		#if nearest.get("found", false):
-			#Entity.target = nearest["inst"]
-	#
-	## Handle target toggle (target nearest or clear current)
-	#if Input_Handler.target_toggle:
-		#Input_Handler.target_toggle = false
-		#if Entity.target and is_instance_valid(Entity.target):
-			## Clear current target
-			#Entity.target = null
-		#else:
-			## Find nearest entity
-			#var nearest := Global.get_nearest_3d(global_position, "Entity", INF)
-			#if nearest.get("found", false):
-				#Entity.target = nearest["inst"]
-
-
-func _handle_rotation(_delta: float) -> void:
-	if not Entity: return
-	## Rotate to face target if locked
-	#if Entity.target and is_instance_valid(Entity.target):
-		#var direction: Vector3 = (Entity.target.global_position - global_position)
-		#var horizontal_dir: Vector3 = Vector3(direction.x, 0, direction.z).normalized()
-		#if horizontal_dir.length() > 0.1:
-			#var target_angle: float = atan2(horizontal_dir.x, horizontal_dir.z)
-			#rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
-	#elif Input_Handler and Input_Handler.look_dir.length() > 0.1:
-		## Face look direction
-		#var look_dir: Vector3 = Input_Handler.look_dir
-		#var target_angle: float = atan2(look_dir.x, look_dir.z)
-		#rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
-
 
 func _update_hand_mesh_position() -> void:
 	# Only weapons need this: they drift from the hand due to spring-follow
@@ -810,12 +878,70 @@ func _update_weapon_swipes(delta: float) -> void:
 	# Rotating both shoulders the same way around Y swings one hand forward
 	# and the other back, which is exactly the opposed walking arm swing.
 	var sway_angle: float = sin(sway_phase * TAU) * sway_amount * SWAY_MAX_ANGLE
-	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left, sway_angle * sway_weight_left)
-	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right, sway_angle * sway_weight_right)
+	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left, contact_left, sway_angle * sway_weight_left)
+	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right, contact_right, sway_angle * sway_weight_right)
+	# The wrist turns the same way the shoulder swings (see _update_shoulder_swipe)
+	if held_weapon_left is WeaponClass3D:
+		held_weapon_left.wrist_yaw = -_wrist_angle(swipe_timer_left, contact_left)
+	if held_weapon_right is WeaponClass3D:
+		held_weapon_right.wrist_yaw = _wrist_angle(swipe_timer_right, contact_right)
 
 
-func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float, sway: float = 0.0) -> float:
+## A held weapon's swing connected (see Weapon3D._swing_contact).
+func swing_contact(weapon: Weapon3D, solid: bool) -> void:
+	_start_swing_contact(weapon == held_weapon_left, solid)
+
+
+## Stop that arm where it is for a moment; off something solid, spring it
+## back from there afterwards instead of finishing the swing.
+func _start_swing_contact(is_left: bool, solid: bool) -> void:
+	var contact: SwingContact = contact_left if is_left else contact_right
+	if contact.hitstop > 0.0 or contact.rebound > 0.0:
+		return  # Already stopped
+	contact.hitstop = Combat.HITSTOP if solid else Combat.HITSTOP_LIGHT
+	if not solid:
+		return
+	var shoulder: Node3D = shoulder_left if is_left else shoulder_right
+	var base: Vector3 = original_shoulder_rotation_left if is_left else original_shoulder_rotation_right
+	contact.rebound = REBOUND_DURATION
+	contact.shoulder_from = shoulder.rotation.y - base.y
+	contact.wrist_from = _swing_wrist_angle(swipe_timer_left if is_left else swipe_timer_right)
+	# A fist springing back off someone shouldn't punch anyone on the way
+	if is_left:
+		punching_left = false
+	else:
+		punching_right = false
+
+
+func _wrist_angle(timer: float, contact: SwingContact) -> float:
+	if contact.rebound > 0.0:
+		return contact.wrist_from * contact.rebound_weight()
+	return _swing_wrist_angle(timer)
+
+
+## How far the wrist has turned the blade along the swing: dips back (cocked)
+## early on, then accelerates past the arm to WRIST_SNAP_ANGLE as the arm
+## reaches full swing, and relaxes with the arm on the way back.
+func _swing_wrist_angle(timer: float) -> float:
+	if timer <= 0.0:
+		return 0.0
+	var t: float = clamp(1.0 - (timer / SWIPE_DURATION), 0.0, 1.0)
+	if t < 0.5:
+		var p: float = t * 2.0
+		return WRIST_SNAP_ANGLE * p * p - WRIST_COCK_ANGLE * sin(PI * p)
+	return lerp(WRIST_SNAP_ANGLE, 0.0, (t - 0.5) * 2.0)
+
+
+func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float, contact: SwingContact, sway: float = 0.0) -> float:
 	if not shoulder: return timer
+
+	if contact.hitstop > 0.0:
+		contact.hitstop -= delta
+		return timer  # Held where it connected
+	if contact.rebound > 0.0:
+		contact.rebound = max(contact.rebound - delta, 0.0)
+		shoulder.rotation.y = base_rotation.y + contact.shoulder_from * contact.rebound_weight()
+		return contact.rebound  # Still mid-swing until it's back at rest
 
 	if timer > 0.0:
 		timer -= delta

@@ -30,6 +30,10 @@ var camera: Camera3D = null
 ## player. Null = legacy mode that reads the shared actions from any device.
 var slot: PlayerSlot = null
 
+## Set while this player uses the souls-like controls: movement turns with
+## this camera, and the player faces where they walk or their lock-on target.
+var souls_camera: SoulsCamera3D = null
+
 
 ## The input action this handler should read for a project action name.
 func action(base: StringName) -> StringName:
@@ -47,6 +51,7 @@ func get_aim_stick() -> Vector2:
 
 
 func _ready() -> void:
+	Players.slot_changed.connect(_on_slot_changed)
 	# Find camera in scene
 	camera = get_viewport().get_camera_3d()
 	if not camera:
@@ -58,14 +63,42 @@ func _ready() -> void:
 				camera = get_tree().get_first_node_in_group("camera")
 
 
+## Our slot moved to another device: the old device's release events will
+## never arrive, so let go of anything it was holding.
+func _on_slot_changed(changed: PlayerSlot) -> void:
+	if changed != slot:
+		return
+	release_all()
+
+
+## Let go of every held button, e.g. after input was ignored for a while
+## (a perk pick paused the game) and its release events were missed.
+func release_all() -> void:
+	action_left = false
+	action_right = false
+	action_heavy_left = false
+	action_heavy_right = false
+	move_dodge = false
+	look_dir = Vector3.ZERO
+	aim_release_timer = 0.0
+	interact = false
+	move_jump = false
+
+
 func _process(delta: float) -> void:
 	# Get 2D input and convert to 3D (X/Z plane)
 	var input_2d: Vector2 = Input.get_vector(action("move_left"), action("move_right"), action("move_up"), action("move_down"))
-	move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
+	if souls_camera:
+		move_dir = souls_camera.camera_relative(input_2d).normalized()
+	else:
+		move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
 	
 	# Update action_left to track current held state (for ball throwing and other actions)
 	action_left = Input.is_action_pressed(action("attack_left"))
 	move_jump = Input.is_action_just_pressed(action("move_jump"))
+	# Stays set until the player acts on it
+	if Input.is_action_just_pressed(action("interact")):
+		interact = true
 	_handle_input_dodge(delta)
 	_handle_input_look(delta)
 
@@ -86,7 +119,12 @@ func _handle_input_dodge(delta: float) -> void:
 ## look_dir is where the player wants to face; zero means "face the walking
 ## direction". Mouse players always aim at the cursor, except while holding
 ## face_movement (Ctrl); controller players aim with the right stick.
+## Souls-like controls face the lock-on target, if any.
 func _handle_input_look(delta: float) -> void:
+	if souls_camera:
+		# The mouse and right stick turn the camera instead
+		look_dir = souls_camera.lock_direction(Master.global_position)
+		return
 	if uses_mouse():
 		look_dir = Vector3.ZERO if Input.is_action_pressed(action("face_movement")) else _get_mouse_aim()
 	else:
@@ -144,9 +182,6 @@ func _input(event: InputEvent) -> void:
 
 	if event.is_action(action("move_dodge")):
 		move_dodge = event.is_action_pressed(action("move_dodge"))
-	
-	if event.is_action(action("interact")):
-		interact = event.is_action_pressed(action("interact"))
 	
 	if event.is_action(action("target")):
 		target_toggle = event.is_action_pressed(action("target"))

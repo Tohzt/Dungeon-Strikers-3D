@@ -19,10 +19,25 @@ var can_zoom: bool = true
 @export var group_padding: float = 3.0  # World units kept visible around each player
 @export var group_max_fov: float = 70.0  # Furthest the camera zooms out to fit everyone
 @export var group_zoom_speed: float = 3.0
+@export var frame_ball: bool = true  # Also keep the ball on screen
+@export var goal_frame_distance: float = 15.0  # Pull a goal into view once a player or the ball is this close
+@export var goal_half_width: float = 3.5  # Goal centre to each post
+
+@export_group("Bottom Wall")
+## The near (bottom-of-screen) wall hides whatever is right up against it,
+## so the camera tilts toward top-down as a player or the ball approaches it.
+@export var top_down_start_z: float = 7.0  # Start tilting once something is this far down the field
+@export var top_down_full_z: float = 15.0  # Fully tilted from here to the wall
+@export_range(0.0, 30.0) var top_down_extra_pitch: float = 25.0  # Degrees added to the usual downward tilt
+@export var top_down_ease: float = 3.0  # How quickly the tilt follows
 
 var initial_transform: Transform3D
+## The camera's current rotation: its starting one, tilted by top_down_blend.
+var view_basis: Basis
+var top_down_blend: float = 0.0  # 0 = usual angle, 1 = fully tilted
 var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
-var test_offset: float = 0.0
+## The player's chosen zoom (scroll wheel); the camera never frames tighter.
+var zoom_fov: float
 
 func _ready() -> void:
 	# The headless server has no screen, and none of its players read local input.
@@ -30,6 +45,8 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 		return
 	initial_transform = global_transform
+	zoom_fov = initial_fov
+	view_basis = initial_transform.basis
 	#initial_fov = fov
 	
 	var Game: Game3D_Class = Global.Game3D
@@ -39,51 +56,90 @@ func _ready() -> void:
 func _set_camera_active(TorF: bool) -> void: is_active = TorF
  
 
-# Zoom functionality commented out for now
+## Scrolling sets the base zoom the automatic camera works from, rather than
+## the FOV itself (which the camera eases every frame). Wheel up zooms in.
 func _input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var zoom_out: bool = event.button_index == MOUSE_BUTTON_WHEEL_UP
-		var zoom_in: bool = event.button_index == MOUSE_BUTTON_WHEEL_DOWN
-		var zoom_dir := -1 if zoom_out else 1 if zoom_in else 0
-		if can_zoom: 
-			fov = clamp(fov + zoom_dir*fov_sensitivity, min_fov, max_fov)
-		else:
-			if zoom_in:
-				test_offset-=1 
-			if zoom_out:
-				test_offset+=1
+	if not can_zoom or not event is InputEventMouseButton or not event.pressed:
+		return
+	var zoom_dir: int = 0
+	match event.button_index:
+		MOUSE_BUTTON_WHEEL_UP: zoom_dir = -1
+		MOUSE_BUTTON_WHEEL_DOWN: zoom_dir = 1
+	if zoom_dir:
+		zoom_fov = clamp(zoom_fov + zoom_dir * fov_sensitivity, min_fov, max_fov)
 
 
-## Who to keep in view: the exported target if one is set, else every player.
+## Who to keep in view: the exported target if one is set; online, just our
+## own player (the others are on their own screens); else every local player.
 func _get_targets() -> Array[Node3D]:
 	var targets: Array[Node3D] = []
 	if target:
 		targets.append(target)
 	elif Global.Game3D:
 		for player: Node3D in Global.Game3D.players:
-			if is_instance_valid(player):
-				targets.append(player)
+			if not is_instance_valid(player):
+				continue
+			if Net.in_session() and not player.is_multiplayer_authority():
+				continue
+			targets.append(player)
 	return targets
+
+
+## Everything the group view should fit: the players, the ball, and any goal
+## that one of those is close to (both posts, so the whole mouth shows).
+func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	for t: Node3D in targets:
+		points.append(t.global_position)
+	if frame_ball:
+		points.append_array(_ball_points())
+	points.append_array(_goal_points_near(points))
+	return points
+
+
+## Every ball in play (none between rounds).
+func _ball_points() -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	if not Global.Game3D:
+		return points
+	for ball: Ball3D in Global.Game3D.balls:
+		if is_instance_valid(ball) and ball.is_inside_tree():
+			points.append(ball.global_position)
+	return points
+
+
+## Both posts of every goal within goal_frame_distance of any of `sources`.
+func _goal_points_near(sources: Array[Vector3]) -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
+		var goal_flat := Vector2(goal.global_position.x, goal.global_position.z)
+		for p: Vector3 in sources:
+			if Vector2(p.x, p.z).distance_to(goal_flat) <= goal_frame_distance:
+				points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
+				points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
+				break
+	return points
 
 
 func _process(delta: float) -> void:
 	if !is_active:
-		if fov > initial_fov:
-			fov = lerp(fov, initial_fov, delta)
+		if fov > zoom_fov:
+			fov = lerp(fov, zoom_fov, delta)
 		return
-
-	# Keep rotation fixed - never change it
-	global_transform.basis = initial_transform.basis
 
 	var targets := _get_targets()
+	_update_tilt(targets, delta)
+	global_transform.basis = view_basis
+
 	if targets.size() > 1:
-		_frame_group(targets, delta)
+		_frame_group(_get_group_points(targets), delta)
 		return
 
-	# Single player: fixed zoom, camera pulled toward where they're aiming.
-	# Eases back in rather than snapping if the group just shrank to one.
-	fov = lerp(fov, initial_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
-	if targets.is_empty(): return
+	# Single player: fixed zoom, camera pulled toward where they're aiming,
+	# widening only while the ball is near a goal.
+	if targets.is_empty():
+		fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
+		return
 	var focus: Node3D = targets[0]
 	var handler: PlayerInputHandler3D = focus.get("Input_Handler")
 	var uses_mouse: bool = handler.uses_mouse() if handler else Global.input_type != "Controller"
@@ -143,36 +199,67 @@ func _process(delta: float) -> void:
 	
 	# Ensure look_target is at player's height
 	look_target.y = target_pos.y
-	
+
+	# Ball closing in on a goal: widen to show that goal and the ball, still
+	# keeping the player and where they're aiming in view.
+	var ball_points: Array[Vector3] = _ball_points()
+	var goal_points: Array[Vector3] = _goal_points_near(ball_points)
+	if not goal_points.is_empty():
+		var points: Array[Vector3] = [target_pos, look_target]
+		points.append_array(ball_points)
+		points.append_array(goal_points)
+		_frame_group(points, delta)
+		return
+
+	# Eases back in rather than snapping after the ball leaves a goal, or the
+	# group shrinks to one.
+	fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 	# Smoothly move camera position (panning only, no rotation)
 	global_position = global_position.lerp(_ideal_position(look_target), delta * follow_speed)
 
 
-## Several players: center on the group and widen the FOV just enough to keep
-## everyone (plus padding) on screen, never tighter than the single-player view.
-func _frame_group(targets: Array[Node3D], delta: float) -> void:
-	var min_pos: Vector3 = targets[0].global_position
-	var max_pos: Vector3 = min_pos
+## Ease the tilt toward top-down by how close the lowest player (or the
+## ball) is to the bottom wall. Tilts about the camera's own right axis, so
+## it only ever pitches, never turns.
+func _update_tilt(targets: Array[Node3D], delta: float) -> void:
+	var lowest_z: float = -INF
 	for t: Node3D in targets:
-		min_pos = min_pos.min(t.global_position)
-		max_pos = max_pos.max(t.global_position)
+		lowest_z = max(lowest_z, t.global_position.z)
+	for p: Vector3 in _ball_points():
+		lowest_z = max(lowest_z, p.z)
+	var goal_blend: float = 0.0
+	if lowest_z > -INF:
+		goal_blend = smoothstep(top_down_start_z, top_down_full_z, lowest_z)
+	top_down_blend = lerp(top_down_blend, goal_blend, clamp(delta * top_down_ease, 0.0, 1.0))
+	var tilt: float = -deg_to_rad(top_down_extra_pitch) * top_down_blend
+	view_basis = Basis(initial_transform.basis.x.normalized(), tilt) * initial_transform.basis
+
+
+## Several players: center on the group and widen the FOV just enough to keep
+## every point (plus padding) on screen, never tighter than the player's chosen zoom.
+func _frame_group(points: Array[Vector3], delta: float) -> void:
+	var min_pos: Vector3 = points[0]
+	var max_pos: Vector3 = min_pos
+	for p: Vector3 in points:
+		min_pos = min_pos.min(p)
+		max_pos = max_pos.max(p)
 	var ideal_pos: Vector3 = _ideal_position((min_pos + max_pos) * 0.5)
 
-	# Measure each player from where the camera is heading, in camera space,
+	# Measure each point from where the camera is heading, in camera space,
 	# and find the half-angle (as a tangent) needed to fit them. FOV is
 	# vertical, so horizontal extents are divided by the aspect ratio.
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var aspect: float = viewport_size.x / viewport_size.y
-	var to_camera_space: Basis = initial_transform.basis.inverse()
-	var needed_tan: float = tan(deg_to_rad(initial_fov) * 0.5)
-	for t: Node3D in targets:
-		var local: Vector3 = to_camera_space * (t.global_position - ideal_pos)
+	var to_camera_space: Basis = view_basis.inverse()
+	var needed_tan: float = tan(deg_to_rad(zoom_fov) * 0.5)
+	for p: Vector3 in points:
+		var local: Vector3 = to_camera_space * (p - ideal_pos)
 		var depth: float = -local.z
 		if depth <= 0.01: continue
 		needed_tan = max(needed_tan,
 			(abs(local.y) + group_padding) / depth,
 			(abs(local.x) + group_padding) / depth / aspect)
-	var target_fov: float = clamp(rad_to_deg(2.0 * atan(needed_tan)), initial_fov, group_max_fov)
+	var target_fov: float = clamp(rad_to_deg(2.0 * atan(needed_tan)), zoom_fov, max(group_max_fov, zoom_fov))
 
 	fov = lerp(fov, target_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 	global_position = global_position.lerp(ideal_pos, delta * follow_speed)
@@ -181,8 +268,8 @@ func _frame_group(targets: Array[Node3D], delta: float) -> void:
 ## Where the camera sits (fixed height and angle) so look_target is centered.
 func _ideal_position(look_target: Vector3) -> Vector3:
 	var fixed_y: float = initial_transform.origin.y
-	# The camera looks in direction -initial_transform.basis.z (forward)
-	var forward_dir: Vector3 = -initial_transform.basis.z
+	# The camera looks in direction -view_basis.z (forward)
+	var forward_dir: Vector3 = -view_basis.z
 	var height_diff: float = fixed_y - look_target.y
 	
 	# Calculate distance needed along forward direction to position camera correctly

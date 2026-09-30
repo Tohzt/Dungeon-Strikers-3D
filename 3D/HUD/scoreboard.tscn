@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://3D/HUD/scoreboard_3d.gd" id="1_score"]
+
+[node name="Scoreboard" type="CanvasLayer"]
+script = ExtResource("1_score")
+
+[node name="Row" type="HBoxContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -150.0
+offset_top = 16.0
+offset_right = 150.0
+offset_bottom = 80.0
+grow_horizontal = 2
+alignment = 1
+theme_override_constants/separation = 24

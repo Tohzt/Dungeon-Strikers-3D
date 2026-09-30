@@ -6,6 +6,12 @@ const HIT_MASK := 0b110  # Player + Enemy layers (the ball is on Enemy)
 ## Loose physics objects (ball, enemies) get this fraction of the knockback
 ## speed as an impulse, unless the attack passes its own.
 const OBJECT_IMPULSE_RATIO := 0.45
+const WORLD_MASK := 0b1
+## A swing that connects freezes the arm (and whoever got hit) this long, so
+## the contact reads as a solid thunk instead of the blade passing through.
+const HITSTOP := 0.08
+## Light things (the ball) barely slow a swing down.
+const HITSTOP_LIGHT := 0.04
 
 
 ## Physics bodies overlapping `shape` placed at `xform`, minus `exclude`.
@@ -23,19 +29,65 @@ static func overlaps(world: World3D, shape: Shape3D, xform: Transform3D, exclude
 	return bodies
 
 
+## Whether a swing stops dead on `body` and springs back (players, blades,
+## walls), rather than following through it (the ball).
+static func is_solid(body: Node3D) -> bool:
+	return not body is Ball3D
+
+
+## Whether `shape` at `xform` is inside a wall. Floors don't count, so a low
+## swing can graze the ground.
+static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> bool:
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = xform
+	query.collision_mask = WORLD_MASK
+	var exclude: Array[RID] = []
+	for i in 4:
+		query.exclude = exclude
+		var info: Dictionary = world.direct_space_state.get_rest_info(query)
+		if info.is_empty():
+			return false
+		if info.normal.y < 0.7:
+			return true
+		exclude.append(info.rid)
+	return false
+
+
 ## Hit `body` with an attack travelling along `dir`. Players take damage and
-## get shoved (unless a raised shield faces the attack); other unfrozen
-## physics bodies just get pushed. Returns true if a player took the hit.
+## get shoved (unless a raised shield faces the attack), bosses take damage;
+## other unfrozen physics bodies just get pushed. Returns true if a player
+## or boss took the hit.
+## `attacker` is the player behind the attack, if any: their perks scale it,
+## and bosses remember who dealt the killing blow.
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
-static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0) -> bool:
+static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null) -> bool:
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
+	if attacker is PlayerClass3D:
+		damage *= attacker.perk_stat(&"damage")
+		knockback *= attacker.perk_stat(&"knockback")
+		impulse *= attacker.perk_stat(&"ball_power" if body is Ball3D else &"knockback")
+		if body is Boss3D:
+			damage *= attacker.perk_stat(&"boss_damage")
+		elif body is PlayerClass3D and _is_ahead_of(body, attacker):
+			damage *= attacker.perk_stat(&"damage_vs_leader")
 	if body is PlayerClass3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
-	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
+	if body is Boss3D:
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
+
+
+## Whether `player`'s team has more points than `other`'s.
+static func _is_ahead_of(player: PlayerClass3D, other: PlayerClass3D) -> bool:
+	if not Global.Game3D or not player.slot or not other.slot:
+		return false
+	var scores: Dictionary[int, int] = Global.Game3D.scores
+	return scores.get(player.slot.team, 0) > scores.get(other.slot.team, 0)
 
 
 ## Shove a loose physics object. Networked ones (ball, weapons) pass the push

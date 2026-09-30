@@ -1,8 +1,7 @@
 class_name Ball3D extends RigidBody3D
 ## Online the server simulates the ball and streams where it is; players ask
 ## the server to grab, throw or push it. Every machine pins a held ball to
-## its holder's hand itself, so holding looks smooth for everyone.
-@onready var starting_position: Vector3 = self.global_position
+## its holder's hands itself, so holding looks smooth for everyone.
 
 var max_ball_speed: float = 600.0 
 var knockback_strength: float = 5.5
@@ -19,13 +18,8 @@ var speed_fast_threshold: float = max_ball_speed * 0.6
 
 @onready var mesh_instance: MeshInstance3D = get_node_or_null("MeshInstance3D")
 
-## Whether players can pick the ball up. Off for now; meant to be switched
-## on during the phases of a session that use it.
-@export var can_be_picked_up: bool = false
-
 ## Who has the ball in hand, if anyone. Set on every machine.
 var holder: PlayerClass3D = null
-var holder_hand_is_left: bool = false
 var _free_collision_layer: int = 0
 var _free_collision_mask: int = 0
 
@@ -33,9 +27,9 @@ var _free_collision_mask: int = 0
 ## thrower's grab request (sent before they saw the throw) doesn't catch it.
 const GRAB_COOLDOWN := 0.3
 var _grab_cooldown: float = 0.0
-## Client: don't ask the server again every frame we're touching the ball.
-const REQUEST_RETRY_MSEC := 250
-var _next_request_msec: int = 0
+## Server: extra reach allowed on a client's grab, since it saw the ball
+## (and the server saw the player) a little in the past.
+const GRAB_REACH_SLACK := 1.0
 var _last_sent_transform: Transform3D
 var _last_sent_msec: int = 0
 ## Clients: the server's recent updates, played back smoothly.
@@ -140,16 +134,15 @@ func _request_push(impulse: Vector3) -> void:
 
 # ===== HOLDING =====
 
-## `player` touched the ball with a free hand. Online the server decides, so
-## two players can't grab it at once.
-func request_grab(player: PlayerClass3D, is_left: bool) -> void:
-	if holder or not can_be_picked_up:
+## `player` pressed interact near the ball with both hands free. Online the
+## server decides, so two players can't grab it at once.
+func request_grab(player: PlayerClass3D) -> void:
+	if holder:
 		return
 	if not Net.in_session():
-		grab(player, is_left)
-	elif Time.get_ticks_msec() >= _next_request_msec:
-		_next_request_msec = Time.get_ticks_msec() + REQUEST_RETRY_MSEC
-		_request_grab.rpc_id(Net.SERVER_ID, is_left)
+		grab(player)
+	else:
+		_request_grab.rpc_id(Net.SERVER_ID)
 
 
 ## `player` (the holder) lets go with this impulse.
@@ -162,15 +155,13 @@ func request_throw(player: PlayerClass3D, impulse: Vector3) -> void:
 		_request_throw.rpc_id(Net.SERVER_ID, impulse)
 
 
-func grab(player: PlayerClass3D, is_left: bool) -> void:
+func grab(player: PlayerClass3D) -> void:
 	if holder:
 		release(Vector3.ZERO)
 	holder = player
-	holder_hand_is_left = is_left
 	if _net_motion:
 		_net_motion.clear()  # Play back from the release, not before the grab
 	player.held_ball = self
-	player.held_ball_hand_is_left = is_left
 	# Freeze the ball's physics and disable collision while it's carried
 	_free_collision_layer = collision_layer
 	_free_collision_mask = collision_mask
@@ -199,12 +190,12 @@ func release(impulse: Vector3) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _request_grab(is_left: bool) -> void:
-	if not Net.is_server or holder or not can_be_picked_up or _grab_cooldown > 0.0:
+func _request_grab() -> void:
+	if not Net.is_server or holder or _grab_cooldown > 0.0:
 		return
 	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and not player.is_hand_occupied(is_left):
-		_grabbed.rpc(player.name, is_left)
+	if player and player.can_grab_ball(self, PlayerClass3D.BALL_REACH + GRAB_REACH_SLACK):
+		_grabbed.rpc(player.name)
 
 
 @rpc("any_peer", "reliable")
@@ -214,10 +205,10 @@ func _request_throw(impulse: Vector3) -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _grabbed(player_name: String, is_left: bool) -> void:
+func _grabbed(player_name: String) -> void:
 	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
 	if player:
-		grab(player, is_left)
+		grab(player)
 
 
 @rpc("authority", "call_local", "reliable")

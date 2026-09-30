@@ -12,8 +12,12 @@ extends Node
 
 signal slot_joined(slot: PlayerSlot)
 signal slot_left(slot: PlayerSlot)
+## A slot moved to a different device (see set_device).
+signal slot_changed(slot: PlayerSlot)
 
 const MAX_PLAYERS := 4
+## What device_of() returns for input that can't pick a device (e.g. mouse motion).
+const NO_DEVICE := -2
 const TEAM_COLORS: Array[Color] = [
 	Color(0, 0.08, 1),      # Blue
 	Color(1, 0.15, 0.1),    # Red
@@ -68,6 +72,58 @@ func get_slot_for_device(device: int) -> PlayerSlot:
 		if slot.device == device:
 			return slot
 	return null
+
+
+## Move a slot to another device, e.g. from the pause menu. If another slot
+## already has that device, the two swap, so local players can trade.
+func set_device(slot: PlayerSlot, device: int) -> void:
+	if slot.device == device:
+		return
+	var other: PlayerSlot = get_slot_for_device(device)
+	if other:
+		other.device = slot.device
+		_register_actions(other)
+	slot.device = device
+	_register_actions(slot)
+	if other:
+		slot_changed.emit(other)
+	slot_changed.emit(slot)
+
+
+# ===== DEVICE PICKING =====
+# Players claim a device by pressing A/Start or Enter/Space on it, and back
+# out with B/Back or Esc. Shared by the lobbies and the pause menu.
+
+## The device an event came from, or NO_DEVICE if it can't claim one.
+func device_of(event: InputEvent) -> int:
+	if event is InputEventJoypadButton:
+		return event.device
+	if event is InputEventKey:
+		return PlayerSlot.KEYBOARD_MOUSE
+	return NO_DEVICE
+
+
+func is_join_press(event: InputEvent) -> bool:
+	if event is InputEventJoypadButton:
+		return event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]
+	if event is InputEventKey:
+		return event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]
+	return false
+
+
+func is_back_press(event: InputEvent) -> bool:
+	if event is InputEventJoypadButton:
+		return event.button_index in [JOY_BUTTON_B, JOY_BUTTON_BACK]
+	if event is InputEventKey:
+		return event.physical_keycode == KEY_ESCAPE
+	return false
+
+
+func device_name(device: int) -> String:
+	if device == PlayerSlot.KEYBOARD_MOUSE:
+		return "Keyboard & Mouse"
+	var pad_name: String = Input.get_joy_name(device)
+	return pad_name if pad_name != "" else "Controller %d" % (device + 1)
 
 
 ## Stand-in until a lobby exists: seat connected controllers first, then

@@ -112,14 +112,7 @@ func _regen_stamina(delta: float) -> void:
 	if _stamina_regen_wait > 0.0:
 		_stamina_regen_wait -= delta
 	elif stamina < stamina_max:
-		stamina = min(stamina + stamina_regen_rate * delta, stamina_max)
-
-
-func take_damage(dmg: float, dir: Vector3) -> void:
-	if is_in_iframes: return
-	if hp > 0:
-		hp -= int(dmg)
-	apply_knockback(dir, dmg*10)
+		stamina = min(stamina + stamina_regen_rate * _perk_stat(&"stamina_regen") * delta, stamina_max)
 
 
 ## Damage plus a shove given directly as a velocity (horizontal slide +
@@ -127,7 +120,7 @@ func take_damage(dmg: float, dir: Vector3) -> void:
 func take_hit(dmg: float, knockback_velocity: Vector3) -> void:
 	if is_in_iframes: return
 	if hp > 0:
-		hp -= int(dmg)
+		hp -= dmg
 	apply_knockback(knockback_velocity, knockback_velocity.length())
 
 
@@ -211,10 +204,7 @@ func reset(active_status: bool = true) -> void:
 		intelligence = 10
 		endurance = 10
 	
-	# Update max values based on stats
-	hp_max = float(strength * 50)  # Scale strength to HP
-	mana_max = float(intelligence * 10)  # Scale intelligence to mana
-	stamina_max = float(endurance)
+	_update_max_stats()
 	
 	# Update current values to match new max values
 	hp = hp_max
@@ -223,6 +213,27 @@ func reset(active_status: bool = true) -> void:
 	_stamina_regen_wait = 0.0
 	
 	Master.global_position = spawn_pos
+
+
+## Max values from base stats and perks.
+func _update_max_stats() -> void:
+	hp_max = float(strength * 50) * _perk_stat(&"max_hp")  # Scale strength to HP
+	mana_max = float(intelligence * 10)  # Scale intelligence to mana
+	stamina_max = float(endurance) * _perk_stat(&"max_stamina")
+
+
+## Perks changed the max values: resize them, keeping HP and stamina just
+## as full as they were.
+func refresh_max_stats() -> void:
+	var hp_ratio: float = hp / hp_max if hp_max > 0.0 else 1.0
+	var stamina_ratio: float = stamina / stamina_max if stamina_max > 0.0 else 1.0
+	_update_max_stats()
+	hp = hp_max * hp_ratio
+	stamina = stamina_max * stamina_ratio
+
+
+func _perk_stat(stat_name: StringName) -> float:
+	return Master.perk_stat(stat_name) if Master is PlayerClass3D else 1.0
 
 
 func end_iframes() -> void:
@@ -237,6 +248,3 @@ func end_iframes() -> void:
 			if material is StandardMaterial3D:
 				material.albedo_color.a = 1.0
 
-
-func set_target() -> void:
-	print("setting target from EB")

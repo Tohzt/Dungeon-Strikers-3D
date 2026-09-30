@@ -3,34 +3,35 @@
 [ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/Game/game_3d.gd" id="1_kwiv5"]
 [ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_wodrl"]
 [ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="3_dwu0v"]
+[ext_resource type="Script" uid="uid://cgp742w6j8vmw" path="res://3D/Game/tools.gd" id="3_gq62a"]
 [ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_cpoda"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
-[ext_resource type="PackedScene" uid="uid://do1mbihumg8t1" path="res://3D/ball_3d.tscn" id="6_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
-[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="8_cpoda"]
-[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="9_sboqw"]
-[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="10_uepvo"]
-[ext_resource type="PackedScene" uid="uid://cqdd6x0yvjqmx" path="res://3D/Weapons/Shield/Shield_3D.tscn" id="12_uepvo"]
-[ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://3D/Weapons/Bow and Arrow/arrow_3d.tscn" id="13_484l6"]
-[ext_resource type="PackedScene" uid="uid://gwtg3n8y37dp" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="14_gq62a"]
+[ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="8_al1ea"]
+[ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="13_uepvo"]
 [ext_resource type="PackedScene" path="res://Menus/PauseMenu/pause_menu.tscn" id="15_pause"]
+[ext_resource type="PackedScene" path="res://3D/HUD/scoreboard.tscn" id="16_score"]
+[ext_resource type="PackedScene" uid="uid://dq1toy2g128vu" path="res://3D/Entities/Boss/boss.tscn" id="17_boss"]
+[ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="18_bossbar"]
+[ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="19_perks"]
+[ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="20_picker"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_xvsmf"]
-sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
-ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_uepvo"]
+sky_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
+ground_bottom_color = Color(0.071674235, 0.102232955, 0.1433199, 1)
+ground_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
 
-[sub_resource type="Sky" id="Sky_v8n5r"]
-sky_material = SubResource("ProceduralSkyMaterial_xvsmf")
+[sub_resource type="Sky" id="Sky_al1ea"]
+sky_material = SubResource("ProceduralSkyMaterial_uepvo")
 
-[sub_resource type="Environment" id="Environment_jrsk6"]
+[sub_resource type="Environment" id="Environment_484l6"]
 background_mode = 2
-sky = SubResource("Sky_v8n5r")
-tonemap_mode = 2
+sky = SubResource("Sky_al1ea")
 glow_enabled = true
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_qgpjc"]
-size = Vector3(106.52246, 0.5, 34.88965)
+size = Vector3(100, 0.5, 100)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uqeks"]
 albedo_color = Color(0.22576779, 0.5083114, 0.22435093, 1)
@@ -40,58 +41,30 @@ uv1_scale = Vector3(-3, 2, 0)
 
 [sub_resource type="BoxMesh" id="BoxMesh_sjtsc"]
 material = SubResource("StandardMaterial3D_uqeks")
-size = Vector3(100, 0.5, 30)
+size = Vector3(100, 0.5, 100)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_p6jv2"]
-size = Vector2(107, 35)
+size = Vector2(100, 100)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8hcp5"]
 albedo_color = Color(0.30323282, 0.30323282, 0.30323282, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_jrsk6"]
-size = Vector3(106.99121, 10, 1)
+size = Vector3(100, 10, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_uqeks"]
-size = Vector3(1, 10, 34.92383)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_w1tv4"]
-albedo_color = Color(0.57070744, 0.37050173, 0.23154527, 1)
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_gvrid"]
-material = SubResource("StandardMaterial3D_w1tv4")
-radius = 0.1
-height = 0.6
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_gvrid"]
-size = Vector3(0.15, 1.5, 0.15)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_al1ea"]
-albedo_color = Color(0, 1, 1, 1)
-metallic = 1.0
-metallic_specular = 0.87
-roughness = 0.55
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_484l6"]
-material = SubResource("StandardMaterial3D_al1ea")
-radius = 0.1
-height = 1.5
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gq62a"]
-albedo_color = Color(1, 0, 0.42745098, 1)
-metallic = 1.0
-metallic_specular = 0.87
-roughness = 0.55
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_drgkw"]
-material = SubResource("StandardMaterial3D_gq62a")
-radius = 0.1
-height = 1.5
+size = Vector3(1, 10, 100)
 
 [node name="Game3d" type="Node3D" unique_id=998231224]
 script = ExtResource("1_kwiv5")
 player_scene = ExtResource("5_sboqw")
 
+[node name="Tools" type="Node" parent="." unique_id=198446725]
+script = ExtResource("3_gq62a")
+
 [node name="HUD" parent="." unique_id=347811869 instance=ExtResource("2_wodrl")]
+
+[node name="Scoreboard" parent="." unique_id=58592400 instance=ExtResource("16_score")]
 
 [node name="PauseMenu" parent="." unique_id=1958909121 instance=ExtResource("15_pause")]
 
@@ -102,8 +75,8 @@ transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.86602545, 0, -0.86602545, 0.49
 transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 23.241423, 0)
 shadow_enabled = true
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1060067142]
-environment = SubResource("Environment_jrsk6")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1774885226]
+environment = SubResource("Environment_484l6")
 
 [node name="Walls" type="Node" parent="." unique_id=252799667]
 
@@ -122,28 +95,28 @@ mesh = SubResource("PlaneMesh_p6jv2")
 surface_material_override/0 = SubResource("StandardMaterial3D_8hcp5")
 
 [node name="Wall" type="StaticBody3D" parent="Walls" unique_id=31739291]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 17.811562)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 50)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall" unique_id=66902059]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall2" type="StaticBody3D" parent="Walls" unique_id=1364339183]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -17.811565)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -50)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall2" unique_id=1586535081]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall3" type="StaticBody3D" parent="Walls" unique_id=1226163763]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 53.748756, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 5, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall3" unique_id=2016981924]
 shape = SubResource("BoxShape3D_uqeks")
 
 [node name="Wall4" type="StaticBody3D" parent="Walls" unique_id=1775812778]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -53.826855, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 5, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall4" unique_id=1686025649]
@@ -154,82 +127,44 @@ mesh_library = ExtResource("5_uepvo")
 cell_size = Vector3(4, 4, 4)
 cell_center_y = false
 data = {
-"cells": PackedInt32Array(65530, 4, 2, 65531, 4, 2, 65532, 4, 2, 65533, 4, 2, 65534, 4, 2, 65535, 4, 2, 0, 4, 2, 1, 4, 2, 2, 4, 2, 3, 4, 2, 4, 4, 2, 5, 4, 2, 6, 4, 2, 7, 4, 2, 8, 4, 2, 9, 4, 2, 10, 4, 2, 11, 4, 2, 12, 4, 2, 65529, 4, 2, 65528, 4, 2, 65527, 4, 2, 65526, 4, 2, 65525, 4, 2, 65524, 4, 2, 65523, 4, 2, 65523, 65531, 2, 65524, 65531, 2, 65525, 65531, 2, 65526, 65531, 2, 65527, 65531, 2, 65528, 65531, 2, 65529, 65531, 2, 65530, 65531, 2, 65531, 65531, 2, 65532, 65531, 2, 65533, 65531, 2, 65534, 65531, 2, 65535, 65531, 2, 0, 65531, 2, 1, 65531, 2, 2, 65531, 2, 3, 65531, 2, 4, 65531, 2, 5, 65531, 2, 6, 65531, 2, 7, 65531, 2, 8, 65531, 2, 9, 65531, 2, 10, 65531, 2, 11, 65531, 2, 12, 65531, 2, 65522, 3, 1441794, 65522, 2, 1441794, 65522, 65532, 1441794, 65522, 65533, 1441794, 65522, 65534, 1441794, 65522, 65535, 1441794, 65522, 0, 1441794, 65522, 1, 1441794, 13, 65532, 1441794, 13, 65533, 1441794, 13, 65534, 1441794, 13, 65535, 1441794, 13, 0, 1441794, 13, 1, 1441794, 13, 2, 1441794, 13, 3, 1441794, 13, 4, 1441795, 65522, 4, 655363, 65522, 65531, 1048579, 13, 65531, 3)
+"cells": PackedInt32Array(65524, 12, 655362, 65525, 12, 655362, 65526, 12, 655362, 65527, 12, 655362, 65528, 12, 655362, 65529, 12, 655362, 65530, 12, 655362, 65531, 12, 655362, 65532, 12, 655362, 65533, 12, 655362, 65534, 12, 655362, 65535, 12, 655362, 0, 12, 655362, 1, 12, 655362, 2, 12, 655362, 3, 12, 655362, 4, 12, 655362, 5, 12, 655362, 6, 12, 655362, 7, 12, 655362, 8, 12, 655362, 9, 12, 655362, 10, 12, 655362, 11, 12, 655362, 12, 12, 1441795, 65524, 65523, 7, 65525, 65523, 7, 65526, 65523, 7, 65527, 65523, 7, 65528, 65523, 7, 65529, 65523, 7, 65530, 65523, 7, 65531, 65523, 7, 65532, 65523, 7, 65533, 65523, 7, 65534, 65523, 7, 65535, 65523, 7, 0, 65523, 7, 1, 65523, 7, 2, 65523, 7, 3, 65523, 7, 4, 65523, 7, 5, 65523, 7, 6, 65523, 7, 7, 65523, 7, 8, 65523, 7, 9, 65523, 7, 10, 65523, 7, 11, 65523, 7, 12, 11, 1048578, 12, 10, 1048578, 12, 9, 1048578, 12, 8, 1048578, 12, 7, 1048578, 12, 6, 1048578, 12, 5, 1048578, 12, 4, 1048578, 12, 3, 1048578, 12, 2, 1048578, 12, 1, 1048578, 12, 0, 1048578, 12, 65535, 1048578, 12, 65534, 1048578, 12, 65533, 1048578, 12, 65532, 1048578, 12, 65531, 1048578, 12, 65530, 1048578, 12, 65529, 1048578, 12, 65528, 1048578, 12, 65527, 1048578, 12, 65526, 1048578, 12, 65525, 1048578, 12, 65524, 1048578, 65523, 11, 1441794, 65523, 10, 1441794, 65523, 9, 1441794, 65523, 8, 1441794, 65523, 7, 1441794, 65523, 6, 1441794, 65523, 5, 1441794, 65523, 4, 1441794, 65523, 3, 1441794, 65523, 2, 1441794, 65523, 1, 1441794, 65523, 0, 1441794, 65523, 65535, 1441794, 65523, 65534, 1441794, 65523, 65533, 1441794, 65523, 65532, 1441794, 65523, 65531, 1441794, 65523, 65530, 1441794, 65523, 65529, 1441794, 65523, 65528, 1441794, 65523, 65527, 1441794, 65523, 65526, 1441794, 65523, 65525, 1441794, 65523, 65524, 1441794, 65523, 12, 655363, 65523, 65523, 1048579, 12, 65523, 3)
 }
 
-[node name="Ball_3D" parent="." unique_id=1631300372 instance=ExtResource("6_uepvo")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.639948, 0)
+[node name="GridMap2" type="GridMap" parent="Walls" unique_id=1321019340]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh_library = ExtResource("5_uepvo")
+cell_size = Vector3(4, 4, 4)
+cell_center_y = false
+data = {
+"cells": PackedInt32Array(65524, 12, 655362, 65525, 12, 655362, 65526, 12, 655362, 65527, 12, 655362, 65528, 12, 655362, 65529, 12, 655362, 65530, 12, 655362, 65531, 12, 655362, 65532, 12, 655362, 65533, 12, 655362, 65534, 12, 655362, 65535, 12, 655362, 0, 12, 655362, 1, 12, 655362, 2, 12, 655362, 3, 12, 655362, 4, 12, 655362, 5, 12, 655362, 6, 12, 655362, 7, 12, 655362, 8, 12, 655362, 9, 12, 655362, 10, 12, 655362, 11, 12, 655362, 12, 12, 1441795, 65524, 65523, 7, 65525, 65523, 7, 65526, 65523, 7, 65527, 65523, 7, 65528, 65523, 7, 65529, 65523, 7, 65530, 65523, 7, 65531, 65523, 7, 65532, 65523, 7, 65533, 65523, 7, 65534, 65523, 7, 65535, 65523, 7, 0, 65523, 7, 1, 65523, 7, 2, 65523, 7, 3, 65523, 7, 4, 65523, 7, 5, 65523, 7, 6, 65523, 7, 7, 65523, 7, 8, 65523, 7, 9, 65523, 7, 10, 65523, 7, 11, 65523, 7, 12, 11, 1048578, 12, 10, 1048578, 12, 9, 1048578, 12, 8, 1048578, 12, 7, 1048578, 12, 6, 1048578, 12, 5, 1048578, 12, 4, 1048578, 12, 3, 1048578, 12, 2, 1048578, 12, 1, 1048578, 12, 0, 1048578, 12, 65535, 1048578, 12, 65534, 1048578, 12, 65533, 1048578, 12, 65532, 1048578, 12, 65531, 1048578, 12, 65530, 1048578, 12, 65529, 1048578, 12, 65528, 1048578, 12, 65527, 1048578, 12, 65526, 1048578, 12, 65525, 1048578, 12, 65524, 1048578, 65523, 11, 1441794, 65523, 10, 1441794, 65523, 9, 1441794, 65523, 8, 1441794, 65523, 7, 1441794, 65523, 6, 1441794, 65523, 5, 1441794, 65523, 4, 1441794, 65523, 3, 1441794, 65523, 2, 1441794, 65523, 1, 1441794, 65523, 0, 1441794, 65523, 65535, 1441794, 65523, 65534, 1441794, 65523, 65533, 1441794, 65523, 65532, 1441794, 65523, 65531, 1441794, 65523, 65530, 1441794, 65523, 65529, 1441794, 65523, 65528, 1441794, 65523, 65527, 1441794, 65523, 65526, 1441794, 65523, 65525, 1441794, 65523, 65524, 1441794, 65523, 12, 655363, 65523, 65523, 1048579, 12, 65523, 3)
+}
+
+[node name="Goal" parent="Walls" unique_id=424337427 instance=ExtResource("8_al1ea")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48.758, 1.75, 0)
+
+[node name="Goal2" parent="Walls" unique_id=961314483 instance=ExtResource("8_al1ea")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -48.758, 1.75, 0)
+scoring_team = 1
+owner_team = 0
 
 [node name="Weapons" type="Node" parent="." unique_id=456536771]
 
-[node name="Sword_3D" parent="Weapons" unique_id=802568974 instance=ExtResource("7_al1ea")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 4.707629)
-follow_strength = 80.0
+[node name="Altar" parent="." unique_id=2138990566 instance=ExtResource("13_uepvo")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -42.80662, 0, 0)
+weapon_scene = ExtResource("7_al1ea")
 
-[node name="Sword_3D2" type="RigidBody3D" parent="Weapons" unique_id=1827205174 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 6.2843537)
-collision_layer = 8
-collision_mask = 7
-axis_lock_angular_x = true
-axis_lock_angular_y = true
-axis_lock_angular_z = true
-script = ExtResource("8_cpoda")
-follow_strength = 80.0
-Properties = NodePath("WeaponProperties")
-Behavior = NodePath("WeaponBehavior")
+[node name="Altar2" parent="." unique_id=827922923 instance=ExtResource("13_uepvo")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 32.855274, 0, 0)
+owner_team = 1
+weapon_scene = ExtResource("7_al1ea")
 
-[node name="WeaponBehavior" parent="Weapons/Sword_3D2" unique_id=1934706997 instance=ExtResource("9_sboqw")]
+[node name="Boss" parent="." unique_id=183138971 instance=ExtResource("17_boss")]
 
-[node name="WeaponProperties" parent="Weapons/Sword_3D2" unique_id=1809870708 instance=ExtResource("10_uepvo")]
+[node name="BossHealthBar" parent="." unique_id=730215984 node_paths=PackedStringArray("boss") instance=ExtResource("18_bossbar")]
+boss = NodePath("../Boss")
 
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="Weapons/Sword_3D2" unique_id=178687410]
-transform = Transform3D(1.9106855e-15, 4.371139e-08, 1, 1, -4.371139e-08, 0, 4.371139e-08, 1, -4.371139e-08, 0, 0.18893492, 0)
-mesh = SubResource("CapsuleMesh_gvrid")
+[node name="PerkPicker" parent="." unique_id=1502938471 instance=ExtResource("20_picker")]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/Sword_3D2" unique_id=224338604]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.47944963, 0)
-shape = SubResource("BoxShape3D_gvrid")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Weapons/Sword_3D2/CollisionShape3D" unique_id=1423754701]
-mesh = SubResource("CapsuleMesh_484l6")
-skeleton = NodePath("../..")
-
-[node name="Sword_3D3" type="RigidBody3D" parent="Weapons" unique_id=588807636 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.0856924, 5.325431, 7.543426)
-collision_layer = 8
-collision_mask = 7
-axis_lock_angular_x = true
-axis_lock_angular_y = true
-axis_lock_angular_z = true
-script = ExtResource("8_cpoda")
-follow_strength = 80.0
-Properties = NodePath("WeaponProperties")
-Behavior = NodePath("WeaponBehavior")
-
-[node name="WeaponBehavior" parent="Weapons/Sword_3D3" unique_id=1466554296 instance=ExtResource("9_sboqw")]
-
-[node name="WeaponProperties" parent="Weapons/Sword_3D3" unique_id=906453494 instance=ExtResource("10_uepvo")]
-
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="Weapons/Sword_3D3" unique_id=1193061058]
-transform = Transform3D(1.9106855e-15, 4.371139e-08, 1, 1, -4.371139e-08, 0, 4.371139e-08, 1, -4.371139e-08, 0, 0.18893492, 0)
-mesh = SubResource("CapsuleMesh_gvrid")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/Sword_3D3" unique_id=1554168426]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.47944963, 0)
-shape = SubResource("BoxShape3D_gvrid")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Weapons/Sword_3D3/CollisionShape3D" unique_id=1249429144]
-mesh = SubResource("CapsuleMesh_drgkw")
-skeleton = NodePath("../..")
-
-[node name="Shield3d" parent="Weapons" unique_id=956456063 instance=ExtResource("12_uepvo")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8102303, -4.600742)
-
-[node name="Arrow_3D" parent="Weapons" unique_id=1688206367 instance=ExtResource("13_484l6")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5703564, 2.1806288, -8.299206)
-
-[node name="Bow_3D" parent="Weapons" unique_id=92531580 instance=ExtResource("14_gq62a")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.186322, 1.5926104, -9.399996)
-
-[node name="Bow_3D2" parent="Weapons" unique_id=1268025179 instance=ExtResource("14_gq62a")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.829128, 1.5926104, -9.399996)
+[node name="Perks" type="Node" parent="." unique_id=884120395 node_paths=PackedStringArray("picker")]
+script = ExtResource("19_perks")
+picker = NodePath("../PerkPicker")
