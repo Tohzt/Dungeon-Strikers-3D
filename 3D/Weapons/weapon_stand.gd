@@ -45,12 +45,18 @@ func _build_display() -> void:
 		_display = null
 	if not weapon_scene:
 		return
-	_display = weapon_scene.instantiate()
-	_display.process_mode = Node.PROCESS_MODE_DISABLED
-	if _display is RigidBody3D:
-		_display.freeze = true
+	_display = _make_display_copy(weapon_scene)
 	_display.visible = cooldown_left <= 0.0
 	display_anchor.add_child(_display)
+
+
+## A copy of `scene` for looks only: never processed, not in the physics world.
+func _make_display_copy(scene: PackedScene) -> Node3D:
+	var copy: Node3D = scene.instantiate()
+	copy.process_mode = Node.PROCESS_MODE_DISABLED
+	if copy is RigidBody3D:
+		copy.freeze = true
+	return copy
 
 
 ## Whether `player` could take this stand's weapon right now.
@@ -101,18 +107,25 @@ func _request_take(is_left: bool) -> void:
 ## hand and start the cooldown.
 @rpc("authority", "call_local", "reliable")
 func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
-	cooldown_left = _cooldown_after_take()
-	if _display:
-		_display.visible = false
+	var scene: PackedScene = _take_stock()
 	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
-	if player:
-		var weapon: Weapon3D = weapon_scene.instantiate()
+	if player and scene:
+		var weapon: Weapon3D = scene.instantiate()
 		weapon.name = weapon_name
 		Global.Game3D.add_weapon(weapon)
 		weapon.name = weapon_name  # Its _ready renames it after its Properties
 		weapon.global_transform = display_anchor.global_transform
 		weapon.hand_to(player, is_left)
 	_after_given()
+
+
+## The weapon on display is being handed out: empty the stand for the
+## cooldown and return what to make.
+func _take_stock() -> PackedScene:
+	cooldown_left = _cooldown_after_take()
+	if _display:
+		_display.visible = false
+	return weapon_scene
 
 
 ## Seconds the stand stays empty after its weapon is taken.

@@ -67,6 +67,11 @@ func open(picking_player: PlayerClass3D, perks: Array[Perk], local: bool) -> voi
 	dim.show()
 
 
+## Showing a hand of cards to pick from.
+func is_open() -> bool:
+	return dim.visible
+
+
 func close() -> void:
 	player = null
 	hand.clear()

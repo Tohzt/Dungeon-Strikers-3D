@@ -1,8 +1,9 @@
 @tool
 class_name Altar3D extends WeaponStand3D
-## A team's own weapon stand. Only its team can take from it. It holds one
-## weapon at a time and restocks only once that one is taken; stronger tiers
-## make the new weapon sit "charging" for a while before it can be taken.
+## A team's own weapon stand. Only its team can take from it. It holds up to
+## `capacity` weapons: each new one (a restock after a take, or a tier-up)
+## goes on top and pushes the oldest off once it's full. Stronger tiers make
+## a new weapon sit "charging" for a while before it can be taken.
 ## Online the server picks every restock and every tier change.
 ## During the intermission between rounds it's also where each of its
 ## team's players picks a perk (see PerkDirector): interact opens the cards.
@@ -17,22 +18,43 @@ const PLAYERS_SCRIPT := preload("res://players.gd")
 			_apply_team_color()
 ## The altar's power curve, weakest first.
 @export var tiers: Array[AltarTier] = []
-## Seconds between automatic tier-ups over the match. 0 = only upgrade()
+## The tier goes up once this many seconds pass with nobody taking a weapon
+## (counting from the match start, then from each take). 0 = only upgrade()
 ## raises the tier (e.g. on a goal).
 @export var seconds_per_tier: float = 0.0
+## How many weapons the altar holds at once; a new one past this pushes off
+## the oldest. Perks may raise it (e.g. to keep the last two).
+@export_range(1, 4) var capacity: int = 1:
+	set(value):
+		capacity = value
+		_trim_held()
 
 @onready var base_mesh: MeshInstance3D = $MeshInstance3D
 @onready var arming_ring: MeshInstance3D = $ArmingRing
 
-## Index into `tiers`. Changes what the next restock can be, not the weapon
-## already on the altar.
+## One weapon on display.
+class HeldWeapon:
+	var scene: PackedScene
+	## Seconds until it can be taken, out of arming_total.
+	var arming_left: float = 0.0
+	var arming_total: float = 0.0
+	## Spins the display copy; also placed side by side with the others.
+	var pivot: Node3D
+
+	func is_armed() -> bool:
+		return arming_left <= 0.0
+
+
+## Index into `tiers`. A tier-up stocks a weapon from the new tier at once.
 var tier: int = 0
-## Seconds until the weapon on display can be taken.
-var arming_left: float = 0.0
-## Arming time of the weapon on display, for the charging visual.
-var _arming_total: float = 0.0
-## Server/offline: time toward the next automatic tier-up.
+## What's on display, oldest first.
+var _held: Array[HeldWeapon] = []
+## A restock waiting out the respawn delay after a take: [tier, pick].
+var _pending: Array[int] = []
+## Server/offline: time since the last take (or tier-up), toward the next tier-up.
 var _tier_timer: float = 0.0
+## Gap between held weapons, side by side along the altar.
+const HELD_SPACING := 1.2
 ## Floats over the altar while one of its team has perk cards waiting.
 var _perk_sign: Label3D = null
 const PERK_SIGN_HEIGHT := 4.0
@@ -52,27 +74,35 @@ var _pip_pop: float = 0.0
 
 
 func _ready() -> void:
-	# In game, always start from the first tier, even if the editor's preview
-	# weapon got saved into the scene.
-	if not weapon_scene or not Engine.is_editor_hint():
-		var first: AltarTier = _current_tier()
-		if first and not first.weapons.is_empty():
+	var first: AltarTier = _current_tier()
+	var has_first: bool = first != null and not first.weapons.is_empty()
+	if Engine.is_editor_hint():
+		# Preview the first tier's weapon through the plain stand display
+		if not weapon_scene and has_first:
 			weapon_scene = first.weapons[0]
-			_arming_total = first.arming_time
-			arming_left = _arming_total
+	else:
+		# The altar shows its own stock (_held), even if the editor's
+		# preview weapon got saved into the scene.
+		weapon_scene = null
 	super()
 	_make_tier_pips()
 	_apply_team_color()
 	if not Engine.is_editor_hint():
 		_make_perk_sign()
+		if has_first:
+			_add_held(0, 0)
 
 
 func _process(delta: float) -> void:
 	super(delta)
 	if Engine.is_editor_hint():
 		return
-	if cooldown_left <= 0.0 and arming_left > 0.0:
-		arming_left = max(arming_left - delta, 0.0)
+	if cooldown_left <= 0.0 and not _pending.is_empty():
+		_add_held(_pending[0], _pending[1])
+		_pending.clear()
+	for item: HeldWeapon in _held:
+		item.arming_left = max(item.arming_left - delta, 0.0)
+		item.pivot.rotate_y(display_spin_speed * delta)
 	_update_arming_visual()
 	_update_perk_sign()
 	_update_pip_pop(delta)
@@ -121,8 +151,67 @@ func _update_perk_sign() -> void:
 		_perk_sign.position.y = PERK_SIGN_HEIGHT + sin(t * 3.0) * 0.15
 
 
+# ===== STOCK =====
+
+## Something armed to hand out (older weapons stay takeable during a restock's
+## respawn delay).
 func _is_stocked() -> bool:
-	return super() and arming_left <= 0.0
+	return _newest_armed() != null
+
+
+func _newest_armed() -> HeldWeapon:
+	for i in range(_held.size() - 1, -1, -1):
+		if _held[i].is_armed():
+			return _held[i]
+	return null
+
+
+## Hands out the newest armed weapon. Falls back to the newest one, so a
+## machine whose charge timer runs a touch behind still gives the same weapon.
+func _take_stock() -> PackedScene:
+	var item: HeldWeapon = _newest_armed()
+	if not item:
+		if _held.is_empty():
+			return null
+		item = _held.back()
+	cooldown_left = _cooldown_after_take()
+	_remove_held(item)
+	return item.scene
+
+
+## Put tiers[tier_index].weapons[pick] on top, charging for its arming time.
+func _add_held(tier_index: int, pick: int) -> void:
+	var stocked_tier: AltarTier = tiers[tier_index]
+	var item := HeldWeapon.new()
+	item.scene = stocked_tier.weapons[pick]
+	item.arming_total = stocked_tier.arming_time
+	item.arming_left = item.arming_total
+	item.pivot = Node3D.new()
+	item.pivot.add_child(_make_display_copy(item.scene))
+	add_child(item.pivot)
+	_held.append(item)
+	_trim_held()
+
+
+func _remove_held(item: HeldWeapon) -> void:
+	_held.erase(item)
+	item.pivot.queue_free()
+	_layout_held()
+
+
+## Push the oldest off past capacity, then line the rest up.
+func _trim_held() -> void:
+	while _held.size() > capacity:
+		_remove_held(_held[0])
+	_layout_held()
+
+
+func _layout_held() -> void:
+	if not is_node_ready():
+		return
+	for i in _held.size():
+		var offset: float = (i - (_held.size() - 1) * 0.5) * HELD_SPACING
+		_held[i].pivot.position = display_anchor.position + Vector3(offset, 0, 0)
 
 
 func _may_take(player: PlayerClass3D) -> bool:
@@ -134,8 +223,15 @@ func _cooldown_after_take() -> float:
 	return current.respawn_delay if current else cooldown
 
 
-## The server (or the offline game) picks what appears next.
+## A take restarts the wait for the next tier-up, and the server (or the
+## offline game) picks what appears next.
 func _after_given() -> void:
+	_tier_timer = 0.0
+	_restock()
+
+
+## Server/offline: pick a weapon from the current tier and stock it everywhere.
+func _restock() -> void:
 	if Net.in_session() and not Net.is_server:
 		return
 	var current: AltarTier = _current_tier()
@@ -149,17 +245,19 @@ func _after_given() -> void:
 
 
 ## Server -> everyone: the next weapon is tiers[tier_index].weapons[pick].
-## It shows once the respawn delay is over, then charges for its arming time.
+## Right after a take it waits out the respawn delay (a newer pick replaces
+## a waiting one); otherwise it goes on top at once. Either way it then
+## charges for its arming time.
 @rpc("authority", "call_local", "reliable")
 func _stock(tier_index: int, pick: int) -> void:
-	var stocked_tier: AltarTier = tiers[tier_index]
-	_arming_total = stocked_tier.arming_time
-	arming_left = _arming_total
-	weapon_scene = stocked_tier.weapons[pick]
+	if cooldown_left > 0.0:
+		_pending = [tier_index, pick]
+	else:
+		_add_held(tier_index, pick)
 
 
-## Raise the altar's tier (e.g. its team scored). Server/offline only; the
-## new tier applies from the next restock.
+## Raise the altar's tier (e.g. its team scored) and stock a weapon from the
+## new tier, replacing the oldest. Server/offline only.
 func upgrade(levels: int = 1) -> void:
 	if Net.in_session() and not Net.is_server:
 		return
@@ -170,6 +268,7 @@ func upgrade(levels: int = 1) -> void:
 		_set_tier.rpc(new_tier)
 	else:
 		_set_tier(new_tier)
+	_restock()
 
 
 @rpc("authority", "call_local", "reliable")
@@ -230,18 +329,19 @@ func _update_pip_pop(delta: float) -> void:
 		pip.scale = Vector3.ONE * pop
 
 
-## Ring grows while the weapon charges and glows fully once it's takeable.
-## The weapon itself is see-through until then.
+## Ring grows while the newest weapon charges and glows fully once it's
+## takeable. Each weapon is see-through until it's armed.
 func _update_arming_visual() -> void:
-	var showing: bool = _display != null and _display.visible
-	arming_ring.visible = showing
-	if not showing:
+	arming_ring.visible = not _held.is_empty()
+	if _held.is_empty():
 		return
-	var progress: float = 1.0 if _arming_total <= 0.0 else 1.0 - arming_left / _arming_total
+	var newest: HeldWeapon = _held.back()
+	var progress: float = 1.0 if newest.arming_total <= 0.0 else 1.0 - newest.arming_left / newest.arming_total
 	arming_ring.scale = Vector3.ONE * lerpf(0.3, 1.0, progress)
-	var see_through: float = 0.0 if arming_left <= 0.0 else 0.6
-	for node: Node in _display.find_children("*", "GeometryInstance3D", true, false):
-		(node as GeometryInstance3D).transparency = see_through
+	for item: HeldWeapon in _held:
+		var see_through: float = 0.0 if item.is_armed() else 0.6
+		for node: Node in item.pivot.find_children("*", "GeometryInstance3D", true, false):
+			(node as GeometryInstance3D).transparency = see_through
 
 
 func _apply_team_color() -> void:

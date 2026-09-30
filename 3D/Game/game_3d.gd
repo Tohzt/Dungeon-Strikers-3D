@@ -40,6 +40,11 @@ enum Phase {
 @onready var scoreboard: Scoreboard3D = $Scoreboard
 @onready var perks: PerkDirector = $Perks
 @onready var boss_health_bar: BossHealthBar3D = $BossHealthBar
+@onready var pause_menu: CanvasLayer = $PauseMenu
+@onready var game_camera: Camera3D = $Camera3D
+
+## Souls-like third-person camera, while that control scheme is on (Tab).
+var souls_camera: SoulsCamera3D = null
 
 var phase: Phase = Phase.BOSS
 ## Balls in play (bosses drop them; scoring removes them).
@@ -78,6 +83,9 @@ func _ready() -> void:
 	perks.intermission_started.connect(_on_intermission_started)
 	perks.intermission_finished.connect(_on_intermission_finished)
 	_update_phase()
+	# Solo/online starts in the souls-like view; Tab switches to top-down
+	if not Net.is_server:
+		toggle_control_scheme()
 
 	await get_tree().create_timer(3.0).timeout
 	set_camera_active.emit(true)
@@ -123,6 +131,37 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 		add_child(hud)
 	hud.setup(player, slot)
 	huds[player] = hud
+
+
+## Tab: swap between souls-like third-person controls (the default) and the
+## shared top-down camera. Only with a single local player (single-player or
+## online); local co-op shares one screen, so it keeps the top-down camera.
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("toggle_controls") and not event.is_echo():
+		toggle_control_scheme()
+		get_viewport().set_input_as_handled()
+
+
+func toggle_control_scheme() -> void:
+	var local_players: Array[PlayerClass3D] = []
+	for p: PlayerClass3D in players:
+		if is_instance_valid(p) and not p.is_remote:
+			local_players.append(p)
+	if local_players.size() != 1:
+		return
+	var player: PlayerClass3D = local_players[0]
+	if souls_camera:
+		souls_camera.queue_free()
+		souls_camera = null
+		player.set_souls_camera(null)
+		game_camera.make_current()
+	else:
+		souls_camera = SoulsCamera3D.new()
+		souls_camera.name = "SoulsCamera"
+		souls_camera.player = player
+		add_child(souls_camera)
+		player.set_souls_camera(souls_camera)
+		souls_camera.camera.make_current()
 
 
 func _on_net_all_loaded() -> void:

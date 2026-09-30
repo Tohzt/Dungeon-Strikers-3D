@@ -766,6 +766,17 @@ func shove(direction: Vector3, force: float) -> void:
 		_share_iframes(was_in_iframes)
 
 
+# ===== CONTROL SCHEME =====
+
+## Souls-like controls follow `cam` (camera-relative movement, lock-on);
+## null returns to the usual top-down controls. Local players only.
+func set_souls_camera(cam: SoulsCamera3D) -> void:
+	if Input_Handler:
+		Input_Handler.souls_camera = cam
+	if not cam and Entity:
+		Entity.target = null
+
+
 # ===== PERKS =====
 
 ## This player's multiplier for a perk stat (see PerkSet.STATS).
