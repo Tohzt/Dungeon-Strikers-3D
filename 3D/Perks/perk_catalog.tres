@@ -134,7 +134,7 @@ mods = Dictionary[StringName, float]({
 [sub_resource type="Resource" id="Perk_grudge"]
 script = ExtResource("1_perk")
 title = "Grudge"
-description = "+35% damage to players whose team is ahead."
+description = "+35% damage to players whose team is ahead in kills."
 category = 3
 mods = Dictionary[StringName, float]({
 &"damage_vs_leader": 0.35
@@ -209,6 +209,51 @@ mods = Dictionary[StringName, float]({
 &"ball_grip": 0.5
 })
 
+[sub_resource type="Resource" id="Perk_vampiric"]
+script = ExtResource("1_perk")
+title = "Vampiric"
+description = "Heal 30% of your max health on a player kill."
+category = 5
+mods = Dictionary[StringName, float]({
+&"kill_heal": 0.3
+})
+
+[sub_resource type="Resource" id="Perk_executioner"]
+script = ExtResource("1_perk")
+title = "Executioner"
+description = "+50% damage to players below 30% health."
+category = 5
+mods = Dictionary[StringName, float]({
+&"damage_vs_wounded": 0.5
+})
+
+[sub_resource type="Resource" id="Perk_pickpocket"]
+script = ExtResource("1_perk")
+title = "Pickpocket"
+description = "Your hits knock the ball loose twice as easily."
+category = 5
+mods = Dictionary[StringName, float]({
+&"ball_strip": 1.0
+})
+
+[sub_resource type="Resource" id="Perk_headhunter"]
+script = ExtResource("1_perk")
+title = "Headhunter"
+description = "Killing a player on the leading team earns your team a bounty shield."
+category = 5
+mods = Dictionary[StringName, float]({
+&"leader_bounty": 1.0
+})
+
+[sub_resource type="Resource" id="Perk_quick_return"]
+script = ExtResource("1_perk")
+title = "Quick Return"
+description = "Respawn 40% faster."
+category = 3
+mods = Dictionary[StringName, float]({
+&"respawn_time": -0.4
+})
+
 [resource]
 script = ExtResource("2_catalog")
-perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands")])
+perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_pickpocket"), SubResource("Perk_headhunter"), SubResource("Perk_quick_return")])

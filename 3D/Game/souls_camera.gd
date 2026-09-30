@@ -143,7 +143,7 @@ func _lock_candidates() -> Array[Node3D]:
 		if is_instance_valid(boss):
 			found.append(boss)
 	for other: PlayerClass3D in Global.Game3D.players:
-		if other != player and is_instance_valid(other):
+		if other != player and is_instance_valid(other) and not other.is_dead():
 			found.append(other)
 	return found
 

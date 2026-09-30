@@ -14,6 +14,8 @@ class_name WeaponStand3D extends Node3D
 @export var cooldown: float = 5.0
 ## How fast the displayed weapon turns, in radians/sec.
 @export var display_spin_speed: float = 1.0
+## How rare (see WeaponRarity) the weapons it hands out are.
+@export var rarity: WeaponRarity.Tier = WeaponRarity.Tier.COMMON
 
 @onready var display_anchor: Marker3D = $WeaponDisplay
 @onready var reach: Area3D = $Reach
@@ -23,6 +25,8 @@ var cooldown_left: float = 0.0
 var _display: Node3D = null
 ## Names the weapons this stand gives out, the same on every machine.
 var _given_count: int = 0
+## Rarity of the weapon _take_stock() last handed out.
+var _given_rarity: int = WeaponRarity.Tier.COMMON
 
 
 func _ready() -> void:
@@ -45,17 +49,20 @@ func _build_display() -> void:
 		_display = null
 	if not weapon_scene:
 		return
-	_display = _make_display_copy(weapon_scene)
+	_display = _make_display_copy(weapon_scene, rarity)
 	_display.visible = cooldown_left <= 0.0
 	display_anchor.add_child(_display)
 
 
-## A copy of `scene` for looks only: never processed, not in the physics world.
-func _make_display_copy(scene: PackedScene) -> Node3D:
+## A copy of `scene` for looks only: never processed, not in the physics
+## world. Glows in `tier`'s rarity color.
+func _make_display_copy(scene: PackedScene, tier: int) -> Node3D:
 	var copy: Node3D = scene.instantiate()
 	copy.process_mode = Node.PROCESS_MODE_DISABLED
 	if copy is RigidBody3D:
 		copy.freeze = true
+	if not Engine.is_editor_hint():
+		WeaponRarity.apply_glow(copy, tier)
 	return copy
 
 
@@ -114,6 +121,7 @@ func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
 		weapon.name = weapon_name
 		Global.Game3D.add_weapon(weapon)
 		weapon.name = weapon_name  # Its _ready renames it after its Properties
+		weapon.set_rarity(_given_rarity)
 		weapon.global_transform = display_anchor.global_transform
 		weapon.hand_to(player, is_left)
 	_after_given()
@@ -125,6 +133,7 @@ func _take_stock() -> PackedScene:
 	cooldown_left = _cooldown_after_take()
 	if _display:
 		_display.visible = false
+	_given_rarity = rarity
 	return weapon_scene
 
 

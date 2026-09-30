@@ -37,6 +37,7 @@ func attack(aim_direction: Vector3) -> void:
 	_fire_arrow(muzzle, aim_direction, true)
 	if Net.match_synced:
 		_net_fire.rpc(muzzle, aim_direction)
+	wear()  # Each shot is a use
 
 
 ## `real` arrows hit things; online, everyone else's copy of a shot is just

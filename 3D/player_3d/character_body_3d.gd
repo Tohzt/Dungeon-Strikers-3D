@@ -245,6 +245,20 @@ var punching_right: bool = false
 var punch_hits_left: Array[Node] = []
 var punch_hits_right: Array[Node] = []
 
+# Kills: the last opponent to hit us gets the kill if we die within
+# KILL_CREDIT_TIME of it, even if something else (a boss stomp) finishes
+# us off. Dying takes us out of play for Game3D.respawn_delay seconds.
+const KILL_CREDIT_TIME := 4.0
+## A bounty shield that soaks a killing blow leaves this share of max HP.
+const SHIELD_SAVE_HP_RATIO := 0.25
+var _last_attacker_name: String = ""
+var _last_attacker_msec: int = -1
+## Seconds left before respawning; 0 = alive.
+var dead_time: float = 0.0
+var _alive_collision_layer: int = 0
+## Floats over the head of anyone on the team leading in kills.
+var _crown: MeshInstance3D = null
+
 
 func _ready() -> void:
 	# Properties is a sub-resource of player_3d.tscn, so every instance would
@@ -312,7 +326,7 @@ func set_remote() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if is_remote:
+	if is_remote or is_dead():
 		return
 	if hitstop > 0.0:
 		hitstop -= delta
@@ -485,6 +499,9 @@ func _get_ball_radius(ball: RigidBody3D) -> float:
 
 
 func _process(delta: float) -> void:
+	if is_dead():
+		_update_death(delta)
+		return
 	if is_remote:
 		_process_remote(delta)
 		return
@@ -707,7 +724,7 @@ func _bump_other_players(delta: float) -> void:
 	var online: bool = Net.in_session()
 	for node: Node in get_tree().get_nodes_in_group("Player"):
 		var other: PlayerClass3D = node as PlayerClass3D
-		if not other or other == self:
+		if not other or other == self or other.is_dead():
 			continue
 		# Offline each pair is handled once, by the player with the lower instance id
 		if not online and get_instance_id() > other.get_instance_id():
@@ -791,21 +808,29 @@ func _check_fist_hits(hand: Area3D, already_hit: Array[Node], is_left: bool) -> 
 
 ## Called by Combat.strike for every attack that lands on this player.
 ## `dir` is the direction the attack travels. Returns false if blocked.
+## `attacker` is the player behind it, if any (they may get the kill).
 ## Online the hit is decided on this player's owner, so a remote copy just
 ## passes it on (and can't know yet whether it was blocked).
-func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bool:
+func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
+	if is_dead():
+		return false
 	if not _is_local():
 		if Net.match_synced:
-			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity)
+			var attacker_name: String = String(attacker.name) if attacker is PlayerClass3D else ""
+			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity, attacker_name)
 		return true
 	if roll_iframes > 0.0:
 		return false  # Rolled through it
+	if attacker is PlayerClass3D and attacker != self:
+		_last_attacker_name = attacker.name
+		_last_attacker_msec = Time.get_ticks_msec()
 	damage *= perk_stat(&"damage_taken")
 	var knockback_taken: float = perk_stat(&"knockback_taken")
 	knockback_velocity.x *= knockback_taken
 	knockback_velocity.z *= knockback_taken
-	if _is_blocking_from(dir):
-		_receive_blocked_hit(damage, knockback_velocity)
+	var shield: ShieldClass3D = _blocking_shield(dir)
+	if shield:
+		_receive_blocked_hit(damage, knockback_velocity, shield)
 		return false
 	if Entity:
 		var was_in_iframes: bool = Entity.is_in_iframes
@@ -816,15 +841,106 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 			hitstop = Combat.HITSTOP
 			if exhausted:
 				_stagger()
-			if held_ball and damage >= BALL_FUMBLE_DAMAGE * perk_stat(&"ball_grip"):
+			var strip: float = attacker.perk_stat(&"ball_strip") if attacker is PlayerClass3D else 1.0
+			if held_ball and damage * strip >= BALL_FUMBLE_DAMAGE * perk_stat(&"ball_grip"):
 				held_ball.request_throw(self, (dir + Vector3.UP * 0.5) * BALL_FUMBLE_IMPULSE)
 		if Entity.hp <= 0:
-			respawn()
+			_on_lethal_hit()
 	return true
 
 
-## Out of HP: back to where this player started, fully restored. Weapons
-## stay in hand; the ball is let go. Online only the owner calls this; the
+## Out of HP (on the owner). A bounty shield saves us from a hit that would
+## give an opponent the kill; otherwise we die and Game3D is told who, if
+## anyone, gets the kill.
+func _on_lethal_hit() -> void:
+	var killer_name: String = _credited_killer()
+	if killer_name != "" and Global.Game3D and Global.Game3D.try_use_shield(self):
+		Entity.hp = Entity.hp_max * SHIELD_SAVE_HP_RATIO
+		return
+	die()
+	if Global.Game3D:
+		Global.Game3D.report_death(self, killer_name)
+
+
+## Whoever last hit us, if it was recent enough to count as their kill.
+func _credited_killer() -> String:
+	if _last_attacker_msec < 0 or Time.get_ticks_msec() - _last_attacker_msec > KILL_CREDIT_TIME * 1000.0:
+		return ""
+	return _last_attacker_name
+
+
+func is_dead() -> bool:
+	return dead_time > 0.0
+
+
+## Killed: gone from the arena until the respawn delay runs out. The owner
+## calls this the moment it happens and every machine again when Game3D
+## announces the death, so a second call does nothing.
+func die() -> void:
+	if is_dead():
+		return
+	var delay: float = Global.Game3D.respawn_delay if Global.Game3D else 0.0
+	delay *= perk_stat(&"respawn_time")
+	if _is_local():
+		# Our weapons stay where we fell, for anyone to take
+		for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
+			if weapon:
+				weapon.drop()
+		respawn()  # Wait at the spawn point, so remote copies don't streak there later
+	if delay <= 0.0:
+		return
+	dead_time = delay
+	_last_attacker_name = ""
+	_last_attacker_msec = -1
+	_cancel_attacks()
+	_set_attack_armed(true, false)
+	_set_attack_armed(false, false)
+	_alive_collision_layer = collision_layer
+	collision_layer = 0
+	visible = false
+
+
+func _update_death(delta: float) -> void:
+	dead_time = max(dead_time - delta, 0.0)
+	if dead_time > 0.0:
+		return
+	collision_layer = _alive_collision_layer
+	visible = true
+	if Entity:
+		Entity.start_iframes()  # A moment of spawn protection
+
+
+## Game3D says whether our team leads in kills: wear the crown if so.
+func set_leader(leading: bool) -> void:
+	if leading and not _crown:
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = 0.3
+		mesh.bottom_radius = 0.22
+		mesh.height = 0.25
+		var material := StandardMaterial3D.new()
+		material.albedo_color = Color(1.0, 0.8, 0.1)
+		material.emission_enabled = true
+		material.emission = Color(1.0, 0.7, 0.1)
+		material.emission_energy_multiplier = 1.5
+		mesh.material = material
+		_crown = MeshInstance3D.new()
+		_crown.name = "Crown"
+		_crown.mesh = mesh
+		_crown.position = Vector3(0, 1.6, 0)
+		add_child(_crown)
+	if _crown:
+		_crown.visible = leading
+
+
+## We got a kill (on every machine): the kill_heal perk stat heals us.
+func on_kill() -> void:
+	var heal: float = perk_stat(&"kill_heal") - 1.0
+	if heal > 0.0 and Entity and _is_local() and not is_dead():
+		Entity.hp = min(Entity.hp + Entity.hp_max * heal, Entity.hp_max)
+
+
+## Back to where this player started, fully restored. Anything still held
+## comes along; the ball is let go. Online only the owner calls this; the
 ## new position and HP reach everyone through the usual sync.
 func respawn() -> void:
 	if held_ball:
@@ -846,7 +962,7 @@ func shove(direction: Vector3, force: float) -> void:
 	if not _is_local():
 		if Net.match_synced:
 			_net_shove.rpc_id(get_multiplayer_authority(), direction, force)
-	elif Entity and roll_iframes <= 0.0:
+	elif Entity and roll_iframes <= 0.0 and not is_dead():
 		var was_in_iframes: bool = Entity.is_in_iframes
 		Entity.apply_knockback(direction, force * perk_stat(&"knockback_taken"))
 		_share_iframes(was_in_iframes)
@@ -938,8 +1054,9 @@ func _lunge(speed: float) -> void:
 ## A hit landed on our raised shield: a little damage and shove, paid for
 ## in stamina. Emptying the bar breaks the guard. Unlike an open hit it
 ## leaves no iframes, so a flurry keeps draining the guard.
-func _receive_blocked_hit(damage: float, knockback_velocity: Vector3) -> void:
+func _receive_blocked_hit(damage: float, knockback_velocity: Vector3, shield: ShieldClass3D) -> void:
 	add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
+	shield.wear()  # Each block is a use
 	if not Entity or Entity.is_in_iframes:
 		return
 	Entity.hp -= damage * BLOCK_DAMAGE_RATIO
@@ -948,7 +1065,7 @@ func _receive_blocked_hit(damage: float, knockback_velocity: Vector3) -> void:
 	if Entity.stamina <= 0.0:
 		_stagger()
 	if Entity.hp <= 0:
-		respawn()
+		_on_lethal_hit()
 
 
 ## Poise broken: stagger, cutting short any roll or swing.
@@ -1020,9 +1137,12 @@ func _share_iframes(was_in_iframes: bool) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _net_receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> void:
+func _net_receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker_name: String) -> void:
 	if is_multiplayer_authority():
-		receive_hit(dir, damage, knockback_velocity)
+		var attacker: Node3D = null
+		if attacker_name != "" and Global.Game3D:
+			attacker = Global.Game3D.get_node_or_null(attacker_name) as PlayerClass3D
+		receive_hit(dir, damage, knockback_velocity, attacker)
 
 
 @rpc("any_peer", "reliable")
@@ -1037,12 +1157,13 @@ func _net_iframes() -> void:
 		Entity.start_iframes()
 
 
-func _is_blocking_from(attack_dir: Vector3) -> bool:
+## The raised shield that stops an attack travelling along `attack_dir`, if any.
+func _blocking_shield(attack_dir: Vector3) -> ShieldClass3D:
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon is ShieldClass3D and weapon.is_blocking:
 			# Blocked if the attack is coming at our front
-			return global_transform.basis.z.dot(-attack_dir) > BLOCK_FACING_DOT
-	return false
+			return weapon if global_transform.basis.z.dot(-attack_dir) > BLOCK_FACING_DOT else null
+	return null
 
 
 # ===== STAMINA =====

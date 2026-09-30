@@ -1,14 +1,25 @@
 class_name Game3D_Class extends Node3D
-## The match. It runs in rounds: a boss fight, then soccer with the ball the
-## boss drops, then (once every ball is scored and no boss is left) an
+## The match: the first team to `kills_to_win` player kills wins. Around
+## that it runs in rounds: a boss fight, then soccer with the ball the boss
+## drops, then (once every ball is scored and no boss is left) an
 ## intermission where each player picks a perk at their altar, then the
 ## next, tougher boss.
+## A goal is a comeback tool: a team behind on kills takes one back from
+## the leader; otherwise it earns a bounty shield that soaks the next
+## killing blow on one of its players.
 
 signal set_camera_active(TorF: bool)
 ## A point was just awarded to `team`. On every machine.
 signal goal_scored(team: int)
 ## The round moved on (see Phase). On every machine.
 signal phase_changed(phase: Phase)
+## `victim` died; `killer` gets the kill (null = nobody). On every machine.
+signal player_killed(victim: PlayerClass3D, killer: PlayerClass3D)
+## Someone reached kills_to_win. On every machine.
+signal match_won(team: int)
+
+## Matches Players.TEAM_COLORS.
+const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 
 enum Phase {
 	BOSS,          ## A boss is alive
@@ -30,11 +41,22 @@ enum Phase {
 ## Where "Reset Ball" (pause menu) puts every ball.
 @export var ball_reset_point: Vector3 = Vector3(0, 4.6, 0)
 ## Spawned after each intermission.
-@export var boss_scene: PackedScene = preload("res://3D/Entities/Boss/boss.tscn")
+@export var boss_scene: PackedScene = preload("res://3D/Entities/Boss_Slime/boss.tscn")
 @export var boss_spawn_point: Vector3 = Vector3.ZERO
 ## Each boss after the first has this much more max HP than the one before
 ## (0.25 = +25%), to keep up with the players' perks.
 @export var boss_hp_growth: float = 0.25
+
+@export_group("Kills")
+## Player kills a team needs to win the match.
+@export_range(1, 20) var kills_to_win: int = 3
+## Seconds a killed player sits out before respawning.
+@export var respawn_delay: float = 4.0
+## Bounty shields a team can bank at once.
+@export_range(0, 5) var max_bounty_shields: int = 1
+## Offline: seconds after the win before the match restarts.
+@export var restart_delay: float = 6.0
+@export_group("")
 
 @onready var HUD: HUD3D = $HUD
 @onready var scoreboard: Scoreboard3D = $Scoreboard
@@ -60,8 +82,13 @@ var _bosses_made: int = 0
 var players: Array[PlayerClass3D] = []
 ## Each player's HUD, so it can go when an online player leaves.
 var huds: Dictionary[PlayerClass3D, HUD3D] = {}
-## Points per team, for every team that has a goal to attack.
+## Goals per team, for every team that has a goal to attack.
 var scores: Dictionary[int, int] = {}
+## Player kills per team, for every team in the match. Decides the winner.
+var kills: Dictionary[int, int] = {}
+## Bounty shields each team has banked (see try_use_shield).
+var shields: Dictionary[int, int] = {}
+var match_over: bool = false
 ## First player, kept for code that only knows about one.
 var Player: PlayerClass3D:
 	get: return players[0] if not players.is_empty() else null
@@ -69,7 +96,6 @@ var Player: PlayerClass3D:
 func _enter_tree() -> void: Global.Game3D = self
 
 func _ready() -> void:
-	_setup_scores()
 	if Net.in_session():
 		_spawn_online_players()
 	else:
@@ -77,6 +103,7 @@ func _ready() -> void:
 			Players.join_default_devices(default_player_count)
 		for slot: PlayerSlot in Players.slots:
 			_spawn_player(slot)
+	_setup_scores()
 	for child: Node in get_children():
 		if child is Boss3D:
 			_track_boss(child)
@@ -205,21 +232,28 @@ func _on_net_peers_changed() -> void:
 				ball.release(Vector3.ZERO)
 		perks.forget_player(player)
 		players.erase(player)
+		_refresh_leader()
 		if huds.get(player) != HUD:
 			huds[player].queue_free()
 		huds.erase(player)
 		player.queue_free()
 
 
+## Every team with a goal to attack or a player in the match.
 func _setup_scores() -> void:
 	var teams: Array[int] = []
 	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
 		if not teams.has(goal.scoring_team):
 			teams.append(goal.scoring_team)
+		scores[goal.scoring_team] = 0
+	for player: PlayerClass3D in players:
+		if player.slot and not teams.has(player.slot.team):
+			teams.append(player.slot.team)
 	teams.sort()
 	for team: int in teams:
-		scores[team] = 0
-	scoreboard.setup(teams)
+		kills[team] = 0
+		shields[team] = 0
+	scoreboard.setup(teams, kills_to_win)
 
 
 ## Server/offline: `scored_ball` went into a goal attacked by `team`. Award
@@ -230,23 +264,213 @@ func score_goal(team: int, scored_ball: Ball3D) -> void:
 	if not balls.has(scored_ball):
 		return  # Already counted
 	var new_score: int = scores.get(team, 0) + 1
+	# Behind on kills: take one back from the leader. Otherwise bank a shield.
+	var erased_team: int = _top_team_ahead_of(team)
 	if Net.in_session():
-		_goal_scored.rpc(team, new_score, scored_ball.name)
+		_goal_scored.rpc(team, new_score, scored_ball.name, erased_team)
 	else:
-		_goal_scored(team, new_score, scored_ball.name)
+		_goal_scored(team, new_score, scored_ball.name, erased_team)
 
 
 @rpc("authority", "call_local", "reliable")
-func _goal_scored(team: int, new_score: int, ball_name: String) -> void:
+func _goal_scored(team: int, new_score: int, ball_name: String, erased_team: int) -> void:
 	scores[team] = new_score
-	scoreboard.set_score(team, new_score)
 	var scored_ball: Ball3D = get_node_or_null(ball_name) as Ball3D
 	if scored_ball:
 		_remove_ball(scored_ball)
+	var color: Color = _team_color(team)
+	if erased_team >= 0 and not match_over:
+		_set_kills(erased_team, kills[erased_team] - 1)
+		scoreboard.announce("%s scores! A kill taken back from %s" % [_team_name(team), _team_name(erased_team)], color)
+	elif shields.get(team, 0) < max_bounty_shields and not match_over:
+		_set_shields(team, shields.get(team, 0) + 1)
+		scoreboard.announce("%s scores! Bounty shield earned" % _team_name(team), color)
+	else:
+		scoreboard.announce("%s scores!" % _team_name(team), color)
 	perks.record_goal(team)
 	goal_scored.emit(team)
 	_update_phase()
 	_check_round_over()
+
+
+## The team with the most kills among those with more than `team`, or -1
+## if nobody is ahead of it.
+func _top_team_ahead_of(team: int) -> int:
+	var best: int = -1
+	for other: int in kills:
+		if other != team and kills[other] > kills.get(team, 0) and (best < 0 or kills[other] > kills[best]):
+			best = other
+	return best
+
+
+# ===== KILLS =====
+
+## Called by a player's owner the moment they die. `killer_name` is the
+## opponent who gets the kill ("" = nobody). The server (or offline game)
+## decides the result and tells everyone.
+func report_death(victim: PlayerClass3D, killer_name: String) -> void:
+	if not Net.in_session() or Net.is_server:
+		_resolve_death(victim.name, killer_name)
+	elif Net.match_synced:
+		_request_death.rpc_id(Net.SERVER_ID, killer_name)
+
+
+@rpc("any_peer", "reliable")
+func _request_death(killer_name: String) -> void:
+	if not Net.is_server:
+		return
+	var victim: PlayerClass3D = player_of_peer(multiplayer.get_remote_sender_id())
+	if victim:
+		_resolve_death(victim.name, killer_name)
+
+
+func _resolve_death(victim_name: String, killer_name: String) -> void:
+	var victim: PlayerClass3D = get_node_or_null(victim_name) as PlayerClass3D
+	var killer: PlayerClass3D = get_node_or_null(killer_name) as PlayerClass3D if killer_name != "" else null
+	if not victim:
+		return
+	# No credit for team kills or once the match is decided
+	if killer and (match_over or killer == victim or _team_of(killer) == _team_of(victim)):
+		killer = null
+	var new_kills: int = -1
+	var bounty: bool = false
+	if killer:
+		var team: int = _team_of(killer)
+		new_kills = kills.get(team, 0) + 1
+		# Headhunter: killing the leader banks a shield
+		bounty = killer.perk_stat(&"leader_bounty") > 1.0 and _leading_team() == _team_of(victim)
+	var sent_killer: String = String(killer.name) if killer else ""
+	if Net.in_session():
+		_player_died.rpc(victim_name, sent_killer, new_kills, bounty)
+	else:
+		_player_died(victim_name, sent_killer, new_kills, bounty)
+
+
+@rpc("authority", "call_local", "reliable")
+func _player_died(victim_name: String, killer_name: String, new_kills: int, bounty: bool) -> void:
+	var victim: PlayerClass3D = get_node_or_null(victim_name) as PlayerClass3D
+	var killer: PlayerClass3D = get_node_or_null(killer_name) as PlayerClass3D if killer_name != "" else null
+	if not victim:
+		return
+	victim.die()
+	if not killer:
+		scoreboard.announce("%s went down" % _player_label(victim), Color.WHITE)
+		player_killed.emit(victim, null)
+		return
+	var team: int = _team_of(killer)
+	_set_kills(team, new_kills)
+	if bounty and shields.get(team, 0) < max_bounty_shields:
+		_set_shields(team, shields.get(team, 0) + 1)
+	killer.on_kill()
+	perks.record_kill(killer)
+	scoreboard.announce("%s killed %s" % [_player_label(killer), _player_label(victim)], _team_color(team))
+	player_killed.emit(victim, killer)
+	if new_kills >= kills_to_win and not match_over:
+		_win(team)
+
+
+func _win(team: int) -> void:
+	match_over = true
+	scoreboard.show_winner("%s wins!" % _team_name(team), _team_color(team))
+	match_won.emit(team)
+	if Net.in_session():
+		return  # Online the pause menu leaves the match
+	await get_tree().create_timer(restart_delay).timeout
+	get_tree().reload_current_scene()
+
+
+## Owner of `player`, on a hit that would give an opponent the kill: if
+## their team has a bounty shield, use it up and return true (they live).
+func try_use_shield(player: PlayerClass3D) -> bool:
+	var team: int = _team_of(player)
+	if shields.get(team, 0) <= 0:
+		return false
+	# Spent here at once, so a second hit before the server replies can't reuse it
+	shields[team] -= 1
+	if not Net.in_session() or Net.is_server:
+		_shield_used(team, shields[team], player.name)
+	elif Net.match_synced:
+		_request_use_shield.rpc_id(Net.SERVER_ID)
+	return true
+
+
+@rpc("any_peer", "reliable")
+func _request_use_shield() -> void:
+	if not Net.is_server:
+		return
+	var player: PlayerClass3D = player_of_peer(multiplayer.get_remote_sender_id())
+	if player:
+		var team: int = _team_of(player)
+		_shield_used.rpc(team, max(shields.get(team, 0) - 1, 0), player.name)
+
+
+@rpc("authority", "call_local", "reliable")
+func _shield_used(team: int, left: int, player_name: String) -> void:
+	_set_shields(team, left)
+	var player: PlayerClass3D = get_node_or_null(player_name) as PlayerClass3D
+	if player:
+		scoreboard.announce("%s's bounty shield broke!" % _player_label(player), _team_color(team))
+
+
+func _set_kills(team: int, value: int) -> void:
+	kills[team] = max(value, 0)
+	scoreboard.set_kills(team, kills[team])
+	_refresh_leader()
+
+
+func _set_shields(team: int, value: int) -> void:
+	shields[team] = max(value, 0)
+	scoreboard.set_shields(team, shields[team])
+
+
+## The team with strictly the most kills, or -1 when nobody leads.
+func _leading_team() -> int:
+	var best: int = -1
+	var tied: bool = false
+	for team: int in kills:
+		if best < 0 or kills[team] > kills[best]:
+			best = team
+			tied = false
+		elif kills[team] == kills[best]:
+			tied = true
+	return -1 if tied or best < 0 or kills[best] == 0 else best
+
+
+## Crown the leading team's players (the boss hunts them too).
+func _refresh_leader() -> void:
+	var leader: int = _leading_team()
+	for player: PlayerClass3D in players:
+		if is_instance_valid(player):
+			player.set_leader(leader >= 0 and _team_of(player) == leader)
+
+
+## Players the boss should go after: the leading team's, if any team leads.
+func leader_players() -> Array[PlayerClass3D]:
+	var found: Array[PlayerClass3D] = []
+	var leader: int = _leading_team()
+	if leader < 0:
+		return found
+	for player: PlayerClass3D in players:
+		if is_instance_valid(player) and _team_of(player) == leader and not player.is_dead():
+			found.append(player)
+	return found
+
+
+func _team_of(player: PlayerClass3D) -> int:
+	return player.slot.team if player.slot else 0
+
+
+func _team_color(team: int) -> Color:
+	return Players.TEAM_COLORS[team % Players.TEAM_COLORS.size()]
+
+
+
+func _team_name(team: int) -> String:
+	return TEAM_NAMES[team % TEAM_NAMES.size()]
+
+
+func _player_label(player: PlayerClass3D) -> String:
+	return "P%d" % (player.slot.index + 1) if player.slot else String(player.name)
 
 
 # ===== BALLS =====

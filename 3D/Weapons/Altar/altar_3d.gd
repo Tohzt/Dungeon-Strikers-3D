@@ -35,6 +35,7 @@ const PLAYERS_SCRIPT := preload("res://players.gd")
 ## One weapon on display.
 class HeldWeapon:
 	var scene: PackedScene
+	var rarity: int = WeaponRarity.Tier.COMMON
 	## Seconds until it can be taken, out of arming_total.
 	var arming_left: float = 0.0
 	var arming_total: float = 0.0
@@ -49,7 +50,7 @@ class HeldWeapon:
 var tier: int = 0
 ## What's on display, oldest first.
 var _held: Array[HeldWeapon] = []
-## A restock waiting out the respawn delay after a take: [tier, pick].
+## A restock waiting out the respawn delay after a take: [tier, pick, rarity].
 var _pending: Array[int] = []
 ## Server/offline: time since the last take (or tier-up), toward the next tier-up.
 var _tier_timer: float = 0.0
@@ -90,7 +91,7 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		_make_perk_sign()
 		if has_first:
-			_add_held(0, 0)
+			_add_held(0, 0, WeaponRarity.Tier.COMMON)
 
 
 func _process(delta: float) -> void:
@@ -98,7 +99,7 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 	if cooldown_left <= 0.0 and not _pending.is_empty():
-		_add_held(_pending[0], _pending[1])
+		_add_held(_pending[0], _pending[1], _pending[2])
 		_pending.clear()
 	for item: HeldWeapon in _held:
 		item.arming_left = max(item.arming_left - delta, 0.0)
@@ -176,18 +177,20 @@ func _take_stock() -> PackedScene:
 		item = _held.back()
 	cooldown_left = _cooldown_after_take()
 	_remove_held(item)
+	_given_rarity = item.rarity
 	return item.scene
 
 
 ## Put tiers[tier_index].weapons[pick] on top, charging for its arming time.
-func _add_held(tier_index: int, pick: int) -> void:
+func _add_held(tier_index: int, pick: int, tier_rarity: int) -> void:
 	var stocked_tier: AltarTier = tiers[tier_index]
 	var item := HeldWeapon.new()
 	item.scene = stocked_tier.weapons[pick]
+	item.rarity = tier_rarity
 	item.arming_total = stocked_tier.arming_time
 	item.arming_left = item.arming_total
 	item.pivot = Node3D.new()
-	item.pivot.add_child(_make_display_copy(item.scene))
+	item.pivot.add_child(_make_display_copy(item.scene, item.rarity))
 	add_child(item.pivot)
 	_held.append(item)
 	_trim_held()
@@ -238,22 +241,24 @@ func _restock() -> void:
 	if not current or current.weapons.is_empty():
 		return
 	var pick: int = randi() % current.weapons.size()
+	var pick_rarity: int = WeaponRarity.roll(current.rarity_weights)
 	if Net.in_session():
-		_stock.rpc(tier, pick)
+		_stock.rpc(tier, pick, pick_rarity)
 	else:
-		_stock(tier, pick)
+		_stock(tier, pick, pick_rarity)
 
 
-## Server -> everyone: the next weapon is tiers[tier_index].weapons[pick].
+## Server -> everyone: the next weapon is tiers[tier_index].weapons[pick],
+## of rarity `pick_rarity`.
 ## Right after a take it waits out the respawn delay (a newer pick replaces
 ## a waiting one); otherwise it goes on top at once. Either way it then
 ## charges for its arming time.
 @rpc("authority", "call_local", "reliable")
-func _stock(tier_index: int, pick: int) -> void:
+func _stock(tier_index: int, pick: int, pick_rarity: int) -> void:
 	if cooldown_left > 0.0:
-		_pending = [tier_index, pick]
+		_pending = [tier_index, pick, pick_rarity]
 	else:
-		_add_held(tier_index, pick)
+		_add_held(tier_index, pick, pick_rarity)
 
 
 ## Raise the altar's tier (e.g. its team scored) and stock a weapon from the

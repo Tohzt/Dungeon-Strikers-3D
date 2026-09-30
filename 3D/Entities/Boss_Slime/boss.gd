@@ -2,7 +2,8 @@ class_name Boss3D extends CharacterBody3D
 ## A big slime that roams the pitch in short hops. It bodies anyone it
 ## lands on or bumps into, leaps up for a big stomp when a player is close,
 ## and when it finds itself near the ball it dribbles it into whichever goal
-## it's nearest, so it's a threat to both teams.
+## it's nearest, so it's a threat to both teams. Every so often it swells
+## up and spits out little minion slimes (SlimeMinion3D) that chase players.
 ## A ball floats in its core; beating it drops a fresh ball into play.
 ## Online the server runs it and streams where it is (like the ball);
 ## everyone else just plays that back.
@@ -17,6 +18,7 @@ enum State {
 	STOMP_FALL,     ## Slamming down
 	RECOVER,        ## Flattened after a stomp, catching its breath
 	STAGGERED,      ## Poise broken: dazed and defenseless for a while
+	SPIT_WINDUP,    ## Swelling up, about to spit out minions
 	DEAD,           ## Beaten: deflating, ball released
 }
 
@@ -65,6 +67,22 @@ const STOMP_FALL_SPEED := 35.0
 const STOMP_RECOVER_TIME := 1.1
 ## Players this far above the ground when it lands jumped the shockwave.
 const STOMP_DODGE_HEIGHT := 1.2
+
+# ===== MINIONS =====
+@export_category("Minions")
+@export var minion_scene: PackedScene = preload("res://3D/Entities/Boss_Slime/Minions/slime_minion.tscn")
+@export var spit_cooldown: float = 9.0
+## Minions per spit.
+@export var spit_count: int = 2
+## No spitting while this many of its minions are still around.
+@export var max_minions: int = 4
+## Sideways and upward launch speed; they land roughly this far out
+## (sideways speed * 2 * up speed / gravity).
+@export var spit_speed: float = 6.0
+@export var spit_lift: float = 10.0
+const SPIT_WINDUP_TIME := 0.8
+## Spread (radians) around the aim toward a player.
+const SPIT_SPREAD := 0.6
 
 # ===== BUMPING =====
 @export_category("Bump")
@@ -142,6 +160,11 @@ var _shove: Vector3 = Vector3.ZERO
 var _move_dir: Vector3 = Vector3.ZERO
 var _stomp_target: Vector3 = Vector3.ZERO
 var _ground_y: float = 0.0
+var _spit_cooldown: float = 0.0
+## Minions it has spat out that are still alive.
+var _minions: Array[SlimeMinion3D] = []
+## Names spat-out minions, the same on every machine.
+var _minions_made: int = 0
 
 # Squash and stretch: a spring on the vertical scale (sideways scale keeps
 # the volume roughly constant).
@@ -167,6 +190,7 @@ func _ready() -> void:
 		ring.top_radius = stomp_radius
 		ring.bottom_radius = stomp_radius
 	_stomp_cooldown = stomp_cooldown * 0.5
+	_spit_cooldown = spit_cooldown * 0.6
 	hp = max_hp
 	core.visible = drops_ball
 	if Net.in_session() and not Net.is_server:
@@ -184,6 +208,7 @@ func _physics_process(delta: float) -> void:
 
 	_state_time += delta
 	_stomp_cooldown = max(_stomp_cooldown - delta, 0.0)
+	_spit_cooldown = max(_spit_cooldown - delta, 0.0)
 	_kick_cooldown = max(_kick_cooldown - delta, 0.0)
 	_update_poise(delta)
 	for key: Node in _bump_cooldowns.keys():
@@ -201,6 +226,7 @@ func _physics_process(delta: float) -> void:
 		State.STOMP_FALL: _state_stomp_fall()
 		State.RECOVER: _state_recover()
 		State.STAGGERED: _state_staggered()
+		State.SPIT_WINDUP: _state_spit_windup()
 
 	_bump_players()
 	_touch_ball()
@@ -252,6 +278,8 @@ func _on_state_entered(new_state: State) -> void:
 			_squash_vel -= 10.0
 		State.DEAD:
 			_squash_vel -= 6.0
+		State.SPIT_WINDUP:
+			_squash_vel += 2.0
 
 
 func _state_idle() -> void:
@@ -278,7 +306,7 @@ func _state_hop(delta: float) -> void:
 func _state_stomp_windup() -> void:
 	_slide_shove()
 	# Keep following the target while crouched, so the leap is aimed late
-	var target: Node3D = _nearest_player()
+	var target: Node3D = _target_player()
 	if target:
 		_stomp_target = _clamp_stomp_target(target.global_position)
 	if _state_time >= STOMP_WINDUP_TIME:
@@ -299,7 +327,7 @@ func _state_stomp_rise(delta: float) -> void:
 
 func _state_stomp_hang(_delta: float) -> void:
 	# Drift over the target, slowly enough that a quick player can get out
-	var target: Node3D = _nearest_player()
+	var target: Node3D = _target_player()
 	if target:
 		var to_target: Vector3 = _flat(target.global_position - global_position)
 		velocity = to_target.limit_length(STOMP_HANG_TRACKING)
@@ -335,13 +363,23 @@ func _state_staggered() -> void:
 		_set_state(State.IDLE)
 
 
+func _state_spit_windup() -> void:
+	_slide_shove()
+	if _state_time >= SPIT_WINDUP_TIME:
+		_spit()
+		_spit_cooldown = spit_cooldown
+		_rest_time = hop_rest_max
+		_set_state(State.IDLE)
+
+
 ## Count down to poise recovering, and stagger once it's broken and grounded.
 func _update_poise(delta: float) -> void:
 	if _poise_reset_wait > 0.0:
 		_poise_reset_wait -= delta
 		if _poise_reset_wait <= 0.0:
 			_poise_damage = 0.0
-	if _poise_broken and state in [State.IDLE, State.HOP_PREP, State.STOMP_WINDUP, State.RECOVER]:
+	# A stagger cuts a spit short: hitting it hard enough stops the minions coming
+	if _poise_broken and state in [State.IDLE, State.HOP_PREP, State.STOMP_WINDUP, State.RECOVER, State.SPIT_WINDUP]:
 		_poise_broken = false
 		_poise_damage = 0.0
 		velocity = Vector3.ZERO
@@ -358,7 +396,7 @@ func _land() -> void:
 # ===== DECISIONS =====
 
 ## On the ground and rested: dribble the ball if it's close, otherwise go
-## after the nearest player (stomping them if they're in range).
+## after its target (see _target_player), stomping them if they're in range.
 func _choose_action() -> void:
 	var ball: Ball3D = _free_ball()
 	if ball and _flat(ball.global_position - global_position).length() < ball_interest_range:
@@ -366,10 +404,14 @@ func _choose_action() -> void:
 		_set_state(State.HOP_PREP)
 		return
 
-	var target: Node3D = _nearest_player()
+	var target: Node3D = _target_player()
 	if not target:
 		_rest_time = hop_rest_max
 		_state_time = 0.0
+		return
+	_forget_dead_minions()
+	if _spit_cooldown <= 0.0 and _minions.size() < max_minions and minion_scene:
+		_set_state(State.SPIT_WINDUP)
 		return
 	var to_target: Vector3 = _flat(target.global_position - global_position)
 	if _stomp_cooldown <= 0.0 and to_target.length() < stomp_trigger_range:
@@ -447,6 +489,54 @@ func _stomp_shockwave() -> void:
 	_kick_cooldown = KICK_COOLDOWN
 
 
+## Drop minions that have popped (or been freed) from _minions.
+func _forget_dead_minions() -> void:
+	for i in range(_minions.size() - 1, -1, -1):
+		if not is_instance_valid(_minions[i]) or _minions[i].is_dead:
+			_minions.remove_at(i)
+
+
+## Server/offline: launch spit_count minions from the top of the slime,
+## each aimed at a random living player (or anywhere), and tell everyone.
+func _spit() -> void:
+	_forget_dead_minions()
+	var targets: Array[PlayerClass3D] = []
+	for player: PlayerClass3D in _players():
+		if is_instance_valid(player) and not player.is_dead():
+			targets.append(player)
+	var names: PackedStringArray = []
+	var launches: PackedVector3Array = []
+	for i in mini(spit_count, max_minions - _minions.size()):
+		var dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+		if not targets.is_empty():
+			var aim: Vector3 = _flat(targets.pick_random().global_position - global_position)
+			if aim.length() > 0.01:
+				dir = aim.normalized().rotated(Vector3.UP, randf_range(-SPIT_SPREAD, SPIT_SPREAD))
+		_minions_made += 1
+		names.append("%s_Minion%d" % [name, _minions_made])
+		launches.append(dir * spit_speed * randf_range(0.7, 1.2) + Vector3.UP * spit_lift)
+	if Net.in_session():
+		_net_spit.rpc(names, launches)
+	else:
+		_net_spit(names, launches)
+
+
+## Spawn the spat-out minions, on every machine, beside the boss in the
+## arena (so they outlive its node for their pop).
+@rpc("authority", "call_local", "reliable")
+func _net_spit(names: PackedStringArray, launches: PackedVector3Array) -> void:
+	_squash_vel -= 8.0  # Deflates as they fly out
+	var mouth: Vector3 = global_position + Vector3.UP * HEIGHT
+	for i in names.size():
+		var minion: SlimeMinion3D = minion_scene.instantiate()
+		minion.name = names[i]
+		minion.position = mouth
+		get_parent().add_child(minion)
+		if _simulates():
+			minion.launch(launches[i])
+		_minions.append(minion)
+
+
 ## Touching the ball knocks it toward the nearest goal, as long as the slime
 ## is behind it (otherwise it just bounces off).
 func _touch_ball() -> void:
@@ -513,6 +603,11 @@ func _defeat(killer_name: String) -> void:
 	velocity = Vector3(0.0, min(velocity.y, 0.0), 0.0)
 	collision_layer = 0  # Players and the ball pass through; it still lands on the floor
 	telegraph.visible = false
+	# Its minions go down with it
+	_forget_dead_minions()
+	for minion: SlimeMinion3D in _minions:
+		minion.die()
+	_minions.clear()
 	if drops_ball and Global.Game3D:
 		core.visible = false
 		var dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
@@ -578,10 +673,22 @@ func _players() -> Array[PlayerClass3D]:
 	return found
 
 
-func _nearest_player() -> PlayerClass3D:
+## Who to go after: the nearest player on the team leading in kills, or
+## the nearest player at all when nobody leads.
+func _target_player() -> PlayerClass3D:
+	if Global.Game3D:
+		var leaders: Array[PlayerClass3D] = Global.Game3D.leader_players()
+		if not leaders.is_empty():
+			return _nearest_of(leaders)
+	return _nearest_of(_players())
+
+
+func _nearest_of(candidates: Array[PlayerClass3D]) -> PlayerClass3D:
 	var best: PlayerClass3D = null
 	var best_dist: float = INF
-	for player: PlayerClass3D in _players():
+	for player: PlayerClass3D in candidates:
+		if player.is_dead():
+			continue
 		var dist: float = _flat(player.global_position - global_position).length()
 		if dist < best_dist:
 			best_dist = dist
@@ -644,6 +751,10 @@ func _update_squash(delta: float) -> void:
 		State.STAGGERED:
 			# Slumped and swaying
 			target = 0.7 + 0.05 * sin(_wobble_time * 8.0)
+		State.SPIT_WINDUP:
+			# Swell up taller and taller, gurgling faster as it goes
+			var t: float = clamp(_state_time / SPIT_WINDUP_TIME, 0.0, 1.0)
+			target = lerp(1.05, 1.35, t) + 0.04 * sin(_wobble_time * lerp(15.0, 45.0, t))
 		State.DEAD:
 			target = 0.15
 	_squash_vel += (target - _squash) * SQUASH_STIFFNESS * delta

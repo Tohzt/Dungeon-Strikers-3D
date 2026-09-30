@@ -11,18 +11,21 @@ script = ExtResource("2_tier")
 weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield")])
 arming_time = 0.0
 respawn_delay = 3.0
+rarity_weights = Array[float]([80.0, 18.0, 2.0, 0.0])
 
 [sub_resource type="Resource" id="AltarTier_2"]
 script = ExtResource("2_tier")
 weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield"), ExtResource("5_bow")])
 arming_time = 3.0
 respawn_delay = 3.0
+rarity_weights = Array[float]([35.0, 40.0, 20.0, 5.0])
 
 [sub_resource type="Resource" id="AltarTier_3"]
 script = ExtResource("2_tier")
 weapons = Array[PackedScene]([ExtResource("5_bow")])
 arming_time = 6.0
 respawn_delay = 2.0
+rarity_weights = Array[float]([10.0, 30.0, 40.0, 20.0])
 
 [sub_resource type="BoxMesh" id="BoxMesh_p6jv2"]
 size = Vector3(3, 1.5, 1.5)

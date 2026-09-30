@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://ckwr3lnu3sfl1"]
+
+[ext_resource type="Script" path="res://3D/Entities/Boss_Slime/Minions/slime_minion.gd" id="1_minion"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_minion"]
+height = 1.0
+radius = 1.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_5jy3x"]
+top_radius = 1.0
+bottom_radius = 1.0
+height = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5had7"]
+resource_local_to_scene = true
+transparency = 1
+albedo_color = Color(0.36078256, 0.5109829, 0.2296569, 0.7019608)
+
+[node name="SlimeMinion" type="CharacterBody3D" unique_id=970878487]
+collision_layer = 4
+script = ExtResource("1_minion")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=970878488]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("CylinderShape3D_minion")
+
+[node name="Visual" type="Node3D" parent="." unique_id=1171747386]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Visual" unique_id=478062360]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("CylinderMesh_5jy3x")
+skeleton = NodePath("../..")
+surface_material_override/0 = SubResource("StandardMaterial3D_5had7")

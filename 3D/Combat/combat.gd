@@ -12,6 +12,9 @@ const WORLD_MASK := 0b1
 const HITSTOP := 0.08
 ## Light things (the ball) barely slow a swing down.
 const HITSTOP_LIGHT := 0.04
+## A player below this share of their max HP counts as wounded (see the
+## damage_vs_wounded perk stat).
+const WOUNDED_HP_RATIO := 0.3
 
 
 ## Physics bodies overlapping `shape` placed at `xform`, minus `exclude`.
@@ -30,9 +33,9 @@ static func overlaps(world: World3D, shape: Shape3D, xform: Transform3D, exclude
 
 
 ## Whether a swing stops dead on `body` and springs back (players, blades,
-## walls), rather than following through it (the ball).
+## walls), rather than following through it (the ball, minions).
 static func is_solid(body: Node3D) -> bool:
-	return not body is Ball3D
+	return not body is Ball3D and not body is SlimeMinion3D
 
 
 ## Whether `shape` at `xform` is inside a wall. Floors don't count, so a low
@@ -56,11 +59,12 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 
 ## Hit `body` with an attack travelling along `dir`. Players take damage and
 ## get shoved (a raised shield facing the attack takes most of it for
-## stamina), bosses take damage;
-## other unfrozen physics bodies just get pushed. Returns true if a player
-## or boss took the hit.
+## stamina), bosses and minions take damage;
+## other unfrozen physics bodies just get pushed. Returns true if a player,
+## boss or minion took the hit.
 ## `attacker` is the player behind the attack, if any: their perks scale it,
-## and bosses remember who dealt the killing blow.
+## and whoever it hits remembers them (a boss's or player's killer gets
+## the credit).
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
 static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null) -> bool:
@@ -73,22 +77,25 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 		impulse *= attacker.perk_stat(&"ball_power" if body is Ball3D else &"knockback")
 		if body is Boss3D:
 			damage *= attacker.perk_stat(&"boss_damage")
-		elif body is PlayerClass3D and _is_ahead_of(body, attacker):
-			damage *= attacker.perk_stat(&"damage_vs_leader")
+		elif body is PlayerClass3D:
+			if _is_ahead_of(body, attacker):
+				damage *= attacker.perk_stat(&"damage_vs_leader")
+			if body.Entity and body.Entity.hp < body.Entity.hp_max * WOUNDED_HP_RATIO:
+				damage *= attacker.perk_stat(&"damage_vs_wounded")
 	if body is PlayerClass3D:
-		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop)
-	if body is Boss3D:
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
+	if body is Boss3D or body is SlimeMinion3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
 
 
-## Whether `player`'s team has more points than `other`'s.
+## Whether `player`'s team has more kills than `other`'s.
 static func _is_ahead_of(player: PlayerClass3D, other: PlayerClass3D) -> bool:
 	if not Global.Game3D or not player.slot or not other.slot:
 		return false
-	var scores: Dictionary[int, int] = Global.Game3D.scores
-	return scores.get(player.slot.team, 0) > scores.get(other.slot.team, 0)
+	var kills: Dictionary[int, int] = Global.Game3D.kills
+	return kills.get(player.slot.team, 0) > kills.get(other.slot.team, 0)
 
 
 ## Shove a loose physics object. Networked ones (ball, weapons) pass the push

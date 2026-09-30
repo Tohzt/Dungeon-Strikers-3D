@@ -1,9 +1,11 @@
 class_name PerkDirector extends Node
 ## Runs the rogue-lite perk picks. Over a round it notes who earned what:
 ## the boss's killer an offensive card and everyone else a mobility/defense
-## card; the scoring team a striker card and everyone else a comeback card.
-## At the intermission each player is dealt three cards (boss card, goal
-## card, general card), and picks one by activating their altar. Like
+## card; the scoring team a striker card and everyone else a comeback card;
+## the round's top player killer a hunter card. At the intermission each
+## player is dealt three cards (boss card, goal card, and a hunter card for
+## the top killer or a general card for everyone else), and picks one by
+## activating their altar. Like
 ## Rounds, the whole game pauses while one player picks; the next boss
 ## comes once everyone has.
 ## Online the server deals and approves picks; every machine applies them.
@@ -26,6 +28,8 @@ var picking: String = ""
 ## What each player (by name) has earned since the last intermission.
 var _boss_rewards: Dictionary[String, Perk.Category] = {}
 var _goal_rewards: Dictionary[String, Perk.Category] = {}
+## Player kills each player (by name) has made since the last intermission.
+var _round_kills: Dictionary[String, int] = {}
 
 
 func _ready() -> void:
@@ -59,6 +63,11 @@ func record_goal(team: int) -> void:
 		_goal_rewards[player.name] = Perk.Category.STRIKER if scored else Perk.Category.COMEBACK
 
 
+## On every machine, so any of them could deal.
+func record_kill(killer: PlayerClass3D) -> void:
+	_round_kills[killer.name] = _round_kills.get(killer.name, 0) + 1
+
+
 # ===== INTERMISSION =====
 
 ## Server/offline: deal everyone their cards and open the altars.
@@ -70,20 +79,22 @@ func begin_intermission() -> void:
 		dealt[player.name] = _deal(player.name)
 	_boss_rewards.clear()
 	_goal_rewards.clear()
+	_round_kills.clear()
 	if Net.in_session():
 		_start_intermission.rpc(dealt)
 	else:
 		_start_intermission(dealt)
 
 
-## One card per source: the boss result, the goal result, and a general
-## one. A source that didn't happen this round (no boss, no goal) gives a
-## general card instead. No card twice in one hand.
+## One card per source: the boss result, the goal result, and a hunter
+## card for the round's top killer (ties included) or a general one. A
+## source that didn't happen this round (no boss, no goal) gives a general
+## card instead. No card twice in one hand.
 func _deal(player_name: String) -> PackedInt32Array:
 	var categories: Array[Perk.Category] = [
 		_boss_rewards.get(player_name, Perk.Category.GENERAL),
 		_goal_rewards.get(player_name, Perk.Category.GENERAL),
-		Perk.Category.GENERAL,
+		Perk.Category.HUNTER if _is_top_killer(player_name) else Perk.Category.GENERAL,
 	]
 	var hand := PackedInt32Array()
 	for category: Perk.Category in categories:
@@ -98,6 +109,16 @@ func _deal(player_name: String) -> PackedInt32Array:
 		if not choices.is_empty():
 			hand.append(choices.pick_random())
 	return hand
+
+
+func _is_top_killer(player_name: String) -> bool:
+	var mine: int = _round_kills.get(player_name, 0)
+	if mine == 0:
+		return false
+	for other: String in _round_kills:
+		if _round_kills[other] > mine:
+			return false
+	return true
 
 
 @rpc("authority", "call_local", "reliable")
@@ -218,6 +239,7 @@ func forget_player(player: PlayerClass3D) -> void:
 	offers.erase(player.name)
 	_boss_rewards.erase(player.name)
 	_goal_rewards.erase(player.name)
+	_round_kills.erase(player.name)
 	if picking == player.name:
 		_end_pick()
 	elif in_intermission:
