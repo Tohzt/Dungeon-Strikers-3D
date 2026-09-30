@@ -55,7 +55,8 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 
 
 ## Hit `body` with an attack travelling along `dir`. Players take damage and
-## get shoved (unless a raised shield faces the attack), bosses take damage;
+## get shoved (a raised shield facing the attack takes most of it for
+## stamina), bosses take damage;
 ## other unfrozen physics bodies just get pushed. Returns true if a player
 ## or boss took the hit.
 ## `attacker` is the player behind the attack, if any: their perks scale it,

@@ -1,8 +1,6 @@
 class_name PlayerInputHandler3D extends Node
 @onready var Master: CharacterBody3D = get_parent()
 
-enum STATUS { NONE, PRESSED, HELD, RELEASED }
-
 var move_jump: bool = false
 var move_dir: Vector3
 var look_dir: Vector3 = Vector3.ZERO
@@ -14,9 +12,14 @@ var interact: bool = false
 var interact_held: bool = false
 var target_toggle: bool = false
 var target_scroll: bool = false
+# The dodge button: a quick tap rolls (on release), holding it sprints.
+## Held past DODGE_TAP_TIME: sprinting.
 var move_dodge: bool = false
 var dodge_dur: float = 0.0
-var dodge_status: STATUS = STATUS.NONE
+const DODGE_TAP_TIME: float = 0.2
+## When a tap last asked for a roll (Time.get_ticks_msec(); -1 = none). The
+## player clears it once it rolls, or ignores it once it's too old.
+var dodge_request_msec: int = -1
 
 # After the right stick is released, keep the last aim this long so a flick
 # (or a stick briefly passing through the deadzone) doesn't snap the facing.
@@ -79,6 +82,8 @@ func release_all() -> void:
 	action_heavy_left = false
 	action_heavy_right = false
 	move_dodge = false
+	dodge_dur = 0.0
+	dodge_request_msec = -1
 	look_dir = Vector3.ZERO
 	aim_release_timer = 0.0
 	interact = false
@@ -102,19 +107,17 @@ func _process(delta: float) -> void:
 	_handle_input_dodge(delta)
 	_handle_input_look(delta)
 
+## Tap = roll, hold = sprint. The roll goes off on release (like the souls
+## games), since until then a tap can't be told apart from a hold.
 func _handle_input_dodge(delta: float) -> void:
-	move_dodge = Input.is_action_pressed(action("move_dodge"))
-	if move_dodge:
-		if dodge_status == STATUS.NONE:
-			dodge_status = STATUS.PRESSED
-		else:
-			dodge_status = STATUS.HELD
-		dodge_dur+=delta
-	else:
-		if dodge_status == STATUS.HELD:
-			pass
-		dodge_status = STATUS.RELEASED
+	if Input.is_action_pressed(action("move_dodge")):
+		dodge_dur += delta
+		move_dodge = dodge_dur >= DODGE_TAP_TIME
+	elif dodge_dur > 0.0:
+		if dodge_dur < DODGE_TAP_TIME:
+			dodge_request_msec = Time.get_ticks_msec()
 		dodge_dur = 0.0
+		move_dodge = false
 
 ## look_dir is where the player wants to face; zero means "face the walking
 ## direction". Mouse players always aim at the cursor, except while holding

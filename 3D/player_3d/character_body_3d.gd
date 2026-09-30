@@ -24,6 +24,8 @@ const SYNCED_PROPERTIES: Array[NodePath] = [
 	^"Entity:hp", ^"Entity:stamina",
 	# Lets each owner work out how hard someone else bumped into them
 	^":velocity",
+	# Rolling / staggered body pose
+	^":body_tilt",
 ]
 ## Online only; sends SYNCED_PROPERTIES from this player's owner.
 var net_sync: MultiplayerSynchronizer = null
@@ -174,9 +176,13 @@ const FIST_RECOIL := 2.0  # Puncher is nudged back a little on a hit
 const FIST_OBJECT_IMPULSE := 4.0  # Shove given to loose physics objects (ball, enemies)
 
 # Raised shield: hits from the front (within this cosine of facing) are
-# blocked - no damage, and only this fraction of the shove gets through.
+# blocked - only a fraction of the damage and shove gets through, but
+# blocking costs stamina (the block_stamina perk stat scales it). A block
+# that empties the stamina bar breaks the guard (see Poise).
 const BLOCK_FACING_DOT := 0.3
 const BLOCK_KNOCKBACK_RATIO := 0.35
+const BLOCK_DAMAGE_RATIO := 0.2
+const BLOCK_STAMINA_PER_DAMAGE := 0.08  # A blocked sword hit (40) costs 3.2
 
 # Stamina (the Entity's stamina pool, shown on the HUD): sprinting drains it,
 # attacks and throws cost a chunk. Running dry stops sprinting until it's
@@ -188,6 +194,51 @@ const SWING_STAMINA := 1.5
 const THROW_STAMINA := 2.0  # Too tired to pay = weakest possible throw
 var is_sprinting: bool = false
 var sprint_exhausted: bool = false
+
+# Dodge roll (tap the dodge button): a burst along the walking direction,
+# untouchable for the first part of it so it has to be timed rather than
+# spammed. Standing still, it's a short backstep instead. Can't roll in the
+# air, while staggered, or during the strike of a swing (the follow-through
+# can be rolled out of). A tap made while a roll isn't allowed is kept for
+# ROLL_BUFFER_MSEC, so it still goes off as soon as it can.
+const ROLL_DURATION := 0.4
+const ROLL_SPEED := 11.0
+const ROLL_END_SPEED_RATIO := 0.4  # Slows to this share of ROLL_SPEED by the end
+const ROLL_IFRAMES := 0.25  # From the start of the roll
+const BACKSTEP_DURATION := 0.25
+const BACKSTEP_SPEED := 8.0
+const BACKSTEP_IFRAMES := 0.15
+const BACKSTEP_LEAN := deg_to_rad(-20)
+const ROLL_STAMINA := 2.0  # Any stamina left is enough to start one
+const ROLL_BUFFER_MSEC := 250
+var roll_time: float = 0.0  # Time left in the current roll or backstep
+var roll_duration: float = 0.0
+var roll_iframes: float = 0.0
+var roll_dir: Vector3 = Vector3.ZERO
+var is_backstep: bool = false
+
+# Swing commitment: a swing (or punch) steps you forward a little, toward
+# the lock-on target or aim, and while it's out you turn slowly and only
+# partly steer, so a whiff can be punished.
+const SWING_LUNGE_SPEED := 5.0
+const FIST_LUNGE_SPEED := 3.5
+const LUNGE_FRICTION := 20.0
+const LUNGE_STOP_GAP := 0.3  # A lunge stops short of the lock-on target by this much
+const SWING_TURN_SPEED := 2.5
+const SWING_MOVE_CONTROL := 0.5
+var lunge: Vector3 = Vector3.ZERO
+
+# Poise is stamina: getting hit with none left, or blocking a hit that
+# empties it, staggers you: no moving, turning, attacking, blocking or
+# rolling for a moment, and whatever you were swinging is cut short. So
+# sprinting, swinging and rolling yourself dry leaves you open.
+const STAGGER_DURATION := 0.7
+const STAGGER_TILT := deg_to_rad(-25)  # Rocked back on the heels
+var stagger_time: float = 0.0
+
+## The body mesh's pitch, for rolling and staggering (synced online).
+var body_tilt: float = 0.0
+var body_mesh_rest: Transform3D
 
 var punching_left: bool = false
 var punching_right: bool = false
@@ -222,6 +273,8 @@ func _ready() -> void:
 		hand_left_mesh_rest = hand_left_mesh.transform
 	if hand_right_mesh:
 		hand_right_mesh_rest = hand_right_mesh.transform
+	if mesh_instance_3d[0]:
+		body_mesh_rest = mesh_instance_3d[0].transform
 
 
 ## Online: hand this player to the peer that controls it. Call before it
@@ -271,6 +324,7 @@ func _physics_process(delta: float) -> void:
 	if Input_Handler:
 		direction = Input_Handler.move_dir
 	_update_sprint(direction, delta)
+	_try_roll(direction)
 
 	# Interact shares the controller's A button with jump, so picking up the
 	# ball or taking a weapon off a stand doesn't also hop
@@ -280,7 +334,7 @@ func _physics_process(delta: float) -> void:
 			Input_Handler.move_jump = false
 
 	# Apply jump velocity multiplier only when jump is initiated, not every frame
-	if Input_Handler.move_jump and is_on_floor():
+	if Input_Handler.move_jump and is_on_floor() and not is_busy():
 		var jump_multiplier: float = 1.0
 		if is_sprinting:
 			jump_multiplier = 1.5  # Sprint jump multiplier
@@ -302,21 +356,34 @@ func _physics_process(delta: float) -> void:
 		walk.z *= Properties.speed_mod.z
 	# Being shoved takes some control away until the shove dies down
 	var control: float = clamp(1.0 - knockback.length() / KNOCKBACK_CONTROL_LOSS, KNOCKBACK_MIN_CONTROL, 1.0)
-	velocity.x = walk.x * control + knockback.x
-	velocity.z = walk.z * control + knockback.z
+	if stagger_time > 0.0:
+		control = 0.0
+	elif is_swinging():
+		control *= SWING_MOVE_CONTROL
+	var move: Vector3 = _roll_velocity() if roll_time > 0.0 else walk * control
+	velocity.x = move.x + knockback.x + lunge.x
+	velocity.z = move.z + knockback.z + lunge.z
 
 	# Face the aim direction if aiming (works while standing still too),
 	# otherwise face the direction we're trying to walk (not the shove).
-	if Input_Handler and !Input_Handler.look_dir.is_zero_approx():
+	# Rolling and staggered players can't turn; mid-swing they turn slowly.
+	var turn_speed: float = SWING_TURN_SPEED if is_swinging() else ROTATION_SPEED
+	if is_busy():
+		pass
+	elif Input_Handler and !Input_Handler.look_dir.is_zero_approx():
 		var look_dir: Vector3 = Input_Handler.look_dir
 		var target_angle: float = atan2(look_dir.x, look_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+		rotation.y = lerp_angle(rotation.y, target_angle, turn_speed * delta)
 	elif !direction.is_zero_approx():
 		var target_angle: float = atan2(direction.x, direction.z)
-		rotation.y = lerp_angle(rotation.y, target_angle, ROTATION_SPEED * delta)
+		rotation.y = lerp_angle(rotation.y, target_angle, turn_speed * delta)
 
 	move_and_slide()
 	_update_knockback(delta)
+	lunge = lunge.move_toward(Vector3.ZERO, LUNGE_FRICTION * delta)
+	_update_roll(delta)
+	_update_poise(delta)
+	_update_body_tilt()
 	_bump_other_players(delta)
 
 	_update_weapon_windups(delta)
@@ -421,18 +488,25 @@ func _process(delta: float) -> void:
 	if is_remote:
 		_process_remote(delta)
 		return
+	# Rolling or staggered: hands do nothing, and presses made meanwhile
+	# don't count once it's over (like presses made while blocking)
+	var busy: bool = is_busy()
+	if busy:
+		_set_attack_armed(true, false)
+		_set_attack_armed(false, false)
+
 	# Heavy input takes priority: if the hand holds a shield, it raises to
 	# block instead of following its usual tap-bump/hold-throw behavior.
-	_handle_hand_block(Input_Handler.action_heavy_left, true)
-	_handle_hand_block(Input_Handler.action_heavy_right, false)
+	_handle_hand_block(Input_Handler.action_heavy_left and not busy, true)
+	_handle_hand_block(Input_Handler.action_heavy_right and not busy, false)
 
 	# Handle each hand independently: while carrying the ball either button
 	# throws it on release (charged by hold duration); a hand holding a weapon
 	# swings it on a quick tap or throws it on a hold-then-release past the threshold.
-	_handle_hand_input(Input_Handler.action_left, was_attack_left, true)
+	if not busy:
+		_handle_hand_input(Input_Handler.action_left, was_attack_left, true)
+		_handle_hand_input(Input_Handler.action_right, was_attack_right, false)
 	was_attack_left = Input_Handler.action_left
-
-	_handle_hand_input(Input_Handler.action_right, was_attack_right, false)
 	was_attack_right = Input_Handler.action_right
 
 
@@ -451,6 +525,7 @@ func _process_remote(delta: float) -> void:
 			weapon.follow_net_pose(delta)
 	_update_hand_mesh_position()
 	update_held_ball_position()
+	_apply_body_tilt()
 
 
 func _handle_hand_block(is_heavy_pressed: bool, is_left: bool) -> void:
@@ -554,6 +629,7 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 				else:
 					swipe_timer_right = SWIPE_DURATION
 				weapon.start_swing(SWIPE_DURATION)
+				_lunge(SWING_LUNGE_SPEED)
 
 
 func _throw_weapon(weapon: Weapon3D, is_left: bool, charge_ratio: float = 1.0) -> void:
@@ -674,6 +750,7 @@ func _start_punch(is_left: bool) -> void:
 		swipe_timer_right = SWIPE_DURATION
 		punching_right = true
 		punch_hits_right.clear()
+	_lunge(FIST_LUNGE_SPEED)
 
 
 ## While a fist is mid-swing, hit whatever it passes through (once each).
@@ -721,19 +798,24 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> bo
 		if Net.match_synced:
 			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity)
 		return true
+	if roll_iframes > 0.0:
+		return false  # Rolled through it
 	damage *= perk_stat(&"damage_taken")
 	var knockback_taken: float = perk_stat(&"knockback_taken")
 	knockback_velocity.x *= knockback_taken
 	knockback_velocity.z *= knockback_taken
 	if _is_blocking_from(dir):
-		add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
+		_receive_blocked_hit(damage, knockback_velocity)
 		return false
 	if Entity:
 		var was_in_iframes: bool = Entity.is_in_iframes
+		var exhausted: bool = Entity.stamina <= 0.0
 		Entity.take_hit(damage, knockback_velocity)
 		_share_iframes(was_in_iframes)
 		if not was_in_iframes:
 			hitstop = Combat.HITSTOP
+			if exhausted:
+				_stagger()
 			if held_ball and damage >= BALL_FUMBLE_DAMAGE * perk_stat(&"ball_grip"):
 				held_ball.request_throw(self, (dir + Vector3.UP * 0.5) * BALL_FUMBLE_IMPULSE)
 		if Entity.hp <= 0:
@@ -749,6 +831,10 @@ func respawn() -> void:
 		held_ball.request_throw(self, Vector3.ZERO)
 	knockback = Vector3.ZERO
 	velocity = Vector3.ZERO
+	lunge = Vector3.ZERO
+	roll_time = 0.0
+	roll_iframes = 0.0
+	stagger_time = 0.0
 	Entity.reset(true)  # Full stats, and moves us to Entity.spawn_pos
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon:
@@ -760,10 +846,140 @@ func shove(direction: Vector3, force: float) -> void:
 	if not _is_local():
 		if Net.match_synced:
 			_net_shove.rpc_id(get_multiplayer_authority(), direction, force)
-	elif Entity:
+	elif Entity and roll_iframes <= 0.0:
 		var was_in_iframes: bool = Entity.is_in_iframes
 		Entity.apply_knockback(direction, force * perk_stat(&"knockback_taken"))
 		_share_iframes(was_in_iframes)
+
+
+# ===== DODGE ROLL, SWING COMMITMENT & POISE =====
+
+## Rolling or staggered: no attacking, jumping, turning or rolling again.
+func is_busy() -> bool:
+	return roll_time > 0.0 or stagger_time > 0.0
+
+
+## Either arm is mid-swing (weapon, fist or ball bonk).
+func is_swinging() -> bool:
+	return swipe_timer_left > 0.0 or swipe_timer_right > 0.0
+
+
+## Roll if the dodge button was tapped recently and we're free to.
+func _try_roll(direction: Vector3) -> void:
+	var request: int = Input_Handler.dodge_request_msec if Input_Handler else -1
+	if request < 0:
+		return
+	if Time.get_ticks_msec() - request > ROLL_BUFFER_MSEC:
+		Input_Handler.dodge_request_msec = -1
+		return
+	# The strike half of a swing is committed; its follow-through isn't
+	var striking: bool = swipe_timer_left > SWIPE_DURATION * 0.5 or swipe_timer_right > SWIPE_DURATION * 0.5
+	if is_busy() or striking or not is_on_floor():
+		return  # Keep it buffered
+	if Entity:
+		if Entity.stamina <= 0.0:
+			return
+		Entity.drain_stamina(ROLL_STAMINA)
+	Input_Handler.dodge_request_msec = -1
+	_cancel_attacks()
+	lunge = Vector3.ZERO
+	is_backstep = direction.is_zero_approx()
+	if is_backstep:
+		roll_dir = -global_transform.basis.z
+		roll_duration = BACKSTEP_DURATION
+		roll_iframes = BACKSTEP_IFRAMES
+	else:
+		roll_dir = direction
+		roll_duration = ROLL_DURATION
+		roll_iframes = ROLL_IFRAMES
+		rotation.y = atan2(direction.x, direction.z)
+	roll_time = roll_duration
+
+
+func _roll_velocity() -> Vector3:
+	var t: float = 1.0 - roll_time / roll_duration
+	if is_backstep:
+		return roll_dir * BACKSTEP_SPEED * (1.0 - t)
+	var speed: float = ROLL_SPEED * lerp(1.0, ROLL_END_SPEED_RATIO, t * t) * perk_stat(&"move_speed")
+	return roll_dir * speed
+
+
+func _update_roll(delta: float) -> void:
+	roll_time = max(roll_time - delta, 0.0)
+	roll_iframes = max(roll_iframes - delta, 0.0)
+
+
+## Stop any punch or weapon swing from hitting anything more.
+func _cancel_attacks() -> void:
+	punching_left = false
+	punching_right = false
+	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
+		if weapon:
+			weapon.cancel_swing()
+
+
+## Step toward the lock-on target (or the aim) at `speed`, stopping short of
+## the target instead of running into it.
+func _lunge(speed: float) -> void:
+	var dir: Vector3 = _get_aim_direction()
+	dir.y = 0.0
+	if dir.is_zero_approx():
+		return
+	var target: Node3D = Entity.target if Entity else null
+	if target and is_instance_valid(target):
+		var target_radius: float = Boss3D.RADIUS if target is Boss3D else BODY_RADIUS
+		var to_target := Vector3(target.global_position.x - global_position.x, 0.0, target.global_position.z - global_position.z)
+		var gap: float = max(to_target.length() - BODY_RADIUS - target_radius - LUNGE_STOP_GAP, 0.0)
+		# A lunge slides speed^2 / (2 * friction) before it stops
+		speed = min(speed, sqrt(2.0 * LUNGE_FRICTION * gap))
+	lunge = dir.normalized() * speed
+
+
+## A hit landed on our raised shield: a little damage and shove, paid for
+## in stamina. Emptying the bar breaks the guard. Unlike an open hit it
+## leaves no iframes, so a flurry keeps draining the guard.
+func _receive_blocked_hit(damage: float, knockback_velocity: Vector3) -> void:
+	add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
+	if not Entity or Entity.is_in_iframes:
+		return
+	Entity.hp -= damage * BLOCK_DAMAGE_RATIO
+	Entity.drain_stamina(damage * BLOCK_STAMINA_PER_DAMAGE * perk_stat(&"block_stamina"))
+	hitstop = Combat.HITSTOP
+	if Entity.stamina <= 0.0:
+		_stagger()
+	if Entity.hp <= 0:
+		respawn()
+
+
+## Poise broken: stagger, cutting short any roll or swing.
+func _stagger() -> void:
+	stagger_time = STAGGER_DURATION
+	roll_time = 0.0
+	roll_iframes = 0.0
+	_cancel_attacks()
+
+
+func _update_poise(delta: float) -> void:
+	stagger_time = max(stagger_time - delta, 0.0)
+
+
+## Tumble forward through a roll, lean back on a backstep, rock back while
+## staggered.
+func _update_body_tilt() -> void:
+	if roll_time > 0.0:
+		var t: float = 1.0 - roll_time / roll_duration
+		body_tilt = BACKSTEP_LEAN * sin(PI * t) if is_backstep else TAU * t
+	elif stagger_time > 0.0:
+		body_tilt = STAGGER_TILT * min(stagger_time / STAGGER_DURATION * 2.0, 1.0)
+	else:
+		body_tilt = 0.0
+	_apply_body_tilt()
+
+
+func _apply_body_tilt() -> void:
+	var mesh: MeshInstance3D = mesh_instance_3d[0]
+	if mesh:
+		mesh.transform = Transform3D(Basis(Vector3.RIGHT, body_tilt), Vector3.ZERO) * body_mesh_rest
 
 
 # ===== CONTROL SCHEME =====
@@ -842,7 +1058,7 @@ func _update_sprint(direction: Vector3, delta: float) -> void:
 	if sprint_exhausted and Entity.stamina >= Entity.stamina_max * SPRINT_RECOVER_RATIO:
 		sprint_exhausted = false
 	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted \
-		and not held_ball
+		and not held_ball and not is_busy()
 	if is_sprinting:
 		Entity.drain_stamina(SPRINT_STAMINA_PER_SEC * delta)
 		if Entity.stamina <= 0.0:

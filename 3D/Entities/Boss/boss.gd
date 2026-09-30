@@ -16,6 +16,7 @@ enum State {
 	STOMP_HANG,     ## Hovering at the top, drifting over the target
 	STOMP_FALL,     ## Slamming down
 	RECOVER,        ## Flattened after a stomp, catching its breath
+	STAGGERED,      ## Poise broken: dazed and defenseless for a while
 	DEAD,           ## Beaten: deflating, ball released
 }
 
@@ -98,6 +99,20 @@ const DEATH_TIME := 1.2
 ## How much the core bobs around inside the slime.
 const CORE_BOB := 0.2
 
+# ===== POISE =====
+# Hits wear down its poise; enough damage in quick succession (a few players
+# ganging up on it) staggers it: it stops, can't hurt anyone, and takes extra
+# damage for a while. A stagger earned in mid-air waits until it's grounded.
+@export_category("Poise")
+@export var poise_max: float = 180.0
+## Poise fully recovers after this long without being hit.
+@export var poise_reset_delay: float = 2.5
+@export var stagger_duration: float = 2.5
+@export var staggered_damage_multiplier: float = 1.5
+var _poise_damage: float = 0.0
+var _poise_reset_wait: float = 0.0
+var _poise_broken: bool = false
+
 ## Don't start acting until the match has had a moment to settle.
 @export var start_delay: float = 3.0
 
@@ -170,6 +185,7 @@ func _physics_process(delta: float) -> void:
 	_state_time += delta
 	_stomp_cooldown = max(_stomp_cooldown - delta, 0.0)
 	_kick_cooldown = max(_kick_cooldown - delta, 0.0)
+	_update_poise(delta)
 	for key: Node in _bump_cooldowns.keys():
 		_bump_cooldowns[key] -= delta
 		if _bump_cooldowns[key] <= 0.0 or not is_instance_valid(key):
@@ -184,6 +200,7 @@ func _physics_process(delta: float) -> void:
 		State.STOMP_HANG: _state_stomp_hang(delta)
 		State.STOMP_FALL: _state_stomp_fall()
 		State.RECOVER: _state_recover()
+		State.STAGGERED: _state_staggered()
 
 	_bump_players()
 	_touch_ball()
@@ -231,6 +248,8 @@ func _on_state_entered(new_state: State) -> void:
 			_squash_vel -= 5.0  # Splat on landing
 		State.RECOVER:
 			_squash_vel -= 12.0
+		State.STAGGERED:
+			_squash_vel -= 10.0
 		State.DEAD:
 			_squash_vel -= 6.0
 
@@ -309,6 +328,26 @@ func _state_recover() -> void:
 		_set_state(State.IDLE)
 
 
+func _state_staggered() -> void:
+	_slide_shove()
+	if _state_time >= stagger_duration:
+		_rest_time = hop_rest_min
+		_set_state(State.IDLE)
+
+
+## Count down to poise recovering, and stagger once it's broken and grounded.
+func _update_poise(delta: float) -> void:
+	if _poise_reset_wait > 0.0:
+		_poise_reset_wait -= delta
+		if _poise_reset_wait <= 0.0:
+			_poise_damage = 0.0
+	if _poise_broken and state in [State.IDLE, State.HOP_PREP, State.STOMP_WINDUP, State.RECOVER]:
+		_poise_broken = false
+		_poise_damage = 0.0
+		velocity = Vector3.ZERO
+		_set_state(State.STAGGERED)
+
+
 func _land() -> void:
 	velocity = Vector3.ZERO
 	_ground_y = global_position.y
@@ -368,6 +407,8 @@ func _dribble_direction(ball: Ball3D) -> Vector3:
 func _bump_players() -> void:
 	if state == State.STOMP_FALL:
 		return  # The landing shockwave deals with whoever's underneath
+	if state == State.STAGGERED:
+		return  # Dazed: safe to crowd around
 	for player: PlayerClass3D in _players():
 		if _bump_cooldowns.has(player):
 			continue
@@ -438,6 +479,12 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
 		return true
 	receive_impulse(knockback_velocity * HIT_SHOVE_RATIO)
+	if state == State.STAGGERED:
+		damage *= staggered_damage_multiplier
+	elif not _poise_broken:
+		_poise_damage += damage
+		_poise_reset_wait = poise_reset_delay
+		_poise_broken = _poise_damage >= poise_max
 	_set_hp(hp - damage)
 	if hp <= 0.0:
 		var killer: String = String(attacker.name) if attacker is PlayerClass3D else ""
@@ -594,6 +641,9 @@ func _update_squash(delta: float) -> void:
 			target = 1.35
 		State.RECOVER:
 			target = 0.85
+		State.STAGGERED:
+			# Slumped and swaying
+			target = 0.7 + 0.05 * sin(_wobble_time * 8.0)
 		State.DEAD:
 			target = 0.15
 	_squash_vel += (target - _squash) * SQUASH_STIFFNESS * delta
@@ -621,7 +671,10 @@ func _update_color(delta: float) -> void:
 	if not _body_material:
 		return
 	_flash = max(_flash - delta, 0.0)
-	var color: Color = _body_color.lerp(Color.WHITE, 0.7 * _flash / HIT_FLASH_TIME)
+	var brighten: float = 0.7 * _flash / HIT_FLASH_TIME
+	if state == State.STAGGERED:
+		brighten = max(brighten, 0.15 + 0.15 * sin(_wobble_time * 10.0))  # Dazed shimmer
+	var color: Color = _body_color.lerp(Color.WHITE, brighten)
 	color.a = _body_color.a
 	if state == State.DEAD:
 		color.a *= clamp(1.0 - _state_time / DEATH_TIME, 0.0, 1.0)

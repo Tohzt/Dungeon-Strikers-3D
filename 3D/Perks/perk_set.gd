@@ -17,6 +17,7 @@ const STATS: Dictionary[StringName, String] = {
 	&"stamina_regen": "Stamina regeneration speed",
 	&"damage_taken": "Damage taken (negative = less)",
 	&"knockback_taken": "Knockback taken (negative = less)",
+	&"block_stamina": "Stamina lost blocking a hit (negative = less)",
 }
 ## No stat goes below this multiplier, however many negatives stack up.
 const MIN_MULTIPLIER := 0.1

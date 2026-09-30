@@ -140,6 +140,11 @@ func start_swing(duration: float) -> void:
 	_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
 
 
+## The wielder rolled away or got staggered: this swing hits nothing more.
+func cancel_swing() -> void:
+	swing_time_left = 0.0
+
+
 func _update_hits(delta: float) -> void:
 	if swing_time_left > 0.0:
 		swing_time_left -= delta
