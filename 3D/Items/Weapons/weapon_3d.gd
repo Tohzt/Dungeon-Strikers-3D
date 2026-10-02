@@ -56,8 +56,11 @@ var _hit_this_action: Array[Node] = []
 
 # A swing knocks things the way the blade is moving (not just away from the
 # wielder), harder the faster it's going: SWING_REFERENCE_SPEED hits for the
-# weapon's usual knockback, scaled within SWING_POWER_MIN..MAX.
+# weapon's usual knockback, scaled within SWING_POWER_MIN..MAX. That's for a
+# REFERENCE_SWING_DURATION swing; a slower weapon's blade is expected to move
+# slower, so a full-speed greataxe swing isn't weaker for being slow.
 const SWING_REFERENCE_SPEED := 18.0
+const REFERENCE_SWING_DURATION := 0.25
 const SWING_POWER_MIN := 0.6
 const SWING_POWER_MAX := 1.0
 const SOLID_BOUNCE := 0.25
@@ -67,6 +70,7 @@ var _blade_tracked: bool = false
 ## Clang off a wall only when the blade swings into it, not when a sword
 ## resting against it starts a swing already inside.
 var _blade_in_wall: bool = false
+var _swing_reference_speed: float = SWING_REFERENCE_SPEED
 
 const THROWN_SETTLE_SPEED: float = 0.4
 const DEFAULT_THROW_FORCE: float = 15.0
@@ -155,6 +159,7 @@ func _handle_thrown_settle() -> void:
 ## Makes the next `duration` seconds of this held weapon's swing able to hit.
 func start_swing(duration: float) -> void:
 	swing_time_left = duration
+	_swing_reference_speed = SWING_REFERENCE_SPEED * REFERENCE_SWING_DURATION / max(duration, 0.01)
 	_hit_this_action.clear()
 	_worn_this_action = false
 	_blade_tracked = false
@@ -220,7 +225,7 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 		var knockback: float = Behavior.knockback_force if Behavior else 8.0
 		if not thrown:
 			dir = _swing_hit_direction(dir)
-			knockback *= clamp(_blade_velocity.length() / SWING_REFERENCE_SPEED, SWING_POWER_MIN, SWING_POWER_MAX)
+			knockback *= clamp(_blade_velocity.length() / _swing_reference_speed, SWING_POWER_MIN, SWING_POWER_MAX)
 			contact = true
 			solid = solid or Combat.is_solid(body)
 		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:

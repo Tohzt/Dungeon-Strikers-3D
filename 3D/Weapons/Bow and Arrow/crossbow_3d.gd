@@ -4,12 +4,16 @@ class_name CrossbowClass3D extends WeaponClass3D
 ## from the hand - while held (and not being thrown) it springs to a fixed
 ## aim-forward pose in front of the wielder instead, and a tap fires an arrow
 ## rather than playing the shoulder-swipe animation.
+## The staff uses this too, firing magic bolts, but with `aims_forward` off
+## so it's carried upright in the hand like any other weapon.
 
 @export var arrow_scene: PackedScene
 @export var arrow_speed: float = 40.0
 @export var muzzle_forward_offset: float = 0.6
 @export var muzzle_height_offset: float = 0.0
 
+## Held out in front, aimed (crossbow), or carried in the hand (staff).
+@export var aims_forward: bool = true
 @export var hold_forward_offset: float = 0.85
 @export var hold_height_offset: float = 0.1
 
@@ -60,7 +64,7 @@ func _net_fire(muzzle: Vector3, aim_direction: Vector3) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if is_held and not is_thrown and wielder and simulates():
+	if aims_forward and is_held and not is_thrown and wielder and simulates():
 		_physics_process_held_forward(delta)
 	else:
 		super._physics_process(delta)

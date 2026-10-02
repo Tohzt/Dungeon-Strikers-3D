@@ -65,10 +65,38 @@ const THROW_CHARGE_MAX_DURATION := 1.0
 const THROW_FORCE_MIN_RATIO := 0.5
 const THROW_FORCE_MAX_RATIO := 1.5
 
-# Simple swipe parameters for whichever hand holds a weapon
+# Simple swipe parameters for whichever hand holds a weapon. Fists and ball
+# bonks take SWIPE_DURATION; a weapon swing takes its own swing_duration
+# (see WeaponProperties3D), so each arm keeps the length of its current one.
 var swipe_timer_left: float = 0.0
 var swipe_timer_right: float = 0.0
 const SWIPE_DURATION := 0.25
+var swipe_duration_left: float = SWIPE_DURATION
+var swipe_duration_right: float = SWIPE_DURATION
+## Where each arm's swing starts from (its yaw offset when it began), so it
+## sweeps on from a draw-back, wind-up or walk sway instead of snapping to rest.
+var swipe_from_left: float = 0.0
+var swipe_from_right: float = 0.0
+
+## A heavy weapon's swing draws back before it strikes (its swing_windup), so
+## it can be seen coming. Once drawn it's committed: it can't be rolled out of.
+class SwingDraw:
+	var weapon: Weapon3D = null
+	var time_left: float = 0.0
+	var total: float = 0.0
+
+	func is_active() -> bool:
+		return time_left > 0.0
+
+	## 0 at the start of the draw, 1 fully drawn back; quick at first, then
+	## held, so the pose reads.
+	func progress() -> float:
+		var p: float = 1.0 - time_left / total
+		return 1.0 - (1.0 - p) * (1.0 - p)
+
+const DRAW_BACK_ANGLE := deg_to_rad(50)
+var draw_left := SwingDraw.new()
+var draw_right := SwingDraw.new()
 var original_shoulder_rotation_left: Vector3
 var original_shoulder_rotation_right: Vector3
 # Wrist: during a swing the blade first cocks back behind the arm, then whips
@@ -402,6 +430,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_weapon_windups(delta)
 	_update_arm_sway(delta)
+	_update_swing_draws(delta)
 	_update_weapon_swipes(delta)
 	_update_punches()
 	_update_hand_mesh_position()
@@ -602,10 +631,8 @@ func _handle_ball_hand(is_pressed: bool, was_pressed: bool, is_left: bool) -> vo
 				charge_ratio = 0.0
 			var force_multiplier: float = lerp(THROW_FORCE_MIN_RATIO, THROW_FORCE_MAX_RATIO, charge_ratio)
 			throw_ball(force_multiplier)
-		elif is_left and swipe_timer_left <= 0.0:
-			swipe_timer_left = SWIPE_DURATION
-		elif not is_left and swipe_timer_right <= 0.0:
-			swipe_timer_right = SWIPE_DURATION
+		elif not _arm_swinging(is_left):
+			_begin_arm_swing(is_left, SWIPE_DURATION)
 
 
 func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, is_left: bool) -> void:
@@ -636,17 +663,62 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 				charge_ratio = 0.0
 			_throw_weapon(weapon, is_left, charge_ratio)
 		else:
-			var swing_timer: float = swipe_timer_left if is_left else swipe_timer_right
-			if swing_timer > 0.0 or not _use_stamina(SWING_STAMINA):
+			var swing_stamina: float = SWING_STAMINA * (weapon.Properties.swing_stamina_scale if weapon.Properties else 1.0)
+			if _arm_swinging(is_left) or not _use_stamina(swing_stamina):
 				return  # Mid-swing already, or too tired
-			weapon.attack(_get_aim_direction())
-			if weapon.plays_swipe_animation:
-				if is_left:
-					swipe_timer_left = SWIPE_DURATION
-				else:
-					swipe_timer_right = SWIPE_DURATION
-				weapon.start_swing(SWIPE_DURATION)
-				_lunge(SWING_LUNGE_SPEED)
+			var draw_time: float = weapon.Properties.swing_windup if weapon.Properties else 0.0
+			if draw_time > 0.0 and weapon.plays_swipe_animation:
+				var draw: SwingDraw = draw_left if is_left else draw_right
+				draw.weapon = weapon
+				draw.time_left = draw_time
+				draw.total = draw_time
+			else:
+				_strike(weapon, is_left)
+
+
+## The weapon in that hand attacks now: a melee one swings (live for its
+## swing_duration) with a step forward, a ranged one just fires.
+func _strike(weapon: Weapon3D, is_left: bool) -> void:
+	weapon.attack(_get_aim_direction())
+	if not weapon.plays_swipe_animation:
+		return
+	var duration: float = weapon.Properties.swing_duration if weapon.Properties else SWIPE_DURATION
+	_begin_arm_swing(is_left, duration)
+	weapon.start_swing(duration)
+	_lunge(SWING_LUNGE_SPEED)
+
+
+## Start that arm's swipe animation, `duration` seconds long, from wherever
+## the arm is now.
+func _begin_arm_swing(is_left: bool, duration: float) -> void:
+	var shoulder: Node3D = shoulder_left if is_left else shoulder_right
+	var base: Vector3 = original_shoulder_rotation_left if is_left else original_shoulder_rotation_right
+	var from: float = base.y - shoulder.rotation.y if shoulder else 0.0
+	if is_left:
+		swipe_timer_left = duration
+		swipe_duration_left = duration
+		swipe_from_left = from
+	else:
+		swipe_timer_right = duration
+		swipe_duration_right = duration
+		swipe_from_right = from
+
+
+## Draw-backs finish here and turn into the strike, if the same weapon is
+## still in that hand (it may have been thrown, dropped or broken meanwhile).
+func _update_swing_draws(delta: float) -> void:
+	for is_left: bool in [true, false]:
+		var draw: SwingDraw = draw_left if is_left else draw_right
+		if not draw.is_active():
+			continue
+		draw.time_left = max(draw.time_left - delta, 0.0)
+		if draw.is_active():
+			continue
+		var weapon: Weapon3D = draw.weapon
+		draw.weapon = null
+		var held: Weapon3D = held_weapon_left if is_left else held_weapon_right
+		if is_instance_valid(weapon) and weapon == held:
+			_strike(weapon, is_left)
 
 
 func _throw_weapon(weapon: Weapon3D, is_left: bool, charge_ratio: float = 1.0) -> void:
@@ -756,15 +828,13 @@ func _bump_other_players(delta: float) -> void:
 
 
 func _start_punch(is_left: bool) -> void:
-	var swing_timer: float = swipe_timer_left if is_left else swipe_timer_right
-	if swing_timer > 0.0 or not _use_stamina(PUNCH_STAMINA):
+	if _arm_swinging(is_left) or not _use_stamina(PUNCH_STAMINA):
 		return
+	_begin_arm_swing(is_left, SWIPE_DURATION)
 	if is_left:
-		swipe_timer_left = SWIPE_DURATION
 		punching_left = true
 		punch_hits_left.clear()
 	else:
-		swipe_timer_right = SWIPE_DURATION
 		punching_right = true
 		punch_hits_right.clear()
 	_lunge(FIST_LUNGE_SPEED)
@@ -975,9 +1045,23 @@ func is_busy() -> bool:
 	return roll_time > 0.0 or stagger_time > 0.0
 
 
-## Either arm is mid-swing (weapon, fist or ball bonk).
+## Either arm is mid-swing (weapon, fist or ball bonk), or drawing one back.
 func is_swinging() -> bool:
-	return swipe_timer_left > 0.0 or swipe_timer_right > 0.0
+	return _arm_swinging(true) or _arm_swinging(false)
+
+
+func _arm_swinging(is_left: bool) -> bool:
+	if is_left:
+		return swipe_timer_left > 0.0 or draw_left.is_active()
+	return swipe_timer_right > 0.0 or draw_right.is_active()
+
+
+## Drawing a heavy swing back, or in the strike half of any swing: committed,
+## so no rolling out of it. The follow-through can be rolled out of.
+func _is_committed() -> bool:
+	return draw_left.is_active() or draw_right.is_active() \
+		or swipe_timer_left > swipe_duration_left * 0.5 \
+		or swipe_timer_right > swipe_duration_right * 0.5
 
 
 ## Roll if the dodge button was tapped recently and we're free to.
@@ -988,9 +1072,7 @@ func _try_roll(direction: Vector3) -> void:
 	if Time.get_ticks_msec() - request > ROLL_BUFFER_MSEC:
 		Input_Handler.dodge_request_msec = -1
 		return
-	# The strike half of a swing is committed; its follow-through isn't
-	var striking: bool = swipe_timer_left > SWIPE_DURATION * 0.5 or swipe_timer_right > SWIPE_DURATION * 0.5
-	if is_busy() or striking or not is_on_floor():
+	if is_busy() or _is_committed() or not is_on_floor():
 		return  # Keep it buffered
 	if Entity:
 		if Entity.stamina <= 0.0:
@@ -1029,6 +1111,9 @@ func _update_roll(delta: float) -> void:
 func _cancel_attacks() -> void:
 	punching_left = false
 	punching_right = false
+	for draw: SwingDraw in [draw_left, draw_right]:
+		draw.time_left = 0.0
+		draw.weapon = null
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon:
 			weapon.cancel_swing()
@@ -1215,13 +1300,13 @@ func _update_weapon_swipes(delta: float) -> void:
 	# Rotating both shoulders the same way around Y swings one hand forward
 	# and the other back, which is exactly the opposed walking arm swing.
 	var sway_angle: float = sin(sway_phase * TAU) * sway_amount * SWAY_MAX_ANGLE
-	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, 1.0, windup_left, contact_left, sway_angle * sway_weight_left)
-	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, -1.0, windup_right, contact_right, sway_angle * sway_weight_right)
+	swipe_timer_left = _update_shoulder_swipe(delta, shoulder_left, original_shoulder_rotation_left, swipe_timer_left, swipe_duration_left, swipe_from_left, draw_left, 1.0, windup_left, contact_left, sway_angle * sway_weight_left)
+	swipe_timer_right = _update_shoulder_swipe(delta, shoulder_right, original_shoulder_rotation_right, swipe_timer_right, swipe_duration_right, swipe_from_right, draw_right, -1.0, windup_right, contact_right, sway_angle * sway_weight_right)
 	# The wrist turns the same way the shoulder swings (see _update_shoulder_swipe)
 	if held_weapon_left is WeaponClass3D:
-		held_weapon_left.wrist_yaw = -_wrist_angle(swipe_timer_left, contact_left)
+		held_weapon_left.wrist_yaw = -_wrist_angle(swipe_timer_left, swipe_duration_left, contact_left)
 	if held_weapon_right is WeaponClass3D:
-		held_weapon_right.wrist_yaw = _wrist_angle(swipe_timer_right, contact_right)
+		held_weapon_right.wrist_yaw = _wrist_angle(swipe_timer_right, swipe_duration_right, contact_right)
 
 
 ## A held weapon's swing connected (see Weapon3D._swing_contact).
@@ -1242,7 +1327,7 @@ func _start_swing_contact(is_left: bool, solid: bool) -> void:
 	var base: Vector3 = original_shoulder_rotation_left if is_left else original_shoulder_rotation_right
 	contact.rebound = REBOUND_DURATION
 	contact.shoulder_from = shoulder.rotation.y - base.y
-	contact.wrist_from = _swing_wrist_angle(swipe_timer_left if is_left else swipe_timer_right)
+	contact.wrist_from = _swing_wrist_angle(swipe_timer_left if is_left else swipe_timer_right, swipe_duration_left if is_left else swipe_duration_right)
 	# A fist springing back off someone shouldn't punch anyone on the way
 	if is_left:
 		punching_left = false
@@ -1250,26 +1335,28 @@ func _start_swing_contact(is_left: bool, solid: bool) -> void:
 		punching_right = false
 
 
-func _wrist_angle(timer: float, contact: SwingContact) -> float:
+func _wrist_angle(timer: float, duration: float, contact: SwingContact) -> float:
 	if contact.rebound > 0.0:
 		return contact.wrist_from * contact.rebound_weight()
-	return _swing_wrist_angle(timer)
+	return _swing_wrist_angle(timer, duration)
 
 
 ## How far the wrist has turned the blade along the swing: dips back (cocked)
 ## early on, then accelerates past the arm to WRIST_SNAP_ANGLE as the arm
 ## reaches full swing, and relaxes with the arm on the way back.
-func _swing_wrist_angle(timer: float) -> float:
+func _swing_wrist_angle(timer: float, duration: float) -> float:
 	if timer <= 0.0:
 		return 0.0
-	var t: float = clamp(1.0 - (timer / SWIPE_DURATION), 0.0, 1.0)
+	var t: float = clamp(1.0 - (timer / duration), 0.0, 1.0)
 	if t < 0.5:
 		var p: float = t * 2.0
 		return WRIST_SNAP_ANGLE * p * p - WRIST_COCK_ANGLE * sin(PI * p)
 	return lerp(WRIST_SNAP_ANGLE, 0.0, (t - 0.5) * 2.0)
 
 
-func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, direction: float, windup: float, contact: SwingContact, sway: float = 0.0) -> float:
+## `duration` is how long this swing lasts and `from` where it started (see
+## _begin_arm_swing); `draw` pulls the arm back before a heavy swing.
+func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vector3, timer: float, duration: float, from: float, draw: SwingDraw, direction: float, windup: float, contact: SwingContact, sway: float = 0.0) -> float:
 	if not shoulder: return timer
 
 	if contact.hitstop > 0.0:
@@ -1283,20 +1370,23 @@ func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vecto
 	if timer > 0.0:
 		timer -= delta
 		var swipe_angle := deg_to_rad(100) * direction
-		var t: float = clamp(1.0 - (timer / SWIPE_DURATION), 0.0, 1.0)
+		var t: float = clamp(1.0 - (timer / duration), 0.0, 1.0)
 
 		# Rotate the shoulder out during the swipe, then back to original
 		var target_rotation: float
 		if t < 0.5:
 			# First half: rotate out
 			var progress: float = t * 2.0  # 0 to 1 over first half
-			target_rotation = lerp(0.0, swipe_angle, progress)
+			target_rotation = lerp(from, swipe_angle, progress)
 		else:
 			# Second half: rotate back
 			var progress: float = (t - 0.5) * 2.0  # 0 to 1 over second half
 			target_rotation = lerp(swipe_angle, 0.0, progress)
 
 		shoulder.rotation.y = base_rotation.y - target_rotation
+	elif draw.is_active():
+		# Drawing a heavy swing back, opposite the way it'll swing
+		shoulder.rotation.y = base_rotation.y + direction * DRAW_BACK_ANGLE * draw.progress()
 	else:
 		# At rest (not mid-swipe): pull back opposite the swing-out direction,
 		# proportional to how wound up this arm currently is.

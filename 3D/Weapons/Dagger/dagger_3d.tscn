@@ -1,0 +1,42 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
+[ext_resource type="PackedScene" path="res://Assets/Weapons/dagger_common.gltf.glb" id="4_model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.14, 0.85, 0.1)
+
+[node name="Dagger_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 0.6
+script = ExtResource("1_script")
+follow_strength = 60.0
+follow_damping = 6.0
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
+weapon_name = "Dagger"
+base_damage = 25.0
+knockback_force = 6.0
+
+[node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]
+weapon_name = "Dagger"
+throw_force = 22.0
+throw_spin_speed = 14.0
+durability_scale = 1.0
+swing_duration = 0.18
+swing_stamina_scale = 0.5
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="dagger_common_gltf" parent="." instance=ExtResource("4_model")]
+transform = Transform3D(1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0, 0, 0.0, 0)

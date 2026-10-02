@@ -61,6 +61,7 @@ player_scene = ExtResource("5_sboqw")
 
 [node name="Tools" type="Node" parent="." unique_id=198446725]
 script = ExtResource("3_gq62a")
+testing_mode = true
 
 [node name="HUD" parent="." unique_id=347811869 instance=ExtResource("2_wodrl")]
 
