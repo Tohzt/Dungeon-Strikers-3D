@@ -22,6 +22,8 @@ Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
+ball_power = 1.5
+ball_lift = 0.15
 weapon_name = "Greataxe"
 base_damage = 75.0
 knockback_force = 14.0

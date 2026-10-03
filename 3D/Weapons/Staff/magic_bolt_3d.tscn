@@ -27,6 +27,7 @@ script = ExtResource("1_arrow")
 damage = 22.0
 impact_impulse = 5.0
 knockback = 9.0
+ball_redirect_speed = 14.0
 max_lifetime = 3.0
 
 [node name="Mesh" type="MeshInstance3D" parent="."]

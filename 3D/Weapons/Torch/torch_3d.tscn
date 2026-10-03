@@ -36,6 +36,7 @@ Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
+ball_ignite_time = 5.0
 weapon_name = "Torch"
 base_damage = 22.0
 knockback_force = 7.0

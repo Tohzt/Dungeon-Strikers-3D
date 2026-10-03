@@ -67,7 +67,10 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 ## the credit).
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
+## Teammates pass through each other's attacks untouched.
 static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null) -> bool:
+	if are_teammates(body, attacker):
+		return false
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
 	var impulse: float = object_impulse if object_impulse >= 0.0 else knockback * OBJECT_IMPULSE_RATIO
@@ -86,8 +89,16 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	if body is Boss3D or body is SlimeMinion3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
+	if body is Ball3D:
+		body.touched_by(attacker)
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
+
+
+## Whether `a` and `b` are different players on the same team.
+static func are_teammates(a: Node3D, b: Node3D) -> bool:
+	return a is PlayerClass3D and b is PlayerClass3D and a != b \
+		and a.slot and b.slot and a.slot.team == b.slot.team
 
 
 ## Whether `player`'s team has more kills than `other`'s.

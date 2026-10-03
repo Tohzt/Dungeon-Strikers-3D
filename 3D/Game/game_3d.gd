@@ -20,6 +20,9 @@ signal match_won(team: int)
 
 ## Matches Players.TEAM_COLORS.
 const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
+## Which side of the arena each team starts on and defends (its goal and
+## altar): Blue left, Red right, Green nearest the camera, Yellow far.
+const TEAM_SIDES: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.BACK, Vector3.FORWARD]
 
 enum Phase {
 	BOSS,          ## A boss is alive
@@ -31,11 +34,13 @@ enum Phase {
 ## How many players to seat automatically when no menu has joined anyone
 ## (controllers first, then keyboard/mouse). Set to 1 for single-player.
 @export_range(1, 4) var default_player_count: int = 2
-## Indexed by player slot; ordered to match the HUD corners (P1 left,
-## P2 right, P3/P4 nearer the camera, i.e. the bottom of the screen).
-@export var spawn_points: Array[Vector3] = [
-	Vector3(-8, 1, 0), Vector3(8, 1, 0), Vector3(-8, 1, 6), Vector3(8, 1, 6),
-]
+## How far from the middle, towards its own side, each team starts.
+@export var spawn_distance: float = 8.0
+## Gap between teammates' starting spots.
+@export var spawn_spacing: float = 6.0
+## Floor for two teams (a goal at each end) and for four (one per side).
+@export var field_2p: Texture2D = preload("res://Assets/Textures/soccer field.png")
+@export var field_4p: Texture2D = preload("res://Assets/Textures/soccer field 4P.png")
 
 @export var ball_scene: PackedScene = preload("res://3D/ball_3d.tscn")
 ## Where "Reset Ball" (pause menu) puts every ball.
@@ -49,7 +54,7 @@ enum Phase {
 
 @export_group("Kills")
 ## Player kills a team needs to win the match.
-@export_range(1, 20) var kills_to_win: int = 3
+@export_range(1, 20) var kills_to_win: int = 5
 ## Seconds a killed player sits out before respawning.
 @export var respawn_delay: float = 4.0
 ## Bounty shields a team can bank at once.
@@ -64,6 +69,7 @@ enum Phase {
 @onready var boss_health_bar: BossHealthBar3D = $BossHealthBar
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var game_camera: Camera3D = $Camera3D
+@onready var floor_mesh: MeshInstance3D = $Walls/Floor/CollisionShape3D/MeshInstance3D
 
 ## Souls-like third-person camera, while that control scheme is on (Tab).
 var souls_camera: SoulsCamera3D = null
@@ -96,6 +102,7 @@ var Player: PlayerClass3D:
 func _enter_tree() -> void: Global.Game3D = self
 
 func _ready() -> void:
+	_setup_arena()
 	if Net.in_session():
 		_spawn_online_players()
 	else:
@@ -129,8 +136,8 @@ func _spawn_online_players() -> void:
 		else:
 			slot = PlayerSlot.new()
 			slot.index = seat
-			slot.team = seat
-			slot.color = Players.TEAM_COLORS[seat % Players.TEAM_COLORS.size()]
+			slot.team = Players.team_for_seat(seat)
+			slot.color = Players.team_color(slot.team)
 		_spawn_player(slot, Net.peers[seat])
 	for weapon: Weapon3D in weapons():
 		weapon.setup_network()
@@ -144,7 +151,7 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 	var player: PlayerClass3D = player_scene.instantiate()
 	player.slot = slot
 	player.name = "Player%d" % (slot.index + 1)
-	player.position = spawn_points[slot.index % spawn_points.size()]
+	player.position = _spawn_position(slot)
 	if peer_id:
 		player.setup_network(peer_id)
 	add_child(player)
@@ -158,6 +165,40 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 		add_child(hud)
 	hud.setup(player, slot)
 	huds[player] = hud
+
+
+## Where `slot` starts: on its team's side, spread out from its teammates.
+func _spawn_position(slot: PlayerSlot) -> Vector3:
+	var side: Vector3 = TEAM_SIDES[slot.team % TEAM_SIDES.size()]
+	var seat_count: int = Net.peers.size() if Net.in_session() else Players.slots.size()
+	var team_size: int = 0
+	for seat: int in maxi(seat_count, slot.index + 1):
+		if Players.team_for_seat(seat) == slot.team:
+			team_size += 1
+	var rank: int = slot.index / Players.team_count
+	var across: Vector3 = side.cross(Vector3.UP)
+	return side * spawn_distance + across * (rank - (team_size - 1) / 2.0) * spawn_spacing + Vector3.UP
+
+
+## Lay the arena out for Players.team_count: two teams get the 2P field and
+## the left/right goals and altars; four get the 4P field and every side's,
+## and their goals go to whoever last played the ball (Goal3D.LAST_TOUCH).
+## Goals and altars for teams not in the match are removed.
+func _setup_arena() -> void:
+	var team_count: int = Players.team_count
+	var field_material: StandardMaterial3D = floor_mesh.get_active_material(0) as StandardMaterial3D
+	if field_material:
+		field_material.albedo_texture = field_4p if team_count > 2 else field_2p
+	var team_nodes: Array[Node] = get_tree().get_nodes_in_group("Goal")
+	for child: Node in get_children():
+		if child is Altar3D:
+			team_nodes.append(child)
+	for node: Node in team_nodes:
+		if node.owner_team >= team_count:
+			node.get_parent().remove_child(node)
+			node.queue_free()
+		elif node is Goal3D and team_count > 2:
+			node.scoring_team = Goal3D.LAST_TOUCH
 
 
 ## Tab: swap between souls-like third-person controls (the default) and the
@@ -243,6 +284,8 @@ func _on_net_peers_changed() -> void:
 func _setup_scores() -> void:
 	var teams: Array[int] = []
 	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		if goal.scoring_team == Goal3D.LAST_TOUCH:
+			continue  # Four teams: only the teams with players are listed
 		if not teams.has(goal.scoring_team):
 			teams.append(goal.scoring_team)
 		scores[goal.scoring_team] = 0
@@ -503,6 +546,33 @@ func _remove_ball(old_ball: Ball3D) -> void:
 		old_ball.release(Vector3.ZERO)
 	balls.erase(old_ball)
 	old_ball.queue_free()
+
+
+## Server/offline: `ball` went into a goal without counting (an own goal,
+## or nobody had played it yet): back to the middle with it.
+func return_ball(ball: Ball3D) -> void:
+	if not balls.has(ball):
+		return
+	ball.last_team = -1
+	# Called from the net's physics callback, so move it once the step is done
+	_move_ball_to_middle.call_deferred(ball)
+	if Net.in_session():
+		_ball_returned.rpc()
+	else:
+		_ball_returned()
+
+
+func _move_ball_to_middle(ball: Ball3D) -> void:
+	if not is_instance_valid(ball):
+		return
+	ball.global_position = ball_reset_point
+	ball.linear_velocity = Vector3.ZERO
+	ball.angular_velocity = Vector3.ZERO
+
+
+@rpc("authority", "call_local", "reliable")
+func _ball_returned() -> void:
+	scoreboard.announce("No goal! Ball back to the middle", Color.WHITE)
 
 
 ## Put every ball back in the middle, taking them from whoever holds them.

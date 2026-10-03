@@ -32,6 +32,16 @@ var throw_spin_direction: float = 1.0
 const WORN_RATIO := 0.25
 const WORN_COLOR := Color(1.0, 0.1, 0.05, 0.5)
 const WORN_PULSE_SPEED := 8.0
+# Breaking is a payoff, not a fizzle: the use that breaks a weapon (its last
+# swing or throw to land, last shot, last block) hits FINAL_* harder, and
+# then the weapon shatters in a burst (see WeaponProperties3D) that hurts and
+# shoves everyone nearby but its wielder's team. On that last use it pulses
+# white-hot, so both sides can see the big hit coming.
+const FINAL_DAMAGE_MULTIPLIER := 2.0
+const FINAL_KNOCKBACK_MULTIPLIER := 1.5
+const LAST_USE_COLOR := Color(1.0, 0.8, 0.35, 0.8)
+const LAST_USE_PULSE_SPEED := 16.0
+const SHATTER_COLOR := Color(0.75, 0.75, 0.8)
 const BREAK_TIME := 0.15
 ## Dropped on death: tossed this hard, up and away.
 const DROP_IMPULSE := 3.0
@@ -215,6 +225,7 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 	var contact: bool = false
 	var solid: bool = false
 	var landed: bool = false
+	var final_use: bool = is_last_use()
 	for body: Node3D in Combat.overlaps(get_world_3d(), Collision.shape, Collision.global_transform, exclude):
 		# Never hit our own side's gear (e.g. the wielder's other-hand weapon)
 		if body in _hit_this_action or (body is Weapon3D and attacker and body.wielder == attacker):
@@ -228,6 +239,14 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			knockback *= clamp(_blade_velocity.length() / _swing_reference_speed, SWING_POWER_MIN, SWING_POWER_MAX)
 			contact = true
 			solid = solid or Combat.is_solid(body)
+		if body is Ball3D and Behavior:
+			# Each weapon plays the ball its own way (see WeaponBehavior3D.hit_ball)
+			var travel := Vector3.ZERO if thrown else Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
+			Behavior.hit_ball(body, dir, travel, knockback, attacker)
+			continue
+		if final_use:
+			damage *= FINAL_DAMAGE_MULTIPLIER
+			knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
 		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D
@@ -415,11 +434,17 @@ func _net_durability(value: int) -> void:
 		_break()
 
 
+## The next use breaks it.
+func is_last_use() -> bool:
+	return not is_broken and durability <= 1
+
+
 func is_worn() -> bool:
 	return durability <= maxi(ceili(max_durability * WORN_RATIO), 1)
 
 
-## Nearly broken: pulse red over (in place of) its rarity glow.
+## Nearly broken: pulse red over (in place of) its rarity glow; white-hot,
+## and faster, on its last use.
 func _update_worn_glow() -> void:
 	if is_broken or not is_worn():
 		return
@@ -430,16 +455,26 @@ func _update_worn_glow() -> void:
 		_worn_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
 			(mesh as MeshInstance3D).material_overlay = _worn_glow
-	var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * WORN_PULSE_SPEED)
-	_worn_glow.albedo_color = Color(WORN_COLOR, WORN_COLOR.a * pulse)
+	var last: bool = is_last_use()
+	var color: Color = LAST_USE_COLOR if last else WORN_COLOR
+	var speed: float = LAST_USE_PULSE_SPEED if last else WORN_PULSE_SPEED
+	var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * speed)
+	_worn_glow.albedo_color = Color(color, color.a * pulse)
 
 
 ## Out of durability, on every machine: out of the wielder's hand, out of
-## the physics world, a quick shrink, gone.
+## the physics world, a quick shrink, gone - in a burst of shards. The
+## machine simulating it decides who the burst hits.
 func _break() -> void:
 	if is_broken:
 		return
 	is_broken = true
+	var breaker: Node3D = wielder if wielder else thrower
+	var radius: float = Properties.break_burst_radius if Properties else 2.5
+	if simulates():
+		_shatter_burst(breaker, radius)
+	var shard_color: Color = WeaponRarity.COLORS[rarity] if rarity != WeaponRarity.Tier.COMMON else SHATTER_COLOR
+	WeaponShatter3D.spawn(get_parent(), global_position, Color(shard_color, 1.0), radius)
 	if wielder:
 		unequip()
 	swing_time_left = 0.0
@@ -449,6 +484,29 @@ func _break() -> void:
 	var tween: Tween = get_tree().create_tween()
 	tween.tween_property(self, "scale", Vector3.ONE * 0.01, BREAK_TIME)
 	tween.tween_callback(queue_free)
+
+
+## Hurt and shove everything in the break burst but `breaker` (whoever held
+## or threw it) and their team, who get the credit.
+func _shatter_burst(breaker: Node3D, radius: float) -> void:
+	if not is_inside_tree() or not Properties:
+		return
+	var sphere := SphereShape3D.new()
+	sphere.radius = radius
+	var exclude: Array[RID] = [get_rid()]
+	if breaker is CollisionObject3D:
+		exclude.append(breaker.get_rid())
+	var origin: Vector3 = global_position
+	for body: Node3D in Combat.overlaps(get_world_3d(), sphere, Transform3D(Basis(), origin), exclude):
+		if _on_team_of(body, breaker) or (body is Weapon3D and breaker and body.wielder == breaker):
+			continue
+		Combat.strike(body, body.global_position - origin, Properties.break_burst_damage,
+			Properties.break_burst_knockback, HIT_POP, -1.0, breaker)
+
+
+static func _on_team_of(body: Node3D, breaker: Node3D) -> bool:
+	return body is PlayerClass3D and breaker is PlayerClass3D and body.slot and breaker.slot \
+		and body.slot.team == breaker.slot.team
 
 
 ## The wielder died (on their machine): let go, tossed up and out a little,

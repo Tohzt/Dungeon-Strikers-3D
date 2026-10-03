@@ -14,6 +14,7 @@ const COPIED_FEEDBACK_TIME := 1.5
 @onready var controller_button: Button = %Controller
 @onready var cards: HBoxContainer = %Cards
 @onready var start_button: Button = %Start
+@onready var lobby_teams: Button = %LobbyTeams
 @onready var online: Control = %Online
 @onready var host_setup: Control = %HostSetup
 @onready var join_setup: Control = %JoinSetup
@@ -27,6 +28,7 @@ const COPIED_FEEDBACK_TIME := 1.5
 @onready var online_cards: HBoxContainer = %OnlineCards
 @onready var online_status: Label = %OnlineStatus
 @onready var online_start: Button = %OnlineStart
+@onready var online_teams: Button = %OnlineTeams
 
 ## Last joypad that sent input, so "Controller" picks the pad that pressed it.
 var last_joypad: int = -1
@@ -56,6 +58,8 @@ func _ready() -> void:
 	controller_button.pressed.connect(_start_single_player_controller)
 	%SinglePlayerBack.pressed.connect(_back_to_home)
 	start_button.pressed.connect(_start_game)
+	lobby_teams.pressed.connect(_cycle_team_count)
+	online_teams.pressed.connect(_cycle_team_count)
 	%LobbyBack.pressed.connect(_back_to_home)
 
 	%HostButton.pressed.connect(_open_host_setup)
@@ -85,6 +89,7 @@ func _ready() -> void:
 	Input.joy_connection_changed.connect(func(_device: int, _connected: bool) -> void: _refresh_controller_button())
 	Players.slot_joined.connect(func(_slot: PlayerSlot) -> void: _refresh_lobby())
 	Players.slot_left.connect(func(_slot: PlayerSlot) -> void: _refresh_lobby())
+	Players.slot_changed.connect(func(_slot: PlayerSlot) -> void: _refresh_lobby())
 
 	_build_cards(cards, card_styles, card_labels)
 	_build_cards(online_cards, online_card_styles, online_card_labels)
@@ -187,6 +192,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		accept_event()
 
 
+## Teams button: 2 teams (2P field) <-> 4 teams (4P field).
+func _cycle_team_count() -> void:
+	Players.set_team_count(Players.next_team_count())
+	_refresh_lobby()
+	_refresh_online_lobby()
+
+
 func _build_cards(container: HBoxContainer, styles: Array[StyleBoxFlat], labels: Array[Label]) -> void:
 	for i in Players.MAX_PLAYERS:
 		var card := PanelContainer.new()
@@ -220,6 +232,7 @@ func _refresh_lobby() -> void:
 			card_styles[i].bg_color = Color(1, 1, 1, 0.06)
 			card_labels[i].text = "Press A or Enter\nto join"
 	start_button.disabled = Players.slots.size() < MIN_LOBBY_PLAYERS
+	lobby_teams.text = "Teams: " + Players.format_name(maxi(Players.slots.size(), MIN_LOBBY_PLAYERS))
 
 
 # ===== ONLINE =====
@@ -302,7 +315,7 @@ func _refresh_online_lobby() -> void:
 	for i in online_card_labels.size():
 		if i < Net.peers.size():
 			var id: int = Net.peers[i]
-			online_card_styles[i].bg_color = Players.TEAM_COLORS[i].darkened(0.35)
+			online_card_styles[i].bg_color = Players.team_color(Players.team_for_seat(i)).darkened(0.35)
 			var text: String = "P%d\n%s" % [i + 1, "Host" if i == 0 else "Guest"]
 			if id == my_id:
 				text += " (You)\n" + ("Press A or Enter\nto pick your device" if online_device == Players.NO_DEVICE
@@ -312,6 +325,9 @@ func _refresh_online_lobby() -> void:
 			online_card_styles[i].bg_color = Color(1, 1, 1, 0.06)
 			online_card_labels[i].text = "Waiting for\nplayer..."
 	online_start.visible = Net.is_host
+	# Only the leader picks the format; it's sent with the match start
+	online_teams.visible = Net.is_host
+	online_teams.text = "Teams: " + Players.format_name(maxi(Net.peers.size(), MIN_LOBBY_PLAYERS))
 	online_start.disabled = Net.peers.size() < MIN_LOBBY_PLAYERS or online_device == Players.NO_DEVICE
 	if online_device == Players.NO_DEVICE:
 		online_status.text = "Press A or Enter on the device you'll play with."
@@ -327,7 +343,7 @@ func _refresh_online_lobby() -> void:
 func _on_match_started() -> void:
 	Players.leave_all()
 	var device: int = online_device if online_device != Players.NO_DEVICE else last_device
-	Players.join(device, Net.local_seat(), Net.local_seat())
+	Players.join(device, -1, Net.local_seat())
 	_start_game()
 
 

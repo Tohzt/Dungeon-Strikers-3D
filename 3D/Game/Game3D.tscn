@@ -4,11 +4,11 @@
 [ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="2_wodrl"]
 [ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="3_dwu0v"]
 [ext_resource type="Script" uid="uid://cgp742w6j8vmw" path="res://3D/Game/tools.gd" id="3_gq62a"]
-[ext_resource type="Texture2D" uid="uid://cfobqwtf60rqc" path="res://3D/player_3d/soccer field.jpg" id="4_cpoda"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
 [ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
 [ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="8_al1ea"]
+[ext_resource type="Texture2D" uid="uid://cjuv6qpovopxf" path="res://Assets/Textures/soccer field.png" id="8_drgkw"]
 [ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="13_uepvo"]
 [ext_resource type="PackedScene" path="res://Menus/PauseMenu/pause_menu.tscn" id="15_pause"]
 [ext_resource type="PackedScene" path="res://3D/HUD/scoreboard.tscn" id="16_score"]
@@ -31,29 +31,22 @@ sky = SubResource("Sky_al1ea")
 glow_enabled = true
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_qgpjc"]
-size = Vector3(100, 0.5, 100)
+size = Vector3(108, 0.5, 108)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uqeks"]
-albedo_color = Color(0.22576779, 0.5083114, 0.22435093, 1)
-albedo_texture = ExtResource("4_cpoda")
-normal_texture = ExtResource("4_cpoda")
-uv1_scale = Vector3(-3, 2, 0)
+albedo_texture = ExtResource("8_drgkw")
+uv1_scale = Vector3(3, 2, 2)
+uv1_offset = Vector3(1, 0, 0)
 
 [sub_resource type="BoxMesh" id="BoxMesh_sjtsc"]
 material = SubResource("StandardMaterial3D_uqeks")
-size = Vector3(100, 0.5, 100)
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_p6jv2"]
-size = Vector2(100, 100)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8hcp5"]
-albedo_color = Color(0.30323282, 0.30323282, 0.30323282, 1)
+size = Vector3(108, 0.5, 108)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_jrsk6"]
-size = Vector3(100, 10, 1)
+size = Vector3(108, 10, 2.68)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_uqeks"]
-size = Vector3(1, 10, 100)
+size = Vector3(2.68, 10, 108)
 
 [node name="Game3d" type="Node3D" unique_id=998231224]
 script = ExtResource("1_kwiv5")
@@ -91,62 +84,60 @@ shape = SubResource("BoxShape3D_qgpjc")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/Floor/CollisionShape3D" unique_id=1471026686]
 mesh = SubResource("BoxMesh_sjtsc")
 
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="Walls/Floor/CollisionShape3D" unique_id=208775146]
-mesh = SubResource("PlaneMesh_p6jv2")
-surface_material_override/0 = SubResource("StandardMaterial3D_8hcp5")
-
 [node name="Wall" type="StaticBody3D" parent="Walls" unique_id=31739291]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 50)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 52)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall" unique_id=66902059]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall2" type="StaticBody3D" parent="Walls" unique_id=1364339183]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -50)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -52)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall2" unique_id=1586535081]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall3" type="StaticBody3D" parent="Walls" unique_id=1226163763]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52, 5, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall3" unique_id=2016981924]
 shape = SubResource("BoxShape3D_uqeks")
 
 [node name="Wall4" type="StaticBody3D" parent="Walls" unique_id=1775812778]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52, 5, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall4" unique_id=1686025649]
 shape = SubResource("BoxShape3D_uqeks")
 
 [node name="GridMap" type="GridMap" parent="Walls" unique_id=119941122]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
 mesh_library = ExtResource("5_uepvo")
 cell_size = Vector3(4, 4, 4)
 cell_center_y = false
 data = {
-"cells": PackedInt32Array(65524, 12, 655362, 65525, 12, 655362, 65526, 12, 655362, 65527, 12, 655362, 65528, 12, 655362, 65529, 12, 655362, 65530, 12, 655362, 65531, 12, 655362, 65532, 12, 655362, 65533, 12, 655362, 65534, 12, 655362, 65535, 12, 655362, 0, 12, 655362, 1, 12, 655362, 2, 12, 655362, 3, 12, 655362, 4, 12, 655362, 5, 12, 655362, 6, 12, 655362, 7, 12, 655362, 8, 12, 655362, 9, 12, 655362, 10, 12, 655362, 11, 12, 655362, 12, 12, 1441795, 65524, 65523, 7, 65525, 65523, 7, 65526, 65523, 7, 65527, 65523, 7, 65528, 65523, 7, 65529, 65523, 7, 65530, 65523, 7, 65531, 65523, 7, 65532, 65523, 7, 65533, 65523, 7, 65534, 65523, 7, 65535, 65523, 7, 0, 65523, 7, 1, 65523, 7, 2, 65523, 7, 3, 65523, 7, 4, 65523, 7, 5, 65523, 7, 6, 65523, 7, 7, 65523, 7, 8, 65523, 7, 9, 65523, 7, 10, 65523, 7, 11, 65523, 7, 12, 11, 1048578, 12, 10, 1048578, 12, 9, 1048578, 12, 8, 1048578, 12, 7, 1048578, 12, 6, 1048578, 12, 5, 1048578, 12, 4, 1048578, 12, 3, 1048578, 12, 2, 1048578, 12, 1, 1048578, 12, 0, 1048578, 12, 65535, 1048578, 12, 65534, 1048578, 12, 65533, 1048578, 12, 65532, 1048578, 12, 65531, 1048578, 12, 65530, 1048578, 12, 65529, 1048578, 12, 65528, 1048578, 12, 65527, 1048578, 12, 65526, 1048578, 12, 65525, 1048578, 12, 65524, 1048578, 65523, 11, 1441794, 65523, 10, 1441794, 65523, 9, 1441794, 65523, 8, 1441794, 65523, 7, 1441794, 65523, 6, 1441794, 65523, 5, 1441794, 65523, 4, 1441794, 65523, 3, 1441794, 65523, 2, 1441794, 65523, 1, 1441794, 65523, 0, 1441794, 65523, 65535, 1441794, 65523, 65534, 1441794, 65523, 65533, 1441794, 65523, 65532, 1441794, 65523, 65531, 1441794, 65523, 65530, 1441794, 65523, 65529, 1441794, 65523, 65528, 1441794, 65523, 65527, 1441794, 65523, 65526, 1441794, 65523, 65525, 1441794, 65523, 65524, 1441794, 65523, 12, 655363, 65523, 65523, 1048579, 12, 65523, 3)
-}
-
-[node name="GridMap2" type="GridMap" parent="Walls" unique_id=1321019340]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
-mesh_library = ExtResource("5_uepvo")
-cell_size = Vector3(4, 4, 4)
-cell_center_y = false
-data = {
-"cells": PackedInt32Array(65524, 12, 655362, 65525, 12, 655362, 65526, 12, 655362, 65527, 12, 655362, 65528, 12, 655362, 65529, 12, 655362, 65530, 12, 655362, 65531, 12, 655362, 65532, 12, 655362, 65533, 12, 655362, 65534, 12, 655362, 65535, 12, 655362, 0, 12, 655362, 1, 12, 655362, 2, 12, 655362, 3, 12, 655362, 4, 12, 655362, 5, 12, 655362, 6, 12, 655362, 7, 12, 655362, 8, 12, 655362, 9, 12, 655362, 10, 12, 655362, 11, 12, 655362, 12, 12, 1441795, 65524, 65523, 7, 65525, 65523, 7, 65526, 65523, 7, 65527, 65523, 7, 65528, 65523, 7, 65529, 65523, 7, 65530, 65523, 7, 65531, 65523, 7, 65532, 65523, 7, 65533, 65523, 7, 65534, 65523, 7, 65535, 65523, 7, 0, 65523, 7, 1, 65523, 7, 2, 65523, 7, 3, 65523, 7, 4, 65523, 7, 5, 65523, 7, 6, 65523, 7, 7, 65523, 7, 8, 65523, 7, 9, 65523, 7, 10, 65523, 7, 11, 65523, 7, 12, 11, 1048578, 12, 10, 1048578, 12, 9, 1048578, 12, 8, 1048578, 12, 7, 1048578, 12, 6, 1048578, 12, 5, 1048578, 12, 4, 1048578, 12, 3, 1048578, 12, 2, 1048578, 12, 1, 1048578, 12, 0, 1048578, 12, 65535, 1048578, 12, 65534, 1048578, 12, 65533, 1048578, 12, 65532, 1048578, 12, 65531, 1048578, 12, 65530, 1048578, 12, 65529, 1048578, 12, 65528, 1048578, 12, 65527, 1048578, 12, 65526, 1048578, 12, 65525, 1048578, 12, 65524, 1048578, 65523, 11, 1441794, 65523, 10, 1441794, 65523, 9, 1441794, 65523, 8, 1441794, 65523, 7, 1441794, 65523, 6, 1441794, 65523, 5, 1441794, 65523, 4, 1441794, 65523, 3, 1441794, 65523, 2, 1441794, 65523, 1, 1441794, 65523, 0, 1441794, 65523, 65535, 1441794, 65523, 65534, 1441794, 65523, 65533, 1441794, 65523, 65532, 1441794, 65523, 65531, 1441794, 65523, 65530, 1441794, 65523, 65529, 1441794, 65523, 65528, 1441794, 65523, 65527, 1441794, 65523, 65526, 1441794, 65523, 65525, 1441794, 65523, 65524, 1441794, 65523, 12, 655363, 65523, 65523, 1048579, 12, 65523, 3)
+"cells": PackedInt32Array(65530, 6, 655362, 65530, 65529, 7, 6, 65530, 1048578, 65529, 65530, 1441794, 65531, 6, 655362, 65531, 65529, 7, 6, 65531, 1048578, 65529, 65531, 1441794, 65532, 6, 655362, 65532, 65529, 7, 6, 65532, 1048578, 65529, 65532, 1441794, 65533, 6, 655362, 65533, 65529, 7, 6, 65533, 1048578, 65529, 65533, 1441794, 65534, 6, 655362, 65534, 65529, 7, 6, 65534, 1048578, 65529, 65534, 1441794, 65535, 6, 655362, 65535, 65529, 7, 6, 65535, 1048578, 65529, 65535, 1441794, 0, 6, 655362, 0, 65529, 7, 6, 0, 1048578, 65529, 0, 1441794, 1, 6, 655362, 1, 65529, 7, 6, 1, 1048578, 65529, 1, 1441794, 2, 6, 655362, 2, 65529, 7, 6, 2, 1048578, 65529, 2, 1441794, 3, 6, 655362, 3, 65529, 7, 6, 3, 1048578, 65529, 3, 1441794, 4, 6, 655362, 4, 65529, 7, 6, 4, 1048578, 65529, 4, 1441794, 5, 6, 655362, 5, 65529, 7, 6, 5, 1048578, 65529, 5, 1441794, 6, 6, 1441795, 65529, 6, 655363, 65529, 65529, 1048579, 6, 65529, 3)
 }
 
 [node name="Goal" parent="Walls" unique_id=424337427 instance=ExtResource("8_al1ea")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48.758, 1.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.09, 1.75, 0)
 
 [node name="Goal2" parent="Walls" unique_id=961314483 instance=ExtResource("8_al1ea")]
-transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -48.758, 1.75, 0)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -50.09, 1.75, 0)
 scoring_team = 1
 owner_team = 0
+
+[node name="Goal3" parent="Walls" unique_id=1846203517 instance=ExtResource("8_al1ea")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 1.75, 50.09)
+scoring_team = -1
+owner_team = 2
+
+[node name="Goal4" parent="Walls" unique_id=607391248 instance=ExtResource("8_al1ea")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 1.75, -50.09)
+scoring_team = -1
+owner_team = 3
 
 [node name="Weapons" type="Node" parent="." unique_id=456536771]
 
@@ -157,6 +148,16 @@ weapon_scene = ExtResource("7_al1ea")
 [node name="Altar2" parent="." unique_id=827922923 instance=ExtResource("13_uepvo")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 32.855274, 0, 0)
 owner_team = 1
+weapon_scene = ExtResource("7_al1ea")
+
+[node name="Altar3" parent="." unique_id=1392847105 instance=ExtResource("13_uepvo")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 42.80662)
+owner_team = 2
+weapon_scene = ExtResource("7_al1ea")
+
+[node name="Altar4" parent="." unique_id=275019384 instance=ExtResource("13_uepvo")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -42.80662)
+owner_team = 3
 weapon_scene = ExtResource("7_al1ea")
 
 [node name="Boss" parent="." unique_id=183138971 instance=ExtResource("17_boss")]

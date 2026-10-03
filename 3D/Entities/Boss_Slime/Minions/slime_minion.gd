@@ -27,7 +27,7 @@ const PLAYER_RADIUS := 0.5  # PlayerClass3D.BODY_RADIUS
 @export var chase_range: float = 25.0
 
 @export_category("Bump")
-@export var bump_damage: float = 10.0
+@export var bump_damage: float = 5.0
 @export var bump_knockback: float = 7.0
 @export var bump_pop: float = 2.0
 const BUMP_COOLDOWN := 0.8  # Per player

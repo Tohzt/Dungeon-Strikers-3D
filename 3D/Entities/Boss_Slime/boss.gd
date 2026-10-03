@@ -54,7 +54,7 @@ const SHOVE_RESISTANCE := 0.15  # Share of an impulse that actually moves it
 @export var stomp_trigger_range: float = 9.0  ## Stomp when a player is this close
 @export var stomp_cooldown: float = 5.0
 @export var stomp_radius: float = 6.0  ## Shockwave reach from the slime's center
-@export var stomp_damage: float = 80.0  ## At the center, falling to half at the edge
+@export var stomp_damage: float = 40.0  ## At the center, falling to half at the edge
 @export var stomp_knockback: float = 14.0
 @export var stomp_pop: float = 5.0
 @export var stomp_ball_impulse: float = 8.0
@@ -86,7 +86,7 @@ const SPIT_SPREAD := 0.6
 
 # ===== BUMPING =====
 @export_category("Bump")
-@export var bump_damage: float = 25.0
+@export var bump_damage: float = 12.5
 @export var bump_knockback: float = 10.0
 @export var bump_pop: float = 3.0
 const BUMP_COOLDOWN := 0.8  # Per player

@@ -9,6 +9,13 @@ class_name WeaponProperties3D extends Node
 ## e.g. higher for weapons whose uses come often, like shots or blocks.
 @export var durability_scale := 1.0
 
+@export_group("Breaking")
+## When it breaks it shatters in a burst this wide (meters), hurting and
+## shoving everyone in it except its wielder's team (see Weapon3D._break).
+@export var break_burst_radius := 2.5
+@export var break_burst_damage := 25.0
+@export var break_burst_knockback := 12.0
+
 @export_group("Swing")
 ## Seconds from the strike until the arm is back at rest; the strike is the
 ## first half (committed), the follow-through the second (can be rolled out

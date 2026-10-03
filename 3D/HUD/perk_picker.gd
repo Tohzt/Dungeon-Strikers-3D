@@ -100,7 +100,7 @@ func _process(delta: float) -> void:
 		_select(selected - 1)
 	elif _just_pressed(&"move_right"):
 		_select(selected + 1)
-	elif _just_pressed(&"interact") or _just_pressed(&"attack_left") or _just_pressed(&"attack_right"):
+	elif _just_pressed(&"interact") or _just_pressed(&"attack") or _just_pressed(&"attack_left") or _just_pressed(&"attack_right"):
 		chosen.emit(selected)
 
 

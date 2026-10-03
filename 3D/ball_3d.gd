@@ -20,6 +20,9 @@ var speed_fast_threshold: float = max_ball_speed * 0.6
 
 ## Who has the ball in hand, if anyone. Set on every machine.
 var holder: PlayerClass3D = null
+## Team (PlayerSlot.team) of the last player to play the ball, -1 = nobody
+## yet. Kept by whoever simulates it; four-team goals credit this team.
+var last_team: int = -1
 var _free_collision_layer: int = 0
 var _free_collision_mask: int = 0
 
@@ -34,6 +37,30 @@ var _last_sent_transform: Transform3D
 var _last_sent_msec: int = 0
 ## Clients: the server's recent updates, played back smoothly.
 var _net_motion: NetInterpolator = null
+
+# Weapon effects (see WeaponBehavior3D.hit_ball). Online the server applies
+# them, like every push.
+## Curve: a sideways pull after an axe hook, fading out over CURVE_TIME.
+const CURVE_TIME := 0.8
+var _curve: Vector3 = Vector3.ZERO
+var _curve_left: float = 0.0
+## Burning (lit by a torch): whoever holds it takes BURN_HOLD_DPS, and a fast
+## burning ball hurts whoever it hits. Known on every machine, for the flames.
+const BURN_HOLD_DPS := 10.0
+const BURN_TICK := 0.5
+const BURN_HIT_DAMAGE := 15.0
+const BURN_HIT_KNOCKBACK := 4.0
+const BURN_HIT_MIN_SPEED := 4.0
+const BURN_HIT_COOLDOWN_MSEC := 500
+const BURN_COLOR := Color(1.0, 0.45, 0.05)
+var burn_left: float = 0.0
+var _igniter_name: String = ""
+var _burn_tick: float = 0.0
+var _burned_msec: Dictionary[String, int] = {}
+var _burn_light: OmniLight3D = null
+## A raised shield catches it: dropped just in front of the shield.
+const CATCH_SPEED := 1.5
+const CATCH_POP := 1.0
 
 func _ready() -> void:
 	# Find mesh instance if not directly named
@@ -55,6 +82,11 @@ func _ready() -> void:
 	# Connect body entered signal
 	body_entered.connect(_on_body_entered)
 	_update_ball_color(0)
+	_burn_light = OmniLight3D.new()
+	_burn_light.light_color = BURN_COLOR
+	_burn_light.omni_range = 5.0
+	_burn_light.visible = false
+	add_child(_burn_light)
 
 
 func _process(delta: float) -> void:
@@ -68,12 +100,16 @@ func _process(delta: float) -> void:
 			material = StandardMaterial3D.new()
 			mesh_instance.set_surface_override_material(0, material)
 		material.albedo_color = color_cur
+		_update_burn_visual(material)
+	burn_left = max(burn_left - delta, 0.0)
 
 
 func _physics_process(delta: float) -> void:
 	if not _simulates():
 		return  # The server's updates move and color it
 	_grab_cooldown = max(_grab_cooldown - delta, 0.0)
+	_update_curve(delta)
+	_update_burn_damage(delta)
 	if linear_velocity.length() > max_ball_speed:
 		linear_velocity = linear_velocity.normalized() * max_ball_speed
 	_update_ball_color(linear_velocity.length())
@@ -132,6 +168,29 @@ func _request_push(impulse: Vector3) -> void:
 		apply_central_impulse(impulse)
 
 
+## `player` played the ball (shoved, shot or bumped it), so a goal now
+## counts for their team. Passed on to whoever simulates the ball.
+func touched_by(player: Node3D) -> void:
+	if not player is PlayerClass3D:
+		return
+	if _simulates():
+		_set_last_team(String(player.name))
+	elif Net.match_synced:
+		_request_touch.rpc_id(Net.SERVER_ID, String(player.name))
+
+
+@rpc("any_peer", "reliable")
+func _request_touch(player_name: String) -> void:
+	if Net.is_server:
+		_set_last_team(player_name)
+
+
+func _set_last_team(player_name: String) -> void:
+	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D if Global.Game3D else null
+	if player and player.slot:
+		last_team = player.slot.team
+
+
 # ===== HOLDING =====
 
 ## `player` pressed interact near the ball with both hands free. Online the
@@ -159,9 +218,12 @@ func grab(player: PlayerClass3D) -> void:
 	if holder:
 		release(Vector3.ZERO)
 	holder = player
+	if player.slot:
+		last_team = player.slot.team
 	if _net_motion:
 		_net_motion.clear()  # Play back from the release, not before the grab
 	player.held_ball = self
+	_curve_left = 0.0
 	# Freeze the ball's physics and disable collision while it's carried
 	_free_collision_layer = collision_layer
 	_free_collision_mask = collision_mask
@@ -235,8 +297,15 @@ func _update_ball_color(speed: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if not _simulates():
 		return
+	if body is ShieldClass3D and body.is_blocking and body.wielder:
+		_catch_on(body)
+		_set_last_team(String(body.wielder.name))
+		return
+	if body is PlayerClass3D and burn_left > 0.0:
+		_burn_on_hit(body)
 	if body is PlayerClass3D:
 		var player: PlayerClass3D = body as PlayerClass3D
+		_set_last_team(String(player.name))
 		# Check if it has EB (EntityBehavior3D)
 		if player.Entity:
 			var ball_speed: float = linear_velocity.length()
@@ -248,23 +317,140 @@ func _on_body_entered(body: Node) -> void:
 				var knockback_force: float = ball_speed * knockback_strength
 				# Apply knockback
 				player.shove(ball_to_player, knockback_force)
-	
-	# Handle weapon/projectile collisions to move the ball
-	if body.is_in_group("Weapon") and body is Weapon3D:
-		var weapon: Weapon3D = body
-		if weapon.Properties:
-			var weapon_damage: float = weapon.Properties.weapon_damage
-			var weapon_velocity: Vector3 = weapon.linear_velocity
-			
-			# For melee attacks (held weapons with no velocity), calculate knockback differently
-			var impact_force: Vector3
-			if weapon_velocity.length() < 10.0:  # Very low velocity = held weapon
-				# Calculate direction from weapon to ball
-				var knockback_direction: Vector3 = (global_position - weapon.global_position).normalized()
-				# Use damage-based knockback force for melee
-				impact_force = knockback_direction * weapon_damage * 50.0
-			else:
-				# For projectiles, use velocity-based knockback
-				impact_force = weapon_velocity * weapon_damage
-			
-			apply_central_impulse(impact_force)
+	# Swung and thrown weapons play the ball through WeaponBehavior3D.hit_ball,
+	# so touching one here does nothing extra.
+
+
+# ===== WEAPON EFFECTS =====
+
+## A weapon hit the ball (see WeaponBehavior3D.hit_ball): `velocity` is
+## added to its own, or replaces it if `exact`; `curve` pulls it sideways for
+## a moment; above 0, `ignite_time` sets it burning.
+func receive_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker: Node3D) -> void:
+	if holder:
+		return
+	if _simulates():
+		_apply_weapon_hit(velocity, exact, curve, ignite_time, _player_name(attacker))
+	else:
+		_request_weapon_hit.rpc_id(Net.SERVER_ID, velocity, exact, curve, ignite_time, _player_name(attacker))
+
+
+@rpc("any_peer", "reliable")
+func _request_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker_name: String) -> void:
+	if Net.is_server and not holder:
+		_apply_weapon_hit(velocity, exact, curve, ignite_time, attacker_name)
+
+
+func _apply_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker_name: String) -> void:
+	_set_last_team(attacker_name)
+	linear_velocity = velocity if exact else linear_velocity + velocity
+	_curve = curve
+	_curve_left = CURVE_TIME if not curve.is_zero_approx() else 0.0
+	if ignite_time > 0.0:
+		_ignite(ignite_time, attacker_name)
+
+
+## Turn it to fly along `dir` (flattened), at its current speed or at least
+## `min_speed`, keeping how it's rising or falling (the staff's bolt).
+func redirect(dir: Vector3, min_speed: float) -> void:
+	if holder:
+		return
+	if _simulates():
+		_apply_redirect(dir, min_speed)
+	else:
+		_request_redirect.rpc_id(Net.SERVER_ID, dir, min_speed)
+
+
+@rpc("any_peer", "reliable")
+func _request_redirect(dir: Vector3, min_speed: float) -> void:
+	if Net.is_server and not holder:
+		_apply_redirect(dir, min_speed)
+
+
+func _apply_redirect(dir: Vector3, min_speed: float) -> void:
+	dir.y = 0.0
+	if dir.length() < 0.01:
+		return
+	var flat_speed: float = Vector2(linear_velocity.x, linear_velocity.z).length()
+	var vertical: float = linear_velocity.y
+	linear_velocity = dir.normalized() * max(flat_speed, min_speed) + Vector3.UP * vertical
+	_curve_left = 0.0
+
+
+## Server: a raised shield took the ball: it drops dead in front of it.
+func _catch_on(shield: ShieldClass3D) -> void:
+	var facing: Vector3 = shield.wielder.global_transform.basis.z
+	facing.y = 0.0
+	linear_velocity = facing.normalized() * CATCH_SPEED + Vector3.UP * CATCH_POP
+	angular_velocity = Vector3.ZERO
+	_curve_left = 0.0
+
+
+func _update_curve(delta: float) -> void:
+	if _curve_left <= 0.0 or holder:
+		return
+	linear_velocity += _curve * (_curve_left / CURVE_TIME) * delta
+	_curve_left = max(_curve_left - delta, 0.0)
+
+
+## Server/offline: set it burning for `duration` (or keep it burning, if
+## longer), credited to `igniter_name`.
+func _ignite(duration: float, igniter_name: String) -> void:
+	_igniter_name = igniter_name
+	var new_burn: float = max(burn_left, duration)
+	if Net.match_synced:
+		_net_burn.rpc(new_burn)
+	else:
+		_net_burn(new_burn)
+
+
+@rpc("authority", "call_local", "reliable")
+func _net_burn(duration: float) -> void:
+	burn_left = duration
+
+
+## Server/offline: burn whoever holds it, a tick at a time.
+func _update_burn_damage(delta: float) -> void:
+	if burn_left <= 0.0 or not holder:
+		_burn_tick = 0.0
+		return
+	_burn_tick -= delta
+	if _burn_tick <= 0.0:
+		_burn_tick = BURN_TICK
+		holder.receive_burn(BURN_HOLD_DPS * BURN_TICK, _igniter())
+
+
+## Server/offline: a burning ball flying into someone hurts them (once in a
+## while each, not every contact while it rolls against them).
+func _burn_on_hit(player: PlayerClass3D) -> void:
+	if linear_velocity.length() < BURN_HIT_MIN_SPEED:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - _burned_msec.get(String(player.name), -BURN_HIT_COOLDOWN_MSEC) < BURN_HIT_COOLDOWN_MSEC:
+		return
+	_burned_msec[String(player.name)] = now
+	Combat.strike(player, linear_velocity, BURN_HIT_DAMAGE, BURN_HIT_KNOCKBACK, 1.0, 0.0, _igniter())
+
+
+func _igniter() -> PlayerClass3D:
+	if _igniter_name == "" or not Global.Game3D:
+		return null
+	return Global.Game3D.get_node_or_null(_igniter_name) as PlayerClass3D
+
+
+func _player_name(node: Node3D) -> String:
+	return String(node.name) if node is PlayerClass3D else ""
+
+
+## Every machine: glow and flicker while it burns.
+func _update_burn_visual(material: StandardMaterial3D) -> void:
+	var burning: bool = burn_left > 0.0
+	_burn_light.visible = burning
+	material.emission_enabled = burning
+	if not burning:
+		return
+	var flicker: float = 0.75 + 0.25 * sin(Time.get_ticks_msec() / 1000.0 * 18.0)
+	material.albedo_color = color_cur.lerp(BURN_COLOR, 0.7)
+	material.emission = BURN_COLOR
+	material.emission_energy_multiplier = 2.0 * flicker
+	_burn_light.light_energy = 1.5 * flicker

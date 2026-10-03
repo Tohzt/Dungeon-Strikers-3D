@@ -42,7 +42,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 4
+const PROTOCOL_VERSION := 5
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -137,10 +137,11 @@ func leave() -> void:
 	_request = ""
 
 
-## Leader only: ask the server to send everyone into the match.
+## Leader only: ask the server to send everyone into the match, played
+## with the leader's Players.team_count.
 func start_match() -> void:
 	if is_host:
-		_request_start.rpc_id(SERVER_ID)
+		_request_start.rpc_id(SERVER_ID, Players.team_count)
 
 
 ## Call once the match scene has spawned everyone.
@@ -340,10 +341,12 @@ func _version_mismatch(version: int) -> String:
 
 
 @rpc("any_peer", "reliable")
-func _request_start() -> void:
+func _request_start(team_count: int) -> void:
 	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0]:
-		print("Session %s started a match with %d players." % [access_code, peers.size()])
-		_start_match.rpc()
+		if not Players.TEAM_COUNTS.has(team_count):
+			team_count = Players.TEAM_COUNTS[0]
+		print("Session %s started a match with %d players in %d teams." % [access_code, peers.size(), team_count])
+		_start_match.rpc(team_count)
 
 
 @rpc("any_peer", "reliable")
@@ -373,8 +376,9 @@ func _sync_peers(ids: Array) -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _start_match() -> void:
+func _start_match(team_count: int) -> void:
 	in_match = true
+	Players.set_team_count(team_count)
 	if is_server:
 		get_tree().change_scene_to_packed(_match_scene)
 	match_started.emit()

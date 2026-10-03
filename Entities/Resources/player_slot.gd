@@ -10,6 +10,10 @@ const KEYBOARD_MOUSE := -1
 @export var device: int = KEYBOARD_MOUSE
 @export var team: int = 0
 @export var color: Color = Color.WHITE
+## Off (Simple): one Attack button that picks the hand itself, and a Guard
+## button for shields. On: each hand has its own buttons (see
+## PlayerInputHandler3D). Switchable per player from the pause menu.
+@export var advanced_controls: bool = false
 
 
 func uses_keyboard_mouse() -> bool:

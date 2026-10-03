@@ -22,6 +22,9 @@ Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
+ball_power = 2.5
+ball_lift = 0.05
+ball_exact = true
 weapon_name = "Dagger"
 base_damage = 25.0
 knockback_force = 6.0

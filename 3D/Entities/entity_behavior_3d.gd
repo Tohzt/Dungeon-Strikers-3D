@@ -21,6 +21,10 @@ var intelligence: int = 0
 var endurance: int = 0
 
 # Max Values
+## Max HP per point of strength. Players start at 10 strength = 250 HP, so a
+## sword (40) kills in 7 hits: kills win the match, so fights should end
+## before the ball has moved on without them.
+const HP_PER_STRENGTH := 25
 var hp_max: float = 1000.0
 var mana_max: float = 100.0
 var stamina_max: float = 5.0
@@ -217,7 +221,7 @@ func reset(active_status: bool = true) -> void:
 
 ## Max values from base stats and perks.
 func _update_max_stats() -> void:
-	hp_max = float(strength * 50) * _perk_stat(&"max_hp")  # Scale strength to HP
+	hp_max = float(strength * HP_PER_STRENGTH) * _perk_stat(&"max_hp")
 	mana_max = float(intelligence * 10)  # Scale intelligence to mana
 	stamina_max = float(endurance) * _perk_stat(&"max_stamina")
 

@@ -4,13 +4,15 @@ extends CanvasLayer
 ##
 ## Lists each local player's device: pick a player's row (with anything,
 ## e.g. the mouse), then press A or Enter on the device they should use.
-## Taking another local player's device swaps the two.
+## Taking another local player's device swaps the two. Next to it, each
+## player can switch between Simple and Advanced controls.
 
 const MAIN_MENU := "res://Menus/MainMenu/main_menu.tscn"
 
 @onready var resume_button: Button = %Resume
 
 var device_buttons: Dictionary[PlayerSlot, Button] = {}
+var controls_buttons: Dictionary[PlayerSlot, Button] = {}
 ## Everything _build_device_rows added, so it can be cleared.
 var device_rows: Array[Control] = []
 ## The slot waiting for a device press, if any.
@@ -77,36 +79,60 @@ func _build_device_rows() -> void:
 		node.queue_free()
 	device_rows.clear()
 	device_buttons.clear()
+	controls_buttons.clear()
 
 	var slots: Array[PlayerSlot] = Players.slots.duplicate()
 	slots.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.index < b.index)
 	var at: int = resume_button.get_index() + 1
 	var caption := Label.new()
 	device_rows.append(caption)
-	caption.text = "Devices"
+	caption.text = "Players"
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption.add_theme_font_size_override("font_size", 16)
 	resume_button.get_parent().add_child(caption)
 	resume_button.get_parent().move_child(caption, at)
 	for slot: PlayerSlot in slots:
 		at += 1
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(0, 40)
-		button.add_theme_font_size_override("font_size", 18)
-		button.add_theme_color_override("font_color", slot.color.lightened(0.4))
+		var row := HBoxContainer.new()
+		var button := _make_row_button(slot)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(_start_rebinding.bind(slot))
-		resume_button.get_parent().add_child(button)
-		resume_button.get_parent().move_child(button, at)
+		row.add_child(button)
+		var controls := _make_row_button(slot)
+		controls.custom_minimum_size.x = 210
+		controls.pressed.connect(_toggle_controls.bind(slot))
+		row.add_child(controls)
+		resume_button.get_parent().add_child(row)
+		resume_button.get_parent().move_child(row, at)
 		device_buttons[slot] = button
-		device_rows.append(button)
+		controls_buttons[slot] = controls
+		device_rows.append(row)
 	caption.visible = not slots.is_empty()
 	_refresh_device_rows()
+
+
+func _make_row_button(slot: PlayerSlot) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(0, 40)
+	button.add_theme_font_size_override("font_size", 18)
+	button.add_theme_color_override("font_color", slot.color.lightened(0.4))
+	return button
 
 
 func _refresh_device_rows() -> void:
 	for slot: PlayerSlot in device_buttons:
 		device_buttons[slot].text = "P%d: %s" % [slot.index + 1,
 			"Press A or Enter on new device..." if slot == rebinding else Players.device_name(slot.device)]
+		controls_buttons[slot].text = "Controls: %s" % ("Advanced" if slot.advanced_controls else "Simple")
+		controls_buttons[slot].tooltip_text = "Advanced: each hand has its own attack and guard buttons" \
+			if slot.advanced_controls else "Simple: one Attack button (picks the hand), Guard raises shields"
+
+
+## Simple <-> Advanced. Tells the slot's input handler, which lets go of
+## anything held under the old layout.
+func _toggle_controls(slot: PlayerSlot) -> void:
+	slot.advanced_controls = not slot.advanced_controls
+	Players.slot_changed.emit(slot)
 
 
 func _on_slot_changed(_slot: PlayerSlot) -> void:

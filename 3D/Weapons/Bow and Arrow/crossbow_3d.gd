@@ -49,6 +49,11 @@ func attack(aim_direction: Vector3) -> void:
 func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
 	var arrow: Arrow3D = arrow_scene.instantiate()
 	arrow.deals_damage = real
+	# The shot that breaks it is the big one (see Weapon3D.is_last_use)
+	if is_last_use():
+		arrow.damage *= FINAL_DAMAGE_MULTIPLIER
+		arrow.knockback *= FINAL_KNOCKBACK_MULTIPLIER
+		arrow.scale = Vector3.ONE * 1.6
 	wielder.get_parent().add_child(arrow)
 	arrow.global_position = muzzle
 	arrow.exclude_body(wielder)
