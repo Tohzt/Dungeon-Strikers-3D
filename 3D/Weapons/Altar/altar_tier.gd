@@ -9,3 +9,6 @@ class_name AltarTier extends Resource
 @export var arming_time: float = 0.0
 ## Seconds the altar stays empty after its weapon is taken.
 @export var respawn_delay: float = 3.0
+## Chance of each rarity (Common, Uncommon, Rare, Legendary) for a weapon
+## this tier stocks, as relative weights. See WeaponRarity.
+@export var rarity_weights: Array[float] = [1.0, 0.0, 0.0, 0.0]

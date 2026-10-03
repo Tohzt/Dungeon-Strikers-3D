@@ -13,9 +13,12 @@ class_name Arrow3D extends RigidBody3D
 ## on top of (and fighting with, in an unpredictable direction) any impulse
 ## applied from script - an Area3D overlap never generates that.
 
-@export var damage: float = 10.0
+@export var damage: float = 20.0
 @export var impact_impulse: float = 6.0
 @export var knockback: float = 10.0  # Shove speed given to a player it hits
+## Above 0, hitting the ball turns it to fly the way this was going, at
+## least this fast (m/s), instead of just shoving it (the staff's bolt).
+@export var ball_redirect_speed: float = 0.0
 ## Safety net: an arrow that somehow never hits anything is removed after this.
 @export var max_lifetime: float = 5.0
 
@@ -110,6 +113,10 @@ func _on_body_entered(body: Node) -> void:
 	# Players take damage + knockback (unless shield-blocked); physics props
 	# (the ball, a placeholder dummy) just get shoved - same as every attack.
 	if deals_damage:
-		Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
+		if body is Ball3D and ball_redirect_speed > 0.0:
+			body.redirect(travel_dir, ball_redirect_speed)
+			body.touched_by(shooter)
+		else:
+			Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
 
 	queue_free()

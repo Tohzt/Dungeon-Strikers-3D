@@ -12,11 +12,20 @@ class_name WeaponClass3D extends Weapon3D
 # tip up to point forward from a Y-aligned mesh; a flat shield should stay
 # upright facing outward instead, so subclasses override this.
 @export var held_pitch: float = deg_to_rad(90)
+## Held upright facing the way the wielder faces, and swung as an overhead
+## chop (pitching forward) instead of a sideways slash. Set held_pitch to 0
+## with this so it rests standing up; the blade's edge should face local +Z.
+@export var vertical_swing: bool = false
+## Metres above the hand's rest height to hold this (the hand comes with it).
+@export var held_lift: float = 0.0
 
 var prev_hand_pos: Vector3
 # Extra yaw at the wrist on top of the arm's angle, set by the wielder while
 # swinging so the blade whips through instead of staying in line with the arm.
 var wrist_yaw: float = 0.0
+# Extra pitch on top of held_pitch, set by the wielder while a vertical_swing
+# weapon chops: negative raises it back overhead, positive brings it down.
+var wrist_pitch: float = 0.0
 
 
 ## Reset the hand-follow tracking to the real hand position the moment we're
@@ -25,6 +34,10 @@ var wrist_yaw: float = 0.0
 func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 	super.equip(new_wielder, hand)
 	wrist_yaw = 0.0
+	wrist_pitch = 0.0
+	# A throw tumbles it end over end (about local Z): come up the right way
+	# up at once, not only once the hand moves (see _physics_process)
+	rotation = Vector3(held_pitch, rotation.y, 0.0)
 	if hand:
 		prev_hand_pos = hand.global_position
 
@@ -43,7 +56,7 @@ func _physics_process(delta: float) -> void:
 	if not simulates() or not is_held or is_thrown or not held_hand:
 		return
 
-	var target_pos: Vector3 = held_hand.global_position
+	var target_pos: Vector3 = held_hand.global_position + Vector3.UP * held_lift
 	var current_pos: Vector3 = global_position
 
 	# Calculate hand velocity (estimate from previous frame)
@@ -57,6 +70,12 @@ func _physics_process(delta: float) -> void:
 
 	# Store current hand position for next frame
 	prev_hand_pos = target_pos
+
+	# A chop pitches the weapon while the hand barely moves, so orient it
+	# before the settled early-out below.
+	if wielder and vertical_swing:
+		# Faces where the wielder faces, so the chop comes down in front
+		rotation = Vector3(held_pitch + wrist_pitch, wielder.global_rotation.y, 0.0)
 
 	var offset: Vector3 = predicted_target - current_pos
 	var distance: float = offset.length()
@@ -76,7 +95,7 @@ func _physics_process(delta: float) -> void:
 
 	# Orient the weapon: Y rotation matches the angle from the wielder to the
 	# hand it's equipped into. This makes the weapon rotate as that hand swings.
-	if wielder:
+	if wielder and not vertical_swing:
 		var player_pos: Vector3 = wielder.global_position
 		var direction: Vector3 = (target_pos - player_pos).normalized()
 
@@ -85,5 +104,4 @@ func _physics_process(delta: float) -> void:
 		if horizontal_dir.length() > 0.001:
 			# atan2(x, z) gives us the yaw angle in Godot's coordinate system
 			var yaw: float = atan2(horizontal_dir.x, horizontal_dir.y)
-			rotation.y = yaw + wrist_yaw
-			rotation.x = held_pitch
+			rotation = Vector3(held_pitch, yaw + wrist_yaw, 0.0)

@@ -35,6 +35,7 @@ weapon_name = "Crossbow"
 
 [node name="WeaponProperties" parent="." unique_id=937272670 instance=ExtResource("3_properties")]
 weapon_name = "Crossbow"
+durability_scale = 1.5
 
 [node name="crossbow_common_gltf" parent="." unique_id=613123724 instance=ExtResource("4_cn188")]
 transform = Transform3D(1.75, 0, 0, 0, 1.75, 0, 0, 0, 1.75, 0, 0, 0)

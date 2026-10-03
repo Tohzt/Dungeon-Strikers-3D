@@ -9,6 +9,7 @@ enum Category {
 	STRIKER,   ## Offered to the team that scored
 	COMEBACK,  ## Offered to the teams that were scored on
 	GENERAL,   ## Offered to everyone
+	HUNTER,    ## Offered to whoever got the most player kills in the round
 }
 
 const CATEGORY_NAMES: Dictionary[Category, String] = {
@@ -17,6 +18,7 @@ const CATEGORY_NAMES: Dictionary[Category, String] = {
 	Category.STRIKER: "Striker",
 	Category.COMEBACK: "Comeback",
 	Category.GENERAL: "General",
+	Category.HUNTER: "Hunter",
 }
 const CATEGORY_COLORS: Dictionary[Category, Color] = {
 	Category.OFFENSE: Color(0.9, 0.25, 0.2),
@@ -24,6 +26,7 @@ const CATEGORY_COLORS: Dictionary[Category, Color] = {
 	Category.STRIKER: Color(0.95, 0.7, 0.15),
 	Category.COMEBACK: Color(0.65, 0.4, 0.95),
 	Category.GENERAL: Color(0.75, 0.75, 0.75),
+	Category.HUNTER: Color(0.85, 0.15, 0.45),
 }
 
 @export var title: String = ""

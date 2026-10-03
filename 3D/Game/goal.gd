@@ -4,9 +4,13 @@ class_name Goal3D extends StaticBody3D
 ## Online only the server (which simulates the ball) counts goals.
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
+## scoring_team value: the point goes to whoever last played the ball
+## (Ball3D.last_team), unless that's this goal's own team.
+const LAST_TOUCH := -1
 
 ## The team (PlayerSlot.team) awarded a point when the ball goes in here,
-## i.e. the team attacking this goal.
+## i.e. the team attacking this goal. LAST_TOUCH when several teams attack
+## it (four-team matches; Game3D sets that up).
 @export var scoring_team: int = 0
 ## The team defending this goal, i.e. whose side it's on. Colors the net.
 @export var owner_team: int = 1:
@@ -28,8 +32,15 @@ func _ready() -> void:
 
 
 func _on_net_body_entered(body: Node3D) -> void:
-	if body is Ball3D and (not Net.in_session() or Net.is_server):
-		Global.Game3D.score_goal(scoring_team, body)
+	if not body is Ball3D or (Net.in_session() and not Net.is_server):
+		return
+	var team: int = scoring_team
+	if team == LAST_TOUCH:
+		team = body.last_team
+	if team < 0 or team == owner_team:
+		Global.Game3D.return_ball(body)  # Own goal, or nobody played it
+	else:
+		Global.Game3D.score_goal(team, body)
 
 
 ## Tints the net with the owning team's color, keeping its transparency.

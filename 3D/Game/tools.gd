@@ -19,6 +19,12 @@ class_name GameTools3D extends Node
 	preload("res://3D/Weapons/Sword/sword_3d.tscn"),
 	preload("res://3D/Weapons/Bow and Arrow/bow_3d.tscn"),
 	preload("res://3D/Weapons/Shield/Shield_3D.tscn"),
+	preload("res://3D/Weapons/Dagger/dagger_3d.tscn"),
+	preload("res://3D/Weapons/Axe/axe_3d.tscn"),
+	preload("res://3D/Weapons/Axe/greataxe_3d.tscn"),
+	preload("res://3D/Weapons/Hammer/hammer_3d.tscn"),
+	preload("res://3D/Weapons/Staff/staff_3d.tscn"),
+	preload("res://3D/Weapons/Torch/torch_3d.tscn"),
 ]
 ## How far each row of stands sits from the middle, towards the side walls.
 @export var row_offset: float = 11.5

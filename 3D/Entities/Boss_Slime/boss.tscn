@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dq1toy2g128vu"]
 
-[ext_resource type="Script" uid="uid://b21jpuhiw8ol4" path="res://3D/Entities/Boss/boss.gd" id="1_boss"]
+[ext_resource type="Script" uid="uid://b21jpuhiw8ol4" path="res://3D/Entities/Boss_Slime/boss.gd" id="1_boss"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_boss"]
 height = 4.0

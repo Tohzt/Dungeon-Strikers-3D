@@ -25,6 +25,34 @@ var can_pickup_dur_in_sec: float = 1.0
 
 var throw_spin_direction: float = 1.0
 
+# Durability: each use (a swing or throw that hits a player, boss or
+# minion, a block, a shot) wears it by one; at 0 it breaks. How many uses it gets
+# depends on its rarity. Worn down to WORN_RATIO it pulses red. Online the
+# machine simulating it wears it and tells everyone the new value.
+const WORN_RATIO := 0.25
+const WORN_COLOR := Color(1.0, 0.1, 0.05, 0.5)
+const WORN_PULSE_SPEED := 8.0
+# Breaking is a payoff, not a fizzle: the use that breaks a weapon (its last
+# swing or throw to land, last shot, last block) hits FINAL_* harder, and
+# then the weapon shatters in a burst (see WeaponProperties3D) that hurts and
+# shoves everyone nearby but its wielder's team. On that last use it pulses
+# white-hot, so both sides can see the big hit coming.
+const FINAL_DAMAGE_MULTIPLIER := 2.0
+const FINAL_KNOCKBACK_MULTIPLIER := 1.5
+const LAST_USE_COLOR := Color(1.0, 0.8, 0.35, 0.8)
+const LAST_USE_PULSE_SPEED := 16.0
+const SHATTER_COLOR := Color(0.75, 0.75, 0.8)
+const BREAK_TIME := 0.15
+## Dropped on death: tossed this hard, up and away.
+const DROP_IMPULSE := 3.0
+var rarity: int = WeaponRarity.Tier.COMMON
+var max_durability: int = 1
+var durability: int = 1
+var is_broken: bool = false
+var _worn_this_action: bool = false
+var _glow: StandardMaterial3D = null
+var _worn_glow: StandardMaterial3D = null
+
 # Hitting things: a swing is live for a short window after a tap-attack, a
 # throw while the weapon is still flying fast. Each target is hit once per
 # swing/throw. Damage and shove come from Behavior (base_damage/knockback_force).
@@ -38,8 +66,11 @@ var _hit_this_action: Array[Node] = []
 
 # A swing knocks things the way the blade is moving (not just away from the
 # wielder), harder the faster it's going: SWING_REFERENCE_SPEED hits for the
-# weapon's usual knockback, scaled within SWING_POWER_MIN..MAX.
+# weapon's usual knockback, scaled within SWING_POWER_MIN..MAX. That's for a
+# REFERENCE_SWING_DURATION swing; a slower weapon's blade is expected to move
+# slower, so a full-speed greataxe swing isn't weaker for being slow.
 const SWING_REFERENCE_SPEED := 18.0
+const REFERENCE_SWING_DURATION := 0.25
 const SWING_POWER_MIN := 0.6
 const SWING_POWER_MAX := 1.0
 const SOLID_BOUNCE := 0.25
@@ -49,6 +80,7 @@ var _blade_tracked: bool = false
 ## Clang off a wall only when the blade swings into it, not when a sword
 ## resting against it starts a swing already inside.
 var _blade_in_wall: bool = false
+var _swing_reference_speed: float = SWING_REFERENCE_SPEED
 
 const THROWN_SETTLE_SPEED: float = 0.4
 const DEFAULT_THROW_FORCE: float = 15.0
@@ -71,9 +103,11 @@ var _net_motion_sender: int = 0
 
 func _ready() -> void:
 	_set_props()
+	set_rarity(rarity)
 
 
 func _process(delta: float) -> void:
+	_update_worn_glow()
 	_handle_pickup_cooldown(delta)
 	_send_pose()
 	# A held replica is posed by its wielder, right after the wielder moves
@@ -135,9 +169,16 @@ func _handle_thrown_settle() -> void:
 ## Makes the next `duration` seconds of this held weapon's swing able to hit.
 func start_swing(duration: float) -> void:
 	swing_time_left = duration
+	_swing_reference_speed = SWING_REFERENCE_SPEED * REFERENCE_SWING_DURATION / max(duration, 0.01)
 	_hit_this_action.clear()
+	_worn_this_action = false
 	_blade_tracked = false
 	_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
+
+
+## The wielder rolled away or got staggered: this swing hits nothing more.
+func cancel_swing() -> void:
+	swing_time_left = 0.0
 
 
 func _update_hits(delta: float) -> void:
@@ -183,6 +224,8 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 		exclude.append(attacker.get_rid())
 	var contact: bool = false
 	var solid: bool = false
+	var landed: bool = false
+	var final_use: bool = is_last_use()
 	for body: Node3D in Combat.overlaps(get_world_3d(), Collision.shape, Collision.global_transform, exclude):
 		# Never hit our own side's gear (e.g. the wielder's other-hand weapon)
 		if body in _hit_this_action or (body is Weapon3D and attacker and body.wielder == attacker):
@@ -193,13 +236,26 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 		var knockback: float = Behavior.knockback_force if Behavior else 8.0
 		if not thrown:
 			dir = _swing_hit_direction(dir)
-			knockback *= clamp(_blade_velocity.length() / SWING_REFERENCE_SPEED, SWING_POWER_MIN, SWING_POWER_MAX)
+			knockback *= clamp(_blade_velocity.length() / _swing_reference_speed, SWING_POWER_MIN, SWING_POWER_MAX)
 			contact = true
 			solid = solid or Combat.is_solid(body)
+		if body is Ball3D and Behavior:
+			# Each weapon plays the ball its own way (see WeaponBehavior3D.hit_ball)
+			var travel := Vector3.ZERO if thrown else Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
+			Behavior.hit_ball(body, dir, travel, knockback, attacker)
+			continue
+		if final_use:
+			damage *= FINAL_DAMAGE_MULTIPLIER
+			knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
+		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D
 	if contact:
 		_swing_contact(solid)
+	# One use per swing or throw, however many it hits
+	if landed and not _worn_this_action:
+		_worn_this_action = true
+		wear()
 
 
 ## Half away from the wielder, half along the blade's travel, so a slash
@@ -315,6 +371,7 @@ func _let_go_thrown(spin_direction: float) -> void:
 	thrower = wielder
 	swing_time_left = 0.0
 	_hit_this_action.clear()
+	_worn_this_action = false
 
 	if Behavior:
 		Behavior.unequip()
@@ -341,6 +398,135 @@ func _clear_from_wielder() -> void:
 		wielder.held_weapon_left = null
 	if wielder.held_weapon_right == self:
 		wielder.held_weapon_right = null
+
+
+# ===== RARITY & DURABILITY =====
+
+## Make this a `tier` weapon, at full durability. Call on every machine.
+func set_rarity(tier: int) -> void:
+	rarity = clampi(tier, 0, WeaponRarity.Tier.size() - 1)
+	var durability_scale: float = Properties.durability_scale if Properties else 1.0
+	max_durability = maxi(roundi(WeaponRarity.DURABILITY[rarity] * durability_scale), 1)
+	durability = max_durability
+	_glow = WeaponRarity.apply_glow(self, rarity)
+	_worn_glow = null
+
+
+## One use's worth of wear, on the machine simulating the weapon. Breaks it
+## (everywhere) at 0.
+func wear(amount: int = 1) -> void:
+	if is_broken or not simulates():
+		return
+	var left: int = maxi(durability - amount, 0)
+	if Net.match_synced:
+		_net_durability.rpc(left)
+	else:
+		_net_durability(left)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _net_durability(value: int) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender != 0 and sender != get_multiplayer_authority():
+		return
+	durability = value
+	if durability <= 0:
+		_break()
+
+
+## The next use breaks it.
+func is_last_use() -> bool:
+	return not is_broken and durability <= 1
+
+
+func is_worn() -> bool:
+	return durability <= maxi(ceili(max_durability * WORN_RATIO), 1)
+
+
+## Nearly broken: pulse red over (in place of) its rarity glow; white-hot,
+## and faster, on its last use.
+func _update_worn_glow() -> void:
+	if is_broken or not is_worn():
+		return
+	if not _worn_glow:
+		_worn_glow = StandardMaterial3D.new()
+		_worn_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_worn_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_worn_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
+			(mesh as MeshInstance3D).material_overlay = _worn_glow
+	var last: bool = is_last_use()
+	var color: Color = LAST_USE_COLOR if last else WORN_COLOR
+	var speed: float = LAST_USE_PULSE_SPEED if last else WORN_PULSE_SPEED
+	var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * speed)
+	_worn_glow.albedo_color = Color(color, color.a * pulse)
+
+
+## Out of durability, on every machine: out of the wielder's hand, out of
+## the physics world, a quick shrink, gone - in a burst of shards. The
+## machine simulating it decides who the burst hits.
+func _break() -> void:
+	if is_broken:
+		return
+	is_broken = true
+	var breaker: Node3D = wielder if wielder else thrower
+	var radius: float = Properties.break_burst_radius if Properties else 2.5
+	if simulates():
+		_shatter_burst(breaker, radius)
+	var shard_color: Color = WeaponRarity.COLORS[rarity] if rarity != WeaponRarity.Tier.COMMON else SHATTER_COLOR
+	WeaponShatter3D.spawn(get_parent(), global_position, Color(shard_color, 1.0), radius)
+	if wielder:
+		unequip()
+	swing_time_left = 0.0
+	is_thrown = false
+	process_mode = Node.PROCESS_MODE_DISABLED  # Leaves the physics world at once
+	# Not bound to this node: a disabled node's own tweens don't run
+	var tween: Tween = get_tree().create_tween()
+	tween.tween_property(self, "scale", Vector3.ONE * 0.01, BREAK_TIME)
+	tween.tween_callback(queue_free)
+
+
+## Hurt and shove everything in the break burst but `breaker` (whoever held
+## or threw it) and their team, who get the credit.
+func _shatter_burst(breaker: Node3D, radius: float) -> void:
+	if not is_inside_tree() or not Properties:
+		return
+	var sphere := SphereShape3D.new()
+	sphere.radius = radius
+	var exclude: Array[RID] = [get_rid()]
+	if breaker is CollisionObject3D:
+		exclude.append(breaker.get_rid())
+	var origin: Vector3 = global_position
+	for body: Node3D in Combat.overlaps(get_world_3d(), sphere, Transform3D(Basis(), origin), exclude):
+		if _on_team_of(body, breaker) or (body is Weapon3D and breaker and body.wielder == breaker):
+			continue
+		Combat.strike(body, body.global_position - origin, Properties.break_burst_damage,
+			Properties.break_burst_knockback, HIT_POP, -1.0, breaker)
+
+
+static func _on_team_of(body: Node3D, breaker: Node3D) -> bool:
+	return body is PlayerClass3D and breaker is PlayerClass3D and body.slot and breaker.slot \
+		and body.slot.team == breaker.slot.team
+
+
+## The wielder died (on their machine): let go, tossed up and out a little,
+## where anyone can pick it up once the pickup cooldown is over.
+func drop() -> void:
+	if not wielder:
+		return
+	var away: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	unequip()
+	if Net.match_synced:
+		_net_dropped.rpc()
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	apply_central_impulse((away + Vector3.UP * 1.5).normalized() * DROP_IMPULSE * mass)
+
+
+@rpc("any_peer", "reliable")
+func _net_dropped() -> void:
+	if _is_from_owner() and wielder:
+		unequip()
 
 
 # ===== NETWORK =====
