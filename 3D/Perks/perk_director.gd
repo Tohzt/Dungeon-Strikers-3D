@@ -156,6 +156,14 @@ func team_has_offer(team: int) -> bool:
 	return false
 
 
+## Offline: a bot takes a random card from its hand, without pausing.
+func auto_pick(player: PlayerClass3D) -> void:
+	if Net.in_session() or not can_open(player):
+		return
+	var hand: PackedInt32Array = offers[player.name]
+	_apply_pick(player.name, hand[randi() % hand.size()])
+
+
 ## `player` activated their altar: pause everyone and show their cards.
 ## Call on the machine that controls the player.
 func open_for(player: PlayerClass3D) -> void:

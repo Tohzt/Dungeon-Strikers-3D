@@ -35,6 +35,9 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 	super.equip(new_wielder, hand)
 	wrist_yaw = 0.0
 	wrist_pitch = 0.0
+	# A throw tumbles it end over end (about local Z): come up the right way
+	# up at once, not only once the hand moves (see _physics_process)
+	rotation = Vector3(held_pitch, rotation.y, 0.0)
 	if hand:
 		prev_hand_pos = hand.global_position
 
@@ -72,8 +75,7 @@ func _physics_process(delta: float) -> void:
 	# before the settled early-out below.
 	if wielder and vertical_swing:
 		# Faces where the wielder faces, so the chop comes down in front
-		rotation.y = wielder.global_rotation.y
-		rotation.x = held_pitch + wrist_pitch
+		rotation = Vector3(held_pitch + wrist_pitch, wielder.global_rotation.y, 0.0)
 
 	var offset: Vector3 = predicted_target - current_pos
 	var distance: float = offset.length()
@@ -102,5 +104,4 @@ func _physics_process(delta: float) -> void:
 		if horizontal_dir.length() > 0.001:
 			# atan2(x, z) gives us the yaw angle in Godot's coordinate system
 			var yaw: float = atan2(horizontal_dir.x, horizontal_dir.y)
-			rotation.y = yaw + wrist_yaw
-			rotation.x = held_pitch
+			rotation = Vector3(held_pitch, yaw + wrist_yaw, 0.0)

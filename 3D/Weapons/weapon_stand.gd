@@ -72,6 +72,12 @@ func can_give_to(player: PlayerClass3D) -> bool:
 		and (not player.is_hand_occupied(false) or not player.is_hand_occupied(true))
 
 
+## Whether `player` could take a weapon here once in reach (bots use this to
+## pick a stand to walk to).
+func has_weapon_for(player: PlayerClass3D) -> bool:
+	return _is_stocked() and _may_take(player)
+
+
 ## Whether there's a weapon here ready to hand out.
 func _is_stocked() -> bool:
 	return weapon_scene != null and cooldown_left <= 0.0

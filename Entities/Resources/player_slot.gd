@@ -5,6 +5,8 @@ class_name PlayerSlot extends Resource
 
 ## Sentinel device id for the keyboard + mouse player. Joypad ids are >= 0.
 const KEYBOARD_MOUSE := -1
+## Device id for a computer-controlled seat (see is_bot).
+const BOT := -3
 
 @export var index: int = 0
 @export var device: int = KEYBOARD_MOUSE
@@ -14,6 +16,8 @@ const KEYBOARD_MOUSE := -1
 ## button for shields. On: each hand has its own buttons (see
 ## PlayerInputHandler3D). Switchable per player from the pause menu.
 @export var advanced_controls: bool = false
+## Played by the computer (BotInputHandler3D) instead of a device.
+@export var is_bot: bool = false
 
 
 func uses_keyboard_mouse() -> bool:

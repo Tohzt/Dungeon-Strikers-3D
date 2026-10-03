@@ -15,6 +15,9 @@ const COPIED_FEEDBACK_TIME := 1.5
 @onready var cards: HBoxContainer = %Cards
 @onready var start_button: Button = %Start
 @onready var lobby_teams: Button = %LobbyTeams
+@onready var lobby_bots: Button = %LobbyBots
+@onready var solo_teams: Button = %SoloTeams
+@onready var solo_bots: Button = %SoloBots
 @onready var online: Control = %Online
 @onready var host_setup: Control = %HostSetup
 @onready var join_setup: Control = %JoinSetup
@@ -60,6 +63,9 @@ func _ready() -> void:
 	start_button.pressed.connect(_start_game)
 	lobby_teams.pressed.connect(_cycle_team_count)
 	online_teams.pressed.connect(_cycle_team_count)
+	solo_teams.pressed.connect(_cycle_team_count)
+	lobby_bots.pressed.connect(_toggle_bots)
+	solo_bots.pressed.connect(_toggle_bots)
 	%LobbyBack.pressed.connect(_back_to_home)
 
 	%HostButton.pressed.connect(_open_host_setup)
@@ -199,6 +205,12 @@ func _cycle_team_count() -> void:
 	_refresh_online_lobby()
 
 
+## Bots button: fill the empty seats with computer players, or don't.
+func _toggle_bots() -> void:
+	Players.fill_with_bots = not Players.fill_with_bots
+	_refresh_lobby()
+
+
 func _build_cards(container: HBoxContainer, styles: Array[StyleBoxFlat], labels: Array[Label]) -> void:
 	for i in Players.MAX_PLAYERS:
 		var card := PanelContainer.new()
@@ -230,9 +242,17 @@ func _refresh_lobby() -> void:
 			card_labels[i].text = "P%d\n%s" % [i + 1, Players.device_name(slot.device)]
 		else:
 			card_styles[i].bg_color = Color(1, 1, 1, 0.06)
-			card_labels[i].text = "Press A or Enter\nto join"
-	start_button.disabled = Players.slots.size() < MIN_LOBBY_PLAYERS
-	lobby_teams.text = "Teams: " + Players.format_name(maxi(Players.slots.size(), MIN_LOBBY_PLAYERS))
+			card_labels[i].text = ("Bot\n" if Players.fill_with_bots else "") + "Press A or Enter\nto join"
+	var needed: int = 1 if Players.fill_with_bots else MIN_LOBBY_PLAYERS
+	start_button.disabled = Players.slots.size() < needed
+	start_button.text = "Start" if Players.fill_with_bots else "Start (2+ players)"
+	# With bots every seat gets filled
+	var seats: int = Players.MAX_PLAYERS if Players.fill_with_bots else maxi(Players.slots.size(), MIN_LOBBY_PLAYERS)
+	lobby_teams.text = "Teams: " + Players.format_name(seats)
+	solo_teams.text = "Teams: " + Players.format_name(Players.MAX_PLAYERS if Players.fill_with_bots else 1)
+	var bots_text: String = "Bots: " + ("On (fill empty seats)" if Players.fill_with_bots else "Off")
+	lobby_bots.text = bots_text
+	solo_bots.text = bots_text
 
 
 # ===== ONLINE =====

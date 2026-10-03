@@ -8,7 +8,8 @@ var action_left: bool = false
 var action_right: bool = false
 var action_heavy_left: bool = false
 var action_heavy_right: bool = false
-## Simple controls' Throw button, routed to one hand like Attack.
+## Simple controls: hold Throw and click a hand's attack button (left/right
+## mouse, LB/RB) to throw that hand's weapon; held to charge, thrown on release.
 var throw_left: bool = false
 var throw_right: bool = false
 var interact: bool = false
@@ -41,8 +42,8 @@ var slot: PlayerSlot = null
 var _attack_was_pressed: bool = false
 var _attack_hand_left: bool = false
 var _last_attack_left: bool = true
-var _throw_was_pressed: bool = false
-var _throw_hand_left: bool = false
+var _left_click_was_pressed: bool = false
+var _right_click_was_pressed: bool = false
 
 ## Set while this player uses the souls-like controls: movement turns with
 ## this camera, and the player faces where they walk or their lock-on target.
@@ -55,7 +56,8 @@ func action(base: StringName) -> StringName:
 
 
 ## Simple controls (the default): Attack, Guard and Throw buttons, which this
-## turns into the per-hand presses the player reads; Attack swings on press.
+## turns into the per-hand presses the player reads; Attack swings on press,
+## and holding Throw turns the left/right attack buttons into per-hand throws.
 ## Advanced: every hand has its own attack and heavy buttons, and a hold
 ## throws. See PlayerSlot.advanced_controls.
 func uses_simple_controls() -> bool:
@@ -131,25 +133,34 @@ func _process(delta: float) -> void:
 	_handle_input_dodge(delta)
 	_handle_input_look(delta)
 
-## Attack and Throw each go to one hand for the whole press, chosen when it
-## goes down (Throw takes what Attack would swing next); Guard raises any
-## shield held.
+## Attack goes to one hand for the whole press, chosen when it goes down;
+## Guard raises any shield held. While Throw is held, neither works: the
+## left/right attack buttons throw that hand's weapon instead.
 func _handle_simple_controls() -> void:
-	var attack: bool = Input.is_action_pressed(action("attack"))
-	if attack and not _attack_was_pressed:
+	var throw_mode: bool = Input.is_action_pressed(action("throw"))
+	_apply_simple_buttons(Input.is_action_pressed(action("attack")), Input.is_action_pressed(action("guard")),
+		throw_mode, Input.is_action_pressed(action("attack_left")), Input.is_action_pressed(action("attack_right")))
+
+
+## Simple controls' buttons (held or not) into the per-hand presses the player
+## reads. `throw_mode` is Throw held; `left_click`/`right_click` then throw
+## that hand. Only presses that start in the right mode count, so letting go
+## of Throw mid-click doesn't swing, and a click held from before doesn't
+## throw. Bots press them through here too.
+func _apply_simple_buttons(attack: bool, guard: bool, throw_mode: bool, left_click: bool, right_click: bool) -> void:
+	var attacking: bool = attack and not throw_mode and (action_left or action_right or not _attack_was_pressed)
+	if attacking and not (action_left or action_right):
 		_attack_hand_left = _pick_attack_hand()
 		_last_attack_left = _attack_hand_left
 	_attack_was_pressed = attack
-	action_left = attack and _attack_hand_left
-	action_right = attack and not _attack_hand_left
-	var throw: bool = Input.is_action_pressed(action("throw"))
-	if throw and not _throw_was_pressed:
-		_throw_hand_left = _pick_attack_hand()
-	_throw_was_pressed = throw
-	throw_left = throw and _throw_hand_left
-	throw_right = throw and not _throw_hand_left
-	var guard: bool = Input.is_action_pressed(action("guard"))
+	action_left = attacking and _attack_hand_left
+	action_right = attacking and not _attack_hand_left
+	throw_left = throw_mode and left_click and (throw_left or not _left_click_was_pressed)
+	throw_right = throw_mode and right_click and (throw_right or not _right_click_was_pressed)
+	_left_click_was_pressed = left_click
+	_right_click_was_pressed = right_click
 	var player := Master as PlayerClass3D
+	guard = guard and not throw_mode
 	action_heavy_left = guard and player != null and player.held_weapon_left is ShieldClass3D
 	action_heavy_right = guard and player != null and player.held_weapon_right is ShieldClass3D
 

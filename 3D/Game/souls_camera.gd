@@ -24,10 +24,16 @@ class_name SoulsCamera3D extends Node3D
 @export var lock_break_ratio: float = 1.3
 @export var lock_ease: float = 6.0
 @export var lock_pitch_deg: float = -15.0
+## While locked on, flicking the right stick this far left/right switches
+## target; it has to come back under flick_reset before the next flick.
+@export var flick_threshold: float = 0.7
+@export var flick_reset: float = 0.3
 
 ## Set before adding to the tree.
 var player: PlayerClass3D
 var lock_target: Node3D = null
+## The right stick is still out from the last target-switching flick.
+var _flick_held: bool = false
 
 var spring: SpringArm3D
 var camera: Camera3D
@@ -75,6 +81,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif player.Input_Handler and event.is_action_pressed(player.Input_Handler.action("target")):
 		_toggle_lock()
 		get_viewport().set_input_as_handled()
+	elif lock_target and player.Input_Handler and event.is_action_pressed(player.Input_Handler.action("target_scroll")):
+		# Wheel down steps right, wheel up left
+		var up: bool = event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_WHEEL_UP
+		_cycle_lock(-1 if up else 1)
+		get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
@@ -86,6 +97,7 @@ func _process(delta: float) -> void:
 		return
 
 	_check_lock()
+	_check_flick()
 	if lock_target:
 		var to_target: Vector3 = lock_target.global_position - player.global_position
 		if Vector2(to_target.x, to_target.z).length() > 0.05:
@@ -168,6 +180,44 @@ func _toggle_lock() -> void:
 	_set_lock(best)
 
 
+## Switch to the next target in range to the right (direction 1) or left
+## (-1) of the current one, as seen from the camera, wrapping around.
+func _cycle_lock(direction: int) -> void:
+	if not lock_target:
+		return
+	var forward: Vector3 = -camera.global_basis.z
+	forward.y = 0.0
+	var right: Vector3 = camera.global_basis.x
+	right.y = 0.0
+	var in_range: Array[Node3D] = []
+	for candidate: Node3D in _lock_candidates():
+		if candidate == lock_target or player.global_position.distance_to(candidate.global_position) <= lock_range:
+			in_range.append(candidate)
+	if in_range.size() < 2:
+		return
+	# Left to right across the view (straight behind at either end)
+	var angle_of := func(node: Node3D) -> float:
+		var offset: Vector3 = node.global_position - camera.global_position
+		return atan2(right.dot(offset), forward.dot(offset))
+	in_range.sort_custom(func(a: Node3D, b: Node3D) -> bool: return angle_of.call(a) < angle_of.call(b))
+	var index: int = in_range.find(lock_target)
+	_set_lock(in_range[posmod(index + direction, in_range.size())])
+
+
+## Controller: while locked on, a flick of the right stick left or right
+## switches target (it doesn't turn the camera then).
+func _check_flick() -> void:
+	var handler: PlayerInputHandler3D = player.Input_Handler
+	if not handler or handler.uses_mouse():
+		return
+	var x: float = handler.get_aim_stick().x
+	if _flick_held:
+		_flick_held = abs(x) > flick_reset
+	elif lock_target and abs(x) >= flick_threshold:
+		_flick_held = true
+		_cycle_lock(1 if x > 0.0 else -1)
+
+
 ## Let go of a target that's been defeated, left, or got too far away.
 func _check_lock() -> void:
 	if lock_target and (not is_instance_valid(lock_target) or not _lock_candidates().has(lock_target) \
@@ -177,6 +227,8 @@ func _check_lock() -> void:
 
 func _set_lock(target: Node3D) -> void:
 	lock_target = target
+	# A stick already pushed out when locking on isn't a flick
+	_flick_held = true
 	# Weapon swings and throws aim at the Entity's target (PlayerClass3D._get_aim_direction)
 	if player.Entity:
 		player.Entity.target = target

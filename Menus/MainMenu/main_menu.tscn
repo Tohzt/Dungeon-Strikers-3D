@@ -87,6 +87,22 @@ theme_override_font_sizes/font_size = 22
 text = "Choose your device"
 horizontal_alignment = 1
 
+[node name="SoloTeams" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Teams: 2"
+
+[node name="SoloBots" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Bots: Off"
+
 [node name="KeyboardMouse" type="Button" parent="Center/Content/SinglePlayer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
@@ -133,6 +149,14 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
+
+[node name="LobbyBots" type="Button" parent="Center/Content/Lobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Bots: Off"
 
 [node name="Start" type="Button" parent="Center/Content/Lobby"]
 unique_name_in_owner = true

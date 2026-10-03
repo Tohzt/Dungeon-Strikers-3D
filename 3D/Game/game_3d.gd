@@ -20,6 +20,7 @@ signal match_won(team: int)
 
 ## Matches Players.TEAM_COLORS.
 const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
+const BOT_INPUT := preload("res://3D/Entities/Handlers/bot_input_handler_3d.gd")
 ## Which side of the arena each team starts on and defends (its goal and
 ## altar): Blue left, Red right, Green nearest the camera, Yellow far.
 const TEAM_SIDES: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.BACK, Vector3.FORWARD]
@@ -108,6 +109,8 @@ func _ready() -> void:
 	else:
 		if Players.slots.is_empty():
 			Players.join_default_devices(default_player_count)
+		if Players.fill_with_bots:
+			Players.fill_bots()
 		for slot: PlayerSlot in Players.slots:
 			_spawn_player(slot)
 	_setup_scores()
@@ -154,6 +157,8 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 	player.position = _spawn_position(slot)
 	if peer_id:
 		player.setup_network(peer_id)
+	if slot.is_bot:
+		player.Input_Handler.set_script(BOT_INPUT)
 	add_child(player)
 	if peer_id and not player.is_multiplayer_authority():
 		player.set_remote()
@@ -175,7 +180,8 @@ func _spawn_position(slot: PlayerSlot) -> Vector3:
 	for seat: int in maxi(seat_count, slot.index + 1):
 		if Players.team_for_seat(seat) == slot.team:
 			team_size += 1
-	var rank: int = slot.index / Players.team_count
+	@warning_ignore("integer_division")
+	var rank: int = slot.index / Players.team_count  # Seats take turns between teams
 	var across: Vector3 = side.cross(Vector3.UP)
 	return side * spawn_distance + across * (rank - (team_size - 1) / 2.0) * spawn_spacing + Vector3.UP
 
@@ -213,7 +219,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func toggle_control_scheme() -> void:
 	var local_players: Array[PlayerClass3D] = []
 	for p: PlayerClass3D in players:
-		if is_instance_valid(p) and not p.is_remote:
+		if is_instance_valid(p) and not p.is_remote and not (p.slot and p.slot.is_bot):
 			local_players.append(p)
 	if local_players.size() != 1:
 		return

@@ -81,7 +81,7 @@ func _build_device_rows() -> void:
 	device_buttons.clear()
 	controls_buttons.clear()
 
-	var slots: Array[PlayerSlot] = Players.slots.duplicate()
+	var slots: Array[PlayerSlot] = Players.human_slots()
 	slots.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.index < b.index)
 	var at: int = resume_button.get_index() + 1
 	var caption := Label.new()

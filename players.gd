@@ -37,6 +37,8 @@ var slots: Array[PlayerSlot] = []
 ## Teams in the next match. Online, the leader's choice is sent to everyone
 ## with the match start (see Net.start_match).
 var team_count: int = TEAM_COUNTS[0]
+## Offline: fill every empty seat with a bot when the match starts.
+var fill_with_bots: bool = false
 
 ## Project actions captured before any per-slot copies are added.
 var _base_actions: Array[StringName] = []
@@ -61,6 +63,36 @@ func join(device: int, team: int = -1, index: int = -1) -> PlayerSlot:
 	_register_actions(slot)
 	slot_joined.emit(slot)
 	return slot
+
+
+## A computer-controlled player in the next free seat (offline only).
+func add_bot() -> PlayerSlot:
+	if slots.size() >= MAX_PLAYERS:
+		return null
+	var slot := PlayerSlot.new()
+	slot.index = _next_free_index()
+	slot.device = PlayerSlot.BOT
+	slot.is_bot = true
+	slot.team = team_for_seat(slot.index)
+	slot.color = team_color(slot.team)
+	slots.append(slot)
+	slot_joined.emit(slot)
+	return slot
+
+
+## Seat bots until every seat is taken.
+func fill_bots() -> void:
+	while add_bot():
+		pass
+
+
+## Seats played by people, not bots.
+func human_slots() -> Array[PlayerSlot]:
+	var humans: Array[PlayerSlot] = []
+	for slot: PlayerSlot in slots:
+		if not slot.is_bot:
+			humans.append(slot)
+	return humans
 
 
 func leave(slot: PlayerSlot) -> void:

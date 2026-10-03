@@ -108,6 +108,12 @@ class SwingDraw:
 const DRAW_BACK_ANGLE := deg_to_rad(50)
 var draw_left := SwingDraw.new()
 var draw_right := SwingDraw.new()
+## Simple controls with the same kind of weapon in both hands: one Attack
+## press swings both, the other hand following once the first is this far
+## into its swing (see _holds_matching_pair).
+const PAIRED_FOLLOW_RATIO := 0.5
+var paired_follow_time: float = 0.0
+var paired_follow_left: bool = false
 var original_shoulder_rotation_left: Vector3
 var original_shoulder_rotation_right: Vector3
 # Wrist: during a swing the blade first cocks back behind the arm, then whips
@@ -566,6 +572,7 @@ func _process(delta: float) -> void:
 		_set_attack_armed(false, false)
 		throw_left_armed = false
 		throw_right_armed = false
+		paired_follow_time = 0.0
 
 	# Heavy input takes priority: if the hand holds a shield, it raises to
 	# block instead of following its usual tap-bump/hold-throw behavior.
@@ -576,6 +583,7 @@ func _process(delta: float) -> void:
 	# throws it on release (charged by hold duration); a hand holding a weapon
 	# swings it on a quick tap or throws it on a hold-then-release past the threshold.
 	if not busy:
+		_update_paired_follow(delta)
 		_handle_hand_input(Input_Handler.action_left, was_attack_left, true)
 		_handle_hand_input(Input_Handler.action_right, was_attack_right, false)
 		_handle_hand_throw(Input_Handler.throw_left, was_throw_left, true)
@@ -678,8 +686,8 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 		return
 	if Input_Handler.uses_simple_controls():
 		# Throwing has its own button, so a swing goes off as soon as it's pressed
-		if is_pressed and not was_pressed:
-			_swing_weapon(weapon, is_left)
+		if is_pressed and not was_pressed and _swing_weapon(weapon, is_left) and _holds_matching_pair():
+			_queue_paired_follow(weapon, not is_left)
 		return
 	var now: float = Time.get_ticks_msec() / 1000.0
 
@@ -707,11 +715,12 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 
 
 ## Swing (or fire) the weapon in that hand, if that arm is free and we have
-## the stamina. A heavy weapon draws back first (see SwingDraw).
-func _swing_weapon(weapon: Weapon3D, is_left: bool) -> void:
+## the stamina; false if it couldn't. A heavy weapon draws back first (see
+## SwingDraw).
+func _swing_weapon(weapon: Weapon3D, is_left: bool) -> bool:
 	var swing_stamina: float = SWING_STAMINA * (weapon.Properties.swing_stamina_scale if weapon.Properties else 1.0)
 	if is_arm_swinging(is_left) or not _use_stamina(swing_stamina):
-		return  # Mid-swing already, or too tired
+		return false  # Mid-swing already, or too tired
 	var draw_time: float = weapon.Properties.swing_windup if weapon.Properties else 0.0
 	if draw_time > 0.0 and weapon.plays_swipe_animation:
 		var draw: SwingDraw = draw_left if is_left else draw_right
@@ -720,6 +729,39 @@ func _swing_weapon(weapon: Weapon3D, is_left: bool) -> void:
 		draw.total = draw_time
 	else:
 		_strike(weapon, is_left)
+	return true
+
+
+## Both hands hold the same kind of weapon (not shields), whatever their
+## rarity: they swing as a pair (see PAIRED_FOLLOW_RATIO).
+func _holds_matching_pair() -> bool:
+	var left: Weapon3D = held_weapon_left
+	var right: Weapon3D = held_weapon_right
+	if not left or not right or left is ShieldClass3D or right is ShieldClass3D:
+		return false
+	if not left.scene_file_path.is_empty():
+		return left.scene_file_path == right.scene_file_path
+	return left.Properties and right.Properties and left.Properties.weapon_name == right.Properties.weapon_name
+
+
+## `weapon` (the lead hand's) just swung: the other hand follows partway
+## through its swing.
+func _queue_paired_follow(weapon: Weapon3D, is_left: bool) -> void:
+	var windup: float = weapon.Properties.swing_windup if weapon.Properties else 0.0
+	var duration: float = weapon.Properties.swing_duration if weapon.Properties else SWIPE_DURATION
+	paired_follow_left = is_left
+	paired_follow_time = windup + duration * PAIRED_FOLLOW_RATIO
+
+
+## The paired follow-up swing goes off when due, if the pair is still in hand.
+func _update_paired_follow(delta: float) -> void:
+	if paired_follow_time <= 0.0:
+		return
+	paired_follow_time -= delta
+	if paired_follow_time > 0.0 or held_ball or not _holds_matching_pair():
+		return
+	paired_follow_time = 0.0
+	_swing_weapon(held_weapon_left if paired_follow_left else held_weapon_right, paired_follow_left)
 
 
 ## The weapon in that hand attacks now: a melee one swings (live for its
@@ -771,8 +813,9 @@ func _update_swing_draws(delta: float) -> void:
 			_strike(weapon, is_left)
 
 
-## Simple controls' Throw button, for the hand it went to: winds up while
-## held (harder the longer, up to THROW_CHARGE_MAX_DURATION) and throws what
+## Simple controls' throw for one hand (Throw held + that hand's attack
+## button): winds up while held (harder the longer, up to
+## THROW_CHARGE_MAX_DURATION) and throws what
 ## that hand holds - the ball, or its weapon - on release. A quick tap is a
 ## light toss. A raised shield can't be thrown.
 func _handle_hand_throw(is_pressed: bool, was_pressed: bool, is_left: bool) -> void:
@@ -1226,6 +1269,7 @@ func _update_roll(delta: float) -> void:
 func _cancel_attacks() -> void:
 	punching_left = false
 	punching_right = false
+	paired_follow_time = 0.0
 	for draw: SwingDraw in [draw_left, draw_right]:
 		draw.time_left = 0.0
 		draw.weapon = null
