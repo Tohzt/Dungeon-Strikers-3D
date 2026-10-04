@@ -42,6 +42,9 @@ enum Phase {
 ## Floor for two teams (a goal at each end) and for four (one per side).
 @export var field_2p: Texture2D = preload("res://Assets/Textures/soccer field.png")
 @export var field_4p: Texture2D = preload("res://Assets/Textures/soccer field 4P.png")
+## Most teams this level is laid out for; a bigger match format is cut down
+## to this (e.g. the dungeon only has two sides).
+@export_range(2, 4) var max_team_count: int = 4
 
 @export var ball_scene: PackedScene = preload("res://3D/ball_3d.tscn")
 ## Where "Reset Ball" (pause menu) puts every ball.
@@ -70,7 +73,8 @@ enum Phase {
 @onready var boss_health_bar: BossHealthBar3D = $BossHealthBar
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var game_camera: Camera3D = $Camera3D
-@onready var floor_mesh: MeshInstance3D = $Walls/Floor/CollisionShape3D/MeshInstance3D
+## The painted soccer field, in levels that have one.
+@onready var floor_mesh: MeshInstance3D = get_node_or_null("Walls/Floor/CollisionShape3D/MeshInstance3D")
 
 ## Souls-like third-person camera, while that control scheme is on (Tab).
 var souls_camera: SoulsCamera3D = null
@@ -103,14 +107,15 @@ var Player: PlayerClass3D:
 func _enter_tree() -> void: Global.Game3D = self
 
 func _ready() -> void:
+	if Players.team_count > max_team_count:
+		Players.set_team_count(max_team_count)
 	_setup_arena()
 	if Net.in_session():
 		_spawn_online_players()
 	else:
 		if Players.slots.is_empty():
 			Players.join_default_devices(default_player_count)
-		if Players.fill_with_bots:
-			Players.fill_bots()
+		Players.fill_bots()
 		for slot: PlayerSlot in Players.slots:
 			_spawn_player(slot)
 	_setup_scores()
@@ -172,9 +177,22 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 	huds[player] = hud
 
 
-## Where `slot` starts: on its team's side, spread out from its teammates.
+## Where `slot` starts (and respawns): its team's SpawnPoint3D if the level
+## has one, else halfway between its team's goal and altar, else
+## spawn_distance out towards its team's side. Teammates spread out from there.
 func _spawn_position(slot: PlayerSlot) -> Vector3:
 	var side: Vector3 = TEAM_SIDES[slot.team % TEAM_SIDES.size()]
+	var center: Vector3 = side * spawn_distance
+	var across: Vector3 = side.cross(Vector3.UP)
+	var goal: Goal3D = _goal_of_team(slot.team)
+	var altar: Altar3D = altar_of_team(slot.team)
+	var spawn_point: SpawnPoint3D = _spawn_point_of_team(slot.team)
+	if spawn_point:
+		center = spawn_point.global_position
+		across = spawn_point.global_basis.x.normalized()
+	elif goal and altar:
+		center = (goal.global_position + altar.global_position) / 2.0
+		center.y = 0.0
 	var seat_count: int = Net.peers.size() if Net.in_session() else Players.slots.size()
 	var team_size: int = 0
 	for seat: int in maxi(seat_count, slot.index + 1):
@@ -182,8 +200,22 @@ func _spawn_position(slot: PlayerSlot) -> Vector3:
 			team_size += 1
 	@warning_ignore("integer_division")
 	var rank: int = slot.index / Players.team_count  # Seats take turns between teams
-	var across: Vector3 = side.cross(Vector3.UP)
-	return side * spawn_distance + across * (rank - (team_size - 1) / 2.0) * spawn_spacing + Vector3.UP
+	return center + across * (rank - (team_size - 1) / 2.0) * spawn_spacing + Vector3.UP
+
+
+func _spawn_point_of_team(team: int) -> SpawnPoint3D:
+	for node: Node in get_tree().get_nodes_in_group("SpawnPoint"):
+		if node is SpawnPoint3D and node.team == team:
+			return node
+	return null
+
+
+## The goal `team` defends (on its side of the arena).
+func _goal_of_team(team: int) -> Goal3D:
+	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		if goal.owner_team == team:
+			return goal
+	return null
 
 
 ## Lay the arena out for Players.team_count: two teams get the 2P field and
@@ -192,7 +224,7 @@ func _spawn_position(slot: PlayerSlot) -> Vector3:
 ## Goals and altars for teams not in the match are removed.
 func _setup_arena() -> void:
 	var team_count: int = Players.team_count
-	var field_material: StandardMaterial3D = floor_mesh.get_active_material(0) as StandardMaterial3D
+	var field_material: StandardMaterial3D = floor_mesh.get_active_material(0) as StandardMaterial3D if floor_mesh else null
 	if field_material:
 		field_material.albedo_texture = field_4p if team_count > 2 else field_2p
 	var team_nodes: Array[Node] = get_tree().get_nodes_in_group("Goal")
@@ -503,6 +535,14 @@ func leader_players() -> Array[PlayerClass3D]:
 		if is_instance_valid(player) and _team_of(player) == leader and not player.is_dead():
 			found.append(player)
 	return found
+
+
+## `team`'s altar, if it has one in this match.
+func altar_of_team(team: int) -> Altar3D:
+	for child: Node in get_children():
+		if child is Altar3D and child.owner_team == team:
+			return child
+	return null
 
 
 func _team_of(player: PlayerClass3D) -> int:

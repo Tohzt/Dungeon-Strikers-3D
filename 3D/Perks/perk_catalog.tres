@@ -51,11 +51,20 @@ mods = Dictionary[StringName, float]({
 
 [sub_resource type="Resource" id="Perk_spring_legs"]
 script = ExtResource("1_perk")
-title = "Spring Legs"
-description = "+35% jump height."
+title = "Afterburner"
+description = "+20% boost speed."
 category = 1
 mods = Dictionary[StringName, float]({
-&"jump": 0.35
+&"boost_speed": 0.2
+})
+
+[sub_resource type="Resource" id="Perk_fuel_line"]
+script = ExtResource("1_perk")
+title = "Fuel Line"
+description = "+50% boost from boost orbs."
+category = 1
+mods = Dictionary[StringName, float]({
+&"boost_gain": 0.5
 })
 
 [sub_resource type="Resource" id="Perk_thick_skin"]
@@ -256,4 +265,4 @@ mods = Dictionary[StringName, float]({
 
 [resource]
 script = ExtResource("2_catalog")
-perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_pickpocket"), SubResource("Perk_headhunter"), SubResource("Perk_quick_return")])
+perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_fuel_line"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_pickpocket"), SubResource("Perk_headhunter"), SubResource("Perk_quick_return")])

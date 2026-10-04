@@ -31,6 +31,13 @@ const SPRINT_DISTANCE := 18.0
 const SPACING := 2.5
 ## Seconds a bot waits before taking its perk, so it doesn't feel instant.
 const PERK_DELAY := 1.0
+## Below this much boost, a bot with nothing urgent to do grabs an orb this close.
+const BOOST_WANT := 50.0
+const BOOST_SEARCH_RANGE := 12.0
+## Boost toward things further than this, but stop at BOOST_RESERVE so
+## there's some left for a fight.
+const BOOST_DISTANCE := 10.0
+const BOOST_RESERVE := 25.0
 
 var _think_left: float = 0.0
 ## Where we're heading this think (null = stand still).
@@ -44,12 +51,13 @@ var _want_interact: bool = false
 
 var _attack_gap_left: float = 0.0
 var _attack_press_left: float = 0.0
+## Which hand the current attack press uses, and which went last (a bot
+## dual-wielding alternates).
+var _attack_hand_left: bool = false
+var _last_attack_left: bool = true
 var _shot_hold: float = 0.0
 var _interact_gap_left: float = 0.0
 var _perk_wait: float = 0.0
-## Unstick: if we're trying to move but haven't for a while, hop.
-var _last_position: Vector3 = Vector3.ZERO
-var _stuck_time: float = 0.0
 
 
 func _ready() -> void:
@@ -66,7 +74,7 @@ func _process(delta: float) -> void:
 	var game: Game3D_Class = Global.Game3D
 	if not player or not game or player.is_dead():
 		release_all()
-		_apply_simple_buttons(false, false, false, false, false)
+		_apply_simple_buttons(false, false, false, false)
 		return
 	_think_left -= delta
 	if _think_left <= 0.0:
@@ -89,6 +97,9 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if game.phase == Game3D_Class.Phase.INTERMISSION:
 		_think_intermission(player, game)
 		return
+	# A boss kill's perk: bots take it on the spot rather than walk back for it
+	if game.perks.can_open(player):
+		_take_perk_soon(player, game)
 	if player.held_ball:
 		_think_carry(player)
 		return
@@ -100,6 +111,9 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	# Someone's on top of us: deal with them first
 	if enemy and enemy_dist < THREAT_RANGE and (armed or not _loose_ball(game)):
 		_fight(player, enemy)
+		return
+
+	if _go_get_boost(player, enemy_dist):
 		return
 
 	var ball: Ball3D = _loose_ball(game)
@@ -123,15 +137,19 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 		_fight(player, enemy)
 
 
+## The player walks itself to the altar (PlayerClass3D._walk_to_altar);
+## once there, pick.
 func _think_intermission(player: PlayerClass3D, game: Game3D_Class) -> void:
-	var altar: Altar3D = _own_altar(player, game)
-	if altar:
-		_move_target = altar.global_position
-	if game.perks.can_open(player):
-		_perk_wait += THINK_TIME
-		if _perk_wait >= PERK_DELAY:
-			_perk_wait = 0.0
-			game.perks.auto_pick(player)
+	if player.at_altar and game.perks.can_open(player):
+		_take_perk_soon(player, game)
+
+
+## Take a card from the waiting hand after PERK_DELAY.
+func _take_perk_soon(player: PlayerClass3D, game: Game3D_Class) -> void:
+	_perk_wait += THINK_TIME
+	if _perk_wait >= PERK_DELAY:
+		_perk_wait = 0.0
+		game.perks.auto_pick(player)
 
 
 ## Carrying the ball: run at the goal and shoot once in range.
@@ -189,6 +207,26 @@ func _go_hit_ball(player: PlayerClass3D, ball: Ball3D) -> void:
 		_move_target = behind if not lined_up else ball.global_position
 
 
+## Low on boost with no enemy close: detour to a nearby orb. Returns
+## false if we don't need one or there's none close.
+func _go_get_boost(player: PlayerClass3D, enemy_dist: float) -> bool:
+	if player.boost >= BOOST_WANT or enemy_dist < THREAT_RANGE * 2.0:
+		return false
+	var best: BoostOrb3D = null
+	var best_dist: float = BOOST_SEARCH_RANGE
+	for orb: BoostOrb3D in get_tree().get_nodes_in_group("BoostOrb"):
+		if not orb.is_ready():
+			continue
+		var dist: float = _flat_dist(player, orb)
+		if dist < best_dist:
+			best = orb
+			best_dist = dist
+	if not best:
+		return false
+	_move_target = best.global_position
+	return true
+
+
 ## Head for the nearest loose weapon or stocked stand. Returns false if
 ## there's none in range.
 func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class) -> bool:
@@ -218,7 +256,7 @@ func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class) -> bool:
 
 # ===== DOING =====
 
-func _steer(player: PlayerClass3D, delta: float) -> void:
+func _steer(player: PlayerClass3D, _delta: float) -> void:
 	var dir: Vector3 = Vector3.ZERO
 	var dist: float = 0.0
 	if _move_target != null:
@@ -226,7 +264,7 @@ func _steer(player: PlayerClass3D, delta: float) -> void:
 		to.y = 0.0
 		dist = to.length()
 		if dist > 0.6:
-			dir = to / dist
+			dir = NavPath.direction(player, _move_target as Vector3)
 	dir += _separation(player)
 	move_dir = dir.normalized() if dir.length() > 0.1 else Vector3.ZERO
 	move_dodge = dist > SPRINT_DISTANCE and not player.held_ball
@@ -238,16 +276,8 @@ func _steer(player: PlayerClass3D, delta: float) -> void:
 	else:
 		look_dir = Vector3.ZERO  # Face where we walk
 
-	# Stuck on something (a stand, the boss): hop
-	move_jump = false
-	if not move_dir.is_zero_approx() and player.global_position.distance_to(_last_position) < 0.5 * delta:
-		_stuck_time += delta
-		if _stuck_time > 0.6:
-			move_jump = true
-			_stuck_time = 0.0
-	else:
-		_stuck_time = 0.0
-	_last_position = player.global_position
+	# Far off: boost to close the gap
+	boost_held = dist > BOOST_DISTANCE and not move_dir.is_zero_approx() and player.boost > BOOST_RESERVE
 
 
 func _press_buttons(player: PlayerClass3D, delta: float) -> void:
@@ -257,6 +287,8 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 	if _want_attack and _attack_gap_left <= 0.0:
 		_attack_press_left = 0.05
 		_attack_gap_left = randf_range(ATTACK_GAP.x, ATTACK_GAP.y)
+		_attack_hand_left = _pick_attack_hand(player)
+		_last_attack_left = _attack_hand_left
 	var attack: bool = _attack_press_left > 0.0
 
 	# Shot: hold Throw and a hand's button to charge while lining up, then let go
@@ -266,7 +298,7 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 		throw = _shot_hold < SHOT_CHARGE
 	else:
 		_shot_hold = 0.0
-	_apply_simple_buttons(attack, _want_guard, throw, throw, false)
+	_apply_simple_buttons((attack and _attack_hand_left) or throw, attack and not _attack_hand_left, _want_guard, throw)
 
 	_interact_gap_left -= delta
 	if _want_interact and _interact_gap_left <= 0.0:
@@ -275,6 +307,32 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 
 
 ## A push away from teammates who are too close.
+## Which hand an attack press uses (true = left). Weapons beat shields (a
+## shield only bashes when it's all we hold); two weapons, or two fists,
+## take turns, skipping an arm that's still mid-swing.
+func _pick_attack_hand(player: PlayerClass3D) -> bool:
+	if player.held_ball:
+		return false  # Either hand bonks the ball
+	var left: Weapon3D = player.held_weapon_left
+	var right: Weapon3D = player.held_weapon_right
+	var left_attacks: bool = left != null and not left is ShieldClass3D
+	var right_attacks: bool = right != null and not right is ShieldClass3D
+	if left_attacks != right_attacks:
+		return left_attacks
+	if not left_attacks and (left != null) != (right != null):
+		return left != null  # Just a shield: use it
+	# Both hands alike: take turns, unless the next one is still busy
+	var next_left: bool = not _last_attack_left
+	if player.is_arm_swinging(next_left) and not player.is_arm_swinging(not next_left):
+		next_left = not next_left
+	return next_left
+
+
+## Bots always swing a matching pair together.
+func is_offhand(_is_left: bool) -> bool:
+	return true
+
+
 func _separation(player: PlayerClass3D) -> Vector3:
 	var push: Vector3 = Vector3.ZERO
 	for other: PlayerClass3D in Global.Game3D.players:
@@ -330,13 +388,6 @@ func _goal_to_attack(player: PlayerClass3D) -> Goal3D:
 		if ours and (not best or _flat_dist(player, goal) < _flat_dist(player, best)):
 			best = goal
 	return best
-
-
-func _own_altar(player: PlayerClass3D, game: Game3D_Class) -> Altar3D:
-	for child: Node in game.get_children():
-		if child is Altar3D and player.slot and child.owner_team == player.slot.team:
-			return child
-	return null
 
 
 func _has_ranged_weapon(player: PlayerClass3D) -> bool:

@@ -187,8 +187,34 @@ var hand_right_mesh_rest: Transform3D
 const THROW_FORCE = 10.0
 const UPWARD_FORCE = 3.0
 
-const JUMP_VELOCITY = 4.5
 const ROTATION_SPEED = 10.0
+
+# Boost: a meter filled by running through boost orbs (BoostOrb3D) around
+# the arena. Holding the boost button while moving burns it to accelerate
+# up to BOOST_SPEED (well past a sprint), and letting go eases back down, so
+# it carries some momentum. It costs no stamina, works carrying the ball,
+# and the speed bowls over anyone you run into (see _bump_other_players).
+# The meter is the owner's; it isn't synced (the lean it causes is).
+signal boost_changed(new_boost: float, max_boost: float)
+const BOOST_MAX := 100.0
+## What a fresh (or respawned) player starts with.
+const BOOST_START := 34.0
+## Meter burned per second of boosting: a full one lasts 3 seconds.
+const BOOST_DRAIN_PER_SEC := 33.0
+## Top speed while boosting (walking is Entity.SPEED, sprinting twice that).
+const BOOST_SPEED := 17.0
+## Seconds to reach full boost speed, and to ease back off it.
+const BOOST_RAMP_UP := 0.3
+const BOOST_RAMP_DOWN := 0.6
+## Leans forward into it.
+const BOOST_LEAN := deg_to_rad(15)
+var boost: float = BOOST_START:
+	set(value):
+		boost = clamp(value, 0.0, BOOST_MAX)
+		boost_changed.emit(boost, BOOST_MAX)
+var is_boosting: bool = false
+## 0 = moving normally, 1 = at full boost speed.
+var boost_blend: float = 0.0
 
 # Knockback: shoves (bumps, punches, hits) live in their own velocity that's
 # added on top of walking and slides to a stop, instead of being overwritten
@@ -247,7 +273,7 @@ const BLOCK_STAMINA_PER_DAMAGE := 0.08  # A blocked sword hit (40) costs 3.2
 const SPRINT_STAMINA_PER_SEC := 2.5
 const SPRINT_RECOVER_RATIO := 0.3  # Must refill to this share after running dry
 const PUNCH_STAMINA := 1.0
-const SWING_STAMINA := 1.5
+const SWING_STAMINA := 1.05
 const THROW_STAMINA := 2.0  # Too tired to pay = weakest possible throw
 var is_sprinting: bool = false
 var sprint_exhausted: bool = false
@@ -259,15 +285,19 @@ var sprint_exhausted: bool = false
 # can be rolled out of). A tap made while a roll isn't allowed is kept for
 # ROLL_BUFFER_MSEC, so it still goes off as soon as it can.
 const ROLL_DURATION := 0.4
-const ROLL_SPEED := 11.0
+const ROLL_SPEED := 13.2
 const ROLL_END_SPEED_RATIO := 0.4  # Slows to this share of ROLL_SPEED by the end
 const ROLL_IFRAMES := 0.25  # From the start of the roll
 const BACKSTEP_DURATION := 0.25
-const BACKSTEP_SPEED := 8.0
+const BACKSTEP_SPEED := 9.6
 const BACKSTEP_IFRAMES := 0.15
 const BACKSTEP_LEAN := deg_to_rad(-20)
 const ROLL_STAMINA := 2.0  # Any stamina left is enough to start one
 const ROLL_BUFFER_MSEC := 250
+## Intermission: close enough to our altar to stop walking (see _walk_to_altar).
+const ALTAR_STOP_DISTANCE := 2.5
+## Standing at our altar for the intermission.
+var at_altar: bool = false
 var roll_time: float = 0.0  # Time left in the current roll or backstep
 var roll_duration: float = 0.0
 var roll_iframes: float = 0.0
@@ -397,6 +427,16 @@ func _physics_process(delta: float) -> void:
 	var direction: Vector3 = Vector3.ZERO
 	if Input_Handler:
 		direction = Input_Handler.move_dir
+	# Walking to the altar or choosing a perk: our own buttons do nothing
+	var perk_locked: bool = is_perk_locked()
+	if perk_locked:
+		direction = _walk_to_altar()
+		Input_Handler.interact = false
+		Input_Handler.swap_hands = false
+		Input_Handler.dodge_request_msec = -1
+	else:
+		at_altar = false
+	_update_boost(direction, delta)
 	_update_sprint(direction, delta)
 	_try_roll(direction)
 
@@ -404,13 +444,9 @@ func _physics_process(delta: float) -> void:
 		Input_Handler.interact = false
 		if not _grab_nearest_ball():
 			_take_from_nearest_stand()
-
-	# Apply jump velocity multiplier only when jump is initiated, not every frame
-	if Input_Handler.move_jump and is_on_floor() and not is_busy():
-		var jump_multiplier: float = 1.0
-		if is_sprinting:
-			jump_multiplier = 1.5  # Sprint jump multiplier
-		velocity.y = JUMP_VELOCITY * jump_multiplier * perk_stat(&"jump")
+	if Input_Handler.swap_hands:
+		Input_Handler.swap_hands = false
+		swap_hands()
 
 	if is_sprinting:
 		Properties.speed_mod.x = 2.0
@@ -419,13 +455,16 @@ func _physics_process(delta: float) -> void:
 		Properties.speed_mod = Vector3.ONE
 
 	# Walking velocity (speed_mod applies only to horizontal, not vertical)
-	var speed: float = (Entity.SPEED if Entity else 5.0) * perk_stat(&"move_speed")
+	var speed: float = (Entity.SPEED if Entity else 6.5) * perk_stat(&"move_speed")
 	if held_ball:
 		speed *= BALL_CARRY_SPEED
 	var walk: Vector3 = direction * speed
 	if Properties:
 		walk.x *= Properties.speed_mod.x
 		walk.z *= Properties.speed_mod.z
+	if boost_blend > 0.0:
+		var boost_speed: float = BOOST_SPEED * perk_stat(&"boost_speed") * (BALL_CARRY_SPEED if held_ball else 1.0)
+		walk = walk.lerp(direction * max(boost_speed, walk.length()), boost_blend)
 	# Being shoved takes some control away until the shove dies down
 	var control: float = clamp(1.0 - knockback.length() / KNOCKBACK_CONTROL_LOSS, KNOCKBACK_MIN_CONTROL, 1.0)
 	if stagger_time > 0.0:
@@ -442,7 +481,7 @@ func _physics_process(delta: float) -> void:
 	var turn_speed: float = SWING_TURN_SPEED if is_swinging() else ROTATION_SPEED
 	if is_busy():
 		pass
-	elif Input_Handler and !Input_Handler.look_dir.is_zero_approx():
+	elif Input_Handler and !Input_Handler.look_dir.is_zero_approx() and not perk_locked:
 		var look_dir: Vector3 = Input_Handler.look_dir
 		var target_angle: float = atan2(look_dir.x, look_dir.z)
 		rotation.y = lerp_angle(rotation.y, target_angle, turn_speed * delta)
@@ -538,6 +577,35 @@ func equip_weapon(weapon: Weapon3D, is_left: bool) -> void:
 	weapon.equip(self, hand_left if is_left else hand_right)
 
 
+## Move each hand's weapon to the other hand, if both arms are free.
+func swap_hands() -> void:
+	if held_ball or is_busy() or is_swinging() or not (held_weapon_left or held_weapon_right):
+		return
+	_swap_hands()
+	if Net.match_synced:
+		_net_swap_hands.rpc()
+
+
+func _swap_hands() -> void:
+	var left: Weapon3D = held_weapon_left
+	held_weapon_left = held_weapon_right
+	held_weapon_right = left
+	paired_follow_time = 0.0
+	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
+		if weapon is ShieldClass3D:
+			weapon.stop_block()
+	if held_weapon_left:
+		held_weapon_left.equip(self, hand_left)
+	if held_weapon_right:
+		held_weapon_right.equip(self, hand_right)
+
+
+@rpc("any_peer", "reliable")
+func _net_swap_hands() -> void:
+	if multiplayer.get_remote_sender_id() == get_multiplayer_authority():
+		_swap_hands()
+
+
 ## Holds the ball between both hands, pushed out in front by its own radius
 ## so its surface rests against them instead of its center.
 func update_held_ball_position() -> void:
@@ -566,7 +634,7 @@ func _process(delta: float) -> void:
 		return
 	# Rolling or staggered: hands do nothing, and presses made meanwhile
 	# don't count once it's over (like presses made while blocking)
-	var busy: bool = is_busy()
+	var busy: bool = is_busy() or is_perk_locked()
 	if busy:
 		_set_attack_armed(true, false)
 		_set_attack_armed(false, false)
@@ -685,8 +753,10 @@ func _handle_hand_attack(weapon: Weapon3D, is_pressed: bool, was_pressed: bool, 
 			_start_punch(is_left)
 		return
 	if Input_Handler.uses_simple_controls():
-		# Throwing has its own button, so a swing goes off as soon as it's pressed
-		if is_pressed and not was_pressed and _swing_weapon(weapon, is_left) and _holds_matching_pair():
+		# Throwing has its own button, so a swing goes off as soon as it's
+		# pressed; the offhand button brings a matching pair's other hand along
+		if is_pressed and not was_pressed and _swing_weapon(weapon, is_left) \
+				and Input_Handler.is_offhand(is_left) and _holds_matching_pair():
 			_queue_paired_follow(weapon, not is_left)
 		return
 	var now: float = Time.get_ticks_msec() / 1000.0
@@ -1149,6 +1219,9 @@ func respawn() -> void:
 	roll_time = 0.0
 	roll_iframes = 0.0
 	stagger_time = 0.0
+	is_boosting = false
+	boost_blend = 0.0
+	boost = BOOST_START
 	Entity.reset(true)  # Full stats, and moves us to Entity.spawn_pos
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon:
@@ -1197,9 +1270,36 @@ func shove(direction: Vector3, force: float) -> void:
 
 # ===== DODGE ROLL, SWING COMMITMENT & POISE =====
 
-## Rolling or staggered: no attacking, jumping, turning or rolling again.
+## Rolling or staggered: no attacking, boosting, turning or rolling again.
 func is_busy() -> bool:
 	return roll_time > 0.0 or stagger_time > 0.0
+
+
+## The intermission (walking back to our altar and picking there), or
+## choosing a perk mid-round: movement and hands are out of our control.
+func is_perk_locked() -> bool:
+	var game: Game3D_Class = Global.Game3D
+	if not game:
+		return false
+	return game.phase == Game3D_Class.Phase.INTERMISSION or game.perks.is_picking(self)
+
+
+## Where to walk while perk-locked: in the intermission, straight to our
+## team's altar, then stand there and take the cards waiting (a bot picks
+## its own; see BotInputHandler3D). Mid-round picks just stand still.
+func _walk_to_altar() -> Vector3:
+	var game: Game3D_Class = Global.Game3D
+	var altar: Altar3D = game.altar_of_team(slot.team) if slot else null
+	if game.phase != Game3D_Class.Phase.INTERMISSION or not altar:
+		return Vector3.ZERO
+	var to_altar: Vector3 = altar.global_position - global_position
+	to_altar.y = 0.0
+	at_altar = to_altar.length() < ALTAR_STOP_DISTANCE or altar.reach.overlaps_body(self)
+	if not at_altar:
+		return NavPath.direction(self, altar.global_position)
+	if not slot.is_bot:
+		game.perks.open_for(self)
+	return Vector3.ZERO
 
 
 ## Either arm is mid-swing (weapon, fist or ball bonk), or drawing one back.
@@ -1263,6 +1363,33 @@ func _roll_velocity() -> Vector3:
 func _update_roll(delta: float) -> void:
 	roll_time = max(roll_time - delta, 0.0)
 	roll_iframes = max(roll_iframes - delta, 0.0)
+
+
+# ===== BOOST & DASH =====
+
+## Whether running through a boost orb would give us anything.
+func can_take_boost() -> bool:
+	return not is_dead() and boost < BOOST_MAX
+
+
+## Owner only (orbs call it on the machine that controls us).
+func add_boost(amount: float) -> void:
+	boost += amount * perk_stat(&"boost_gain")
+
+
+## Burn boost while the button is held, we're moving and free to; ease
+## the speed up or back down.
+func _update_boost(direction: Vector3, delta: float) -> void:
+	var held: bool = Input_Handler != null and Input_Handler.boost_held
+	is_boosting = held and boost > 0.0 and not direction.is_zero_approx() \
+		and not is_busy() and not is_perk_locked()
+	if is_boosting:
+		boost -= BOOST_DRAIN_PER_SEC * delta
+		boost_blend = move_toward(boost_blend, 1.0, delta / BOOST_RAMP_UP)
+	else:
+		boost_blend = move_toward(boost_blend, 0.0, delta / BOOST_RAMP_DOWN)
+	if is_busy():
+		boost_blend = 0.0
 
 
 ## Stop any punch or weapon swing from hitting anything more.
@@ -1333,7 +1460,7 @@ func _update_body_tilt() -> void:
 	elif stagger_time > 0.0:
 		body_tilt = STAGGER_TILT * min(stagger_time / STAGGER_DURATION * 2.0, 1.0)
 	else:
-		body_tilt = 0.0
+		body_tilt = BOOST_LEAN * boost_blend
 	_apply_body_tilt()
 
 
@@ -1422,8 +1549,8 @@ func _update_sprint(direction: Vector3, delta: float) -> void:
 		return
 	if sprint_exhausted and Entity.stamina >= Entity.stamina_max * SPRINT_RECOVER_RATIO:
 		sprint_exhausted = false
-	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted \
-		and not held_ball and not is_busy()
+	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted and not is_boosting \
+		and not held_ball and not is_busy() and not is_perk_locked()
 	if is_sprinting:
 		Entity.drain_stamina(SPRINT_STAMINA_PER_SEC * delta)
 		if Entity.stamina <= 0.0:
@@ -1594,7 +1721,7 @@ func _update_shoulder_swipe(delta: float, shoulder: Node3D, base_rotation: Vecto
 ## sway amount toward how fast we're moving (0 standing/airborne, 1 at walk
 ## speed, up to SWAY_RUN_AMPLITUDE_RATIO when running).
 func _update_arm_sway(delta: float) -> void:
-	var walk_speed: float = Entity.SPEED if Entity else 5.0
+	var walk_speed: float = Entity.SPEED if Entity else 6.5
 	var horizontal_speed: float = Vector2(velocity.x, velocity.z).length()
 	if not is_on_floor():
 		horizontal_speed = 0.0

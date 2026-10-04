@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://cxfcslpgv6kke" path="res://3D/Weapons/Bow and Arrow/crossbow_3d.gd" id="1_crossbow"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
-[ext_resource type="PackedScene" uid="uid://b035nv2n3rrry" path="res://Assets/Weapons/crossbow_common.gltf.glb" id="4_cn188"]
+[ext_resource type="PackedScene" uid="uid://dc1fwcax10xqe" path="res://Assets/BetterDungeon/glb/crossbow_common.glb" id="4_cn188"]
 [ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://3D/Weapons/Bow and Arrow/arrow_3d.tscn" id="5_arrow"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_p6jv2"]

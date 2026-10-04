@@ -102,6 +102,9 @@ var _net_motion_sender: int = 0
 
 
 func _ready() -> void:
+	# Thrown weapons are fast and thin: without this they can pass through
+	# walls and floors in a single physics step.
+	continuous_cd = true
 	_set_props()
 	set_rarity(rarity)
 

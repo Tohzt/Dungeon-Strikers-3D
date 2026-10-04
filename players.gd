@@ -37,8 +37,9 @@ var slots: Array[PlayerSlot] = []
 ## Teams in the next match. Online, the leader's choice is sent to everyone
 ## with the match start (see Net.start_match).
 var team_count: int = TEAM_COUNTS[0]
-## Offline: fill every empty seat with a bot when the match starts.
-var fill_with_bots: bool = false
+## Offline: seat bots until the match has this many players (0 = no bots).
+## Always a whole number of players per team; see bot_fill_options().
+var bot_fill_count: int = 0
 
 ## Project actions captured before any per-slot copies are added.
 var _base_actions: Array[StringName] = []
@@ -80,10 +81,25 @@ func add_bot() -> PlayerSlot:
 	return slot
 
 
-## Seat bots until every seat is taken.
+## Seat bots until the match has bot_fill_count players.
 func fill_bots() -> void:
-	while add_bot():
+	while slots.size() < bot_fill_count and add_bot():
 		pass
+
+
+## Match sizes the Bots option can fill to with the current team_count:
+## 0 (off), then every even split, e.g. 2 (1v1) and 4 (2v2) for two teams.
+func bot_fill_options() -> Array[int]:
+	var options: Array[int] = [0]
+	for count: int in range(team_count, MAX_PLAYERS + 1, team_count):
+		options.append(count)
+	return options
+
+
+## The next match size after bot_fill_count (menu toggles).
+func next_bot_fill_count() -> int:
+	var options: Array[int] = bot_fill_options()
+	return options[(options.find(bot_fill_count) + 1) % options.size()]
 
 
 ## Seats played by people, not bots.
@@ -125,6 +141,8 @@ func set_team_count(count: int) -> void:
 	if not TEAM_COUNTS.has(count):
 		return
 	team_count = count
+	if not bot_fill_options().has(bot_fill_count):
+		bot_fill_count = bot_fill_options()[-1]
 	for slot: PlayerSlot in slots:
 		slot.team = team_for_seat(slot.index)
 		slot.color = team_color(slot.team)

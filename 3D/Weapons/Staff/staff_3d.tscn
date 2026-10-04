@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://cxfcslpgv6kke" path="res://3D/Weapons/Bow and Arrow/crossbow_3d.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
-[ext_resource type="PackedScene" uid="uid://d3t0m2r7v4fa3" path="res://Assets/Weapons/staff_common.gltf.glb" id="4_model"]
+[ext_resource type="PackedScene" uid="uid://clpaa3i2kvfik" path="res://Assets/BetterDungeon/glb/staff_common.glb" id="4_model"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Staff/magic_bolt_3d.tscn" id="5_bolt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]

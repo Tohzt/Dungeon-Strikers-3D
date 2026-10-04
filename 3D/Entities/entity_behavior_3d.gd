@@ -12,7 +12,7 @@ class_name EntityBehavior3D extends Node
 @onready var Master := get_parent()
 
 # ===== CONSTANTS =====
-const SPEED: float = 5.0
+const SPEED: float = 6.5
 
 # ===== HEALTH SYSTEM =====
 # Base stats

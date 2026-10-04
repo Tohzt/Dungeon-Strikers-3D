@@ -1,0 +1,55 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://3D/Weapons/Chest/chest_3d.gd" id="1_chest"]
+[ext_resource type="PackedScene" uid="uid://b8grlmxj4bj8m" path="res://Assets/BetterDungeon/glb/chest_common.glb" id="2_body"]
+[ext_resource type="PackedScene" uid="uid://b5lomgn7ssqsf" path="res://Assets/BetterDungeon/glb/chestTop_common.glb" id="3_lid"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Sword/sword_3d.tscn" id="4_sword"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Axe/axe_3d.tscn" id="5_axe"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Hammer/hammer_3d.tscn" id="6_hammer"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="7_bow"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Staff/staff_3d.tscn" id="8_staff"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Axe/greataxe_3d.tscn" id="9_greataxe"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Dagger/dagger_3d.tscn" id="10_dagger"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(1.5, 1.2, 1.15)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_reach"]
+radius = 2.2
+
+[node name="Chest" type="Node3D" groups=["WeaponStand"]]
+script = ExtResource("1_chest")
+loot_weapons = Array[PackedScene]([ExtResource("4_sword"), ExtResource("5_axe"), ExtResource("6_hammer"), ExtResource("7_bow"), ExtResource("8_staff"), ExtResource("9_greataxe"), ExtResource("10_dagger")])
+display_spin_speed = 1.5
+
+[node name="Model" parent="." instance=ExtResource("2_body")]
+
+[node name="Lid" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -0.55)
+
+[node name="Top" parent="Lid" instance=ExtResource("3_lid")]
+
+[node name="Body" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="WeaponDisplay" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
+
+[node name="Reach" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Reach"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("SphereShape3D_reach")
+
+[node name="Glow" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0.4)
+light_color = Color(1, 0.8, 0.35, 1)
+light_energy = 1.6
+omni_range = 5.0

@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_gvrid"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_lnps2"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_tmecx"]
-[ext_resource type="PackedScene" uid="uid://kgeujft7bqb7" path="res://Assets/Weapons/sword_common.gltf.glb" id="4_tmecx"]
+[ext_resource type="PackedScene" uid="uid://ddjj88cjf2ahn" path="res://Assets/BetterDungeon/glb/sword_common.glb" id="4_tmecx"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jamch"]
 transparency = 1

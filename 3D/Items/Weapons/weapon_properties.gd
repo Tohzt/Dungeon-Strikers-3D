@@ -20,7 +20,7 @@ class_name WeaponProperties3D extends Node
 ## Seconds from the strike until the arm is back at rest; the strike is the
 ## first half (committed), the follow-through the second (can be rolled out
 ## of). The sword's 0.25 is the baseline: heavier weapons swing slower.
-@export var swing_duration := 0.25
+@export var swing_duration := 0.2
 ## Seconds the arm draws back before the strike, so a heavy swing can be seen
 ## coming (and dodged). Committed: it can't be rolled out of. 0 = strikes at once.
 @export var swing_windup := 0.0

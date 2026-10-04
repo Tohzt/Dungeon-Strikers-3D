@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://b0oxcf5fv00jt" path="res://3D/Weapons/Shield/shield_3d.gd" id="1_smdq6"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_37nig"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="4_rf7fj"]
-[ext_resource type="PackedScene" uid="uid://d25l4r8xx34gs" path="res://Assets/Weapons/shield_common.gltf.glb" id="6_wp6bp"]
+[ext_resource type="PackedScene" uid="uid://br4rqcvu4qngr" path="res://Assets/BetterDungeon/glb/shield_common.glb" id="6_wp6bp"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_8hcp5"]
 height = 0.1723938

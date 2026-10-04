@@ -1,0 +1,38 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Boost/boost_orb.gd" id="1_orb"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_pick"]
+radius = 1.1
+
+[sub_resource type="StandardMaterial3D" id="Mat_orb"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.3, 0.65, 1, 0.85)
+emission_enabled = true
+emission = Color(0.2, 0.55, 1, 1)
+emission_energy_multiplier = 3.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_orb"]
+material = SubResource("Mat_orb")
+radius = 0.35
+height = 0.7
+
+[node name="BoostOrb" type="Area3D" groups=["BoostOrb"]]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+script = ExtResource("1_orb")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("SphereShape3D_pick")
+
+[node name="Orb" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("SphereMesh_orb")
+
+[node name="Light" type="OmniLight3D" parent="Orb"]
+light_color = Color(0.3, 0.6, 1, 1)
+light_energy = 1.5
+omni_range = 2.0

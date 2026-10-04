@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
-[ext_resource type="PackedScene" path="res://Assets/Weapons/axeDouble_common.gltf.glb" id="4_model"]
+[ext_resource type="PackedScene" uid="uid://cw6xvc0k3k2mk" path="res://Assets/BetterDungeon/glb/axeDouble_common.glb" id="4_model"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.8, 1.4, 0.15)
@@ -33,7 +33,7 @@ weapon_name = "Greataxe"
 throw_force = 12.0
 throw_spin_speed = 6.0
 durability_scale = 1.0
-swing_duration = 0.45
+swing_duration = 0.36
 swing_windup = 0.25
 swing_stamina_scale = 2.0
 

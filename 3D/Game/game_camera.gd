@@ -16,18 +16,33 @@ var can_zoom: bool = true
 @export var controller_aim_ease: float = 2.5  # How quickly the view eases toward the stick offset
 
 @export_group("Multiple Players")
-@export var group_padding: float = 3.0  # World units kept visible around each player
+@export var group_padding: float = 5.0  # World units kept visible around each player
 @export var group_max_fov: float = 70.0  # Furthest the camera zooms out to fit everyone
 @export var group_zoom_speed: float = 3.0
 @export var frame_ball: bool = true  # Also keep the ball on screen
 @export var goal_frame_distance: float = 15.0  # Pull a goal into view once a player or the ball is this close
 @export var goal_half_width: float = 3.5  # Goal centre to each post
 
+@export_group("Arena Framing")
+## Inside an arena (a node in the "ArenaZone" group, e.g. the dungeon's
+## boss room), the view widens past the player to also show the boss, the
+## ball and enemy players that are in there too, if they're this close.
+## Outside it the camera sticks to the player. A level without any
+## ArenaZone counts as arena everywhere.
+@export var context_range: float = 30.0
+@export var frame_bosses: bool = true
+@export var frame_enemies: bool = true
+## Extra ground kept in view below (nearer the camera than) the players while
+## framing several things, so the boss health bar doesn't cover them.
+@export var hud_margin: float = 5.0
+
 @export_group("Bottom Wall")
 ## The near (bottom-of-screen) wall hides whatever is right up against it,
 ## so the camera tilts toward top-down as a player or the ball approaches it.
-@export var top_down_start_z: float = 7.0  # Start tilting once something is this far down the field
-@export var top_down_full_z: float = 15.0  # Fully tilted from here to the wall
+## Distances are measured from this wall, so resizing the arena keeps working.
+@export var bottom_wall: Node3D
+@export var top_down_start_distance: float = 10.0  # Start tilting once something is this close to the wall (its center)
+@export var top_down_full_distance: float = 2.0  # Fully tilted from here to the wall
 @export_range(0.0, 30.0) var top_down_extra_pitch: float = 25.0  # Degrees added to the usual downward tilt
 @export var top_down_ease: float = 3.0  # How quickly the tilt follows
 
@@ -38,6 +53,8 @@ var top_down_blend: float = 0.0  # 0 = usual angle, 1 = fully tilted
 var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
 ## The player's chosen zoom (scroll wheel); the camera never frames tighter.
 var zoom_fov: float
+## Jumped to the players yet (so the match doesn't open on an empty room).
+var _placed: bool = false
 
 func _ready() -> void:
 	# The headless server has no screen, and none of its players read local input.
@@ -70,31 +87,92 @@ func _input(event: InputEvent) -> void:
 
 
 ## Who to keep in view: the exported target if one is set; online, just our
-## own player (the others are on their own screens); else every local player.
+## own player (the others are on their own screens); else every local person
+## playing (bots only show up as enemies nearby, see _context_points), or
+## every bot when nobody is.
 func _get_targets() -> Array[Node3D]:
 	var targets: Array[Node3D] = []
 	if target:
 		targets.append(target)
-	elif Global.Game3D:
-		for player: Node3D in Global.Game3D.players:
-			if not is_instance_valid(player):
-				continue
-			if Net.in_session() and not player.is_multiplayer_authority():
-				continue
+		return targets
+	if not Global.Game3D:
+		return targets
+	var bots: Array[Node3D] = []
+	for player: PlayerClass3D in Global.Game3D.players:
+		if not is_instance_valid(player):
+			continue
+		if Net.in_session() and not player.is_multiplayer_authority():
+			continue
+		if player.slot and player.slot.is_bot:
+			bots.append(player)
+		else:
 			targets.append(player)
-	return targets
+	return targets if not targets.is_empty() else bots
 
 
-## Everything the group view should fit: the players, the ball, and any goal
-## that one of those is close to (both posts, so the whole mouth shows).
+## Everything the group view should fit: the players, what's around them
+## in the arena (see _context_points), and any goal one of those is close to
+## (both posts, so the whole mouth shows).
 func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
 	var points: Array[Vector3] = []
 	for t: Node3D in targets:
 		points.append(t.global_position)
-	if frame_ball:
-		points.append_array(_ball_points())
+		points.append(_below_on_screen(t.global_position))
+	points.append_array(_context_points(targets))
 	points.append_array(_goal_points_near(points))
 	return points
+
+
+## The boss, balls and enemy players worth showing alongside `targets`:
+## only for targets in an arena, and only within context_range of one.
+func _context_points(targets: Array[Node3D]) -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	var game: Game3D_Class = Global.Game3D
+	if not game:
+		return points
+	var zones: Array[Node] = get_tree().get_nodes_in_group("ArenaZone")
+	var anchors: Array[Node3D] = []
+	for t: Node3D in targets:
+		if zones.is_empty() or _in_arena(t, zones):
+			anchors.append(t)
+	if anchors.is_empty():
+		return points
+	var candidates: Array[Node3D] = []
+	if frame_ball:
+		for ball: Ball3D in game.balls:
+			if is_instance_valid(ball) and ball.is_inside_tree():
+				candidates.append(ball)
+	if frame_bosses:
+		for boss: Boss3D in game.bosses:
+			if is_instance_valid(boss) and boss.is_awake and not boss.is_defeated:
+				candidates.append(boss)
+	if frame_enemies:
+		for player: PlayerClass3D in game.players:
+			if is_instance_valid(player) and not targets.has(player) and not player.is_dead() \
+					and (zones.is_empty() or _in_arena(player, zones)):
+				candidates.append(player)
+	for candidate: Node3D in candidates:
+		for anchor: Node3D in anchors:
+			if candidate is PlayerClass3D and _same_team(candidate, anchor):
+				continue
+			var gap: Vector3 = candidate.global_position - anchor.global_position
+			if Vector2(gap.x, gap.z).length() <= context_range:
+				points.append(candidate.global_position)
+				break
+	return points
+
+
+func _in_arena(node: Node3D, zones: Array[Node]) -> bool:
+	for zone: Node in zones:
+		if zone is Area3D and (zone as Area3D).overlaps_body(node):
+			return true
+	return false
+
+
+func _same_team(a: Node3D, b: Node3D) -> bool:
+	var slot_a: PlayerSlot = a.get("slot")
+	var slot_b: PlayerSlot = b.get("slot")
+	return slot_a != null and slot_b != null and slot_a.team == slot_b.team
 
 
 ## Every ball in play (none between rounds).
@@ -122,6 +200,8 @@ func _goal_points_near(sources: Array[Vector3]) -> Array[Vector3]:
 
 
 func _process(delta: float) -> void:
+	if not _placed:
+		_place_on_targets()
 	if !is_active:
 		if fov > zoom_fov:
 			fov = lerp(fov, zoom_fov, delta)
@@ -200,14 +280,14 @@ func _process(delta: float) -> void:
 	# Ensure look_target is at player's height
 	look_target.y = target_pos.y
 
-	# Ball closing in on a goal: widen to show that goal and the ball, still
-	# keeping the player and where they're aiming in view.
-	var ball_points: Array[Vector3] = _ball_points()
-	var goal_points: Array[Vector3] = _goal_points_near(ball_points)
-	if not goal_points.is_empty():
-		var points: Array[Vector3] = [target_pos, look_target]
-		points.append_array(ball_points)
-		points.append_array(goal_points)
+	# In the arena: widen to also show the boss, ball and enemies nearby (and
+	# a goal the ball is closing in on), keeping the player and where they're
+	# aiming in view.
+	var context: Array[Vector3] = _context_points(targets)
+	if not context.is_empty():
+		var points: Array[Vector3] = [target_pos, look_target, _below_on_screen(target_pos)]
+		points.append_array(context)
+		points.append_array(_goal_points_near(context))
 		_frame_group(points, delta)
 		return
 
@@ -216,6 +296,25 @@ func _process(delta: float) -> void:
 	fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 	# Smoothly move camera position (panning only, no rotation)
 	global_position = global_position.lerp(_ideal_position(look_target), delta * follow_speed)
+
+
+## `point` moved hud_margin toward the bottom of the screen (along the ground).
+func _below_on_screen(point: Vector3) -> Vector3:
+	var toward_camera: Vector3 = Vector3(view_basis.z.x, 0.0, view_basis.z.z).normalized()
+	return point + toward_camera * hud_margin
+
+
+## Start over the players rather than wherever the camera sits in the scene.
+func _place_on_targets() -> void:
+	var targets: Array[Node3D] = _get_targets()
+	if targets.is_empty():
+		return
+	var center: Vector3 = Vector3.ZERO
+	for t: Node3D in targets:
+		center += t.global_position
+	center /= targets.size()
+	global_position = _ideal_position(center)
+	_placed = true
 
 
 ## Ease the tilt toward top-down by how close the lowest player (or the
@@ -228,8 +327,9 @@ func _update_tilt(targets: Array[Node3D], delta: float) -> void:
 	for p: Vector3 in _ball_points():
 		lowest_z = max(lowest_z, p.z)
 	var goal_blend: float = 0.0
-	if lowest_z > -INF:
-		goal_blend = smoothstep(top_down_start_z, top_down_full_z, lowest_z)
+	if lowest_z > -INF and bottom_wall:
+		var wall_z: float = bottom_wall.global_position.z
+		goal_blend = smoothstep(wall_z - top_down_start_distance, wall_z - top_down_full_distance, lowest_z)
 	top_down_blend = lerp(top_down_blend, goal_blend, clamp(delta * top_down_ease, 0.0, 1.0))
 	var tilt: float = -deg_to_rad(top_down_extra_pitch) * top_down_blend
 	view_basis = Basis(initial_transform.basis.x.normalized(), tilt) * initial_transform.basis

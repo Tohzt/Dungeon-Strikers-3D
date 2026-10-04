@@ -133,6 +133,9 @@ var _poise_broken: bool = false
 
 ## Don't start acting until the match has had a moment to settle.
 @export var start_delay: float = 3.0
+## Sleep (no countdown, no health bar) until wake() is called, e.g. by a
+## BossTrigger3D when the first player walks into its arena, or by a hit.
+@export var wait_for_players: bool = false
 
 @onready var visual: Node3D = $Visual
 @onready var body_mesh: MeshInstance3D = $Visual/MeshInstance3D
@@ -235,7 +238,7 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	# Every machine counts down itself, so everyone's health bar appears together
-	if not is_awake:
+	if not is_awake and not wait_for_players:
 		start_delay -= delta
 		if start_delay <= 0.0:
 			is_awake = true
@@ -564,6 +567,7 @@ func _touch_ball() -> void:
 func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
 	if is_defeated:
 		return false
+	wake()
 	if not _simulates():
 		if Net.match_synced:
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
@@ -583,6 +587,11 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 		else:
 			_defeat(killer)
 	return true
+
+
+## Start the start_delay countdown if it was waiting for players.
+func wake() -> void:
+	wait_for_players = false
 
 
 func _set_hp(value: float) -> void:

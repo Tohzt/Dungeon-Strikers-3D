@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="18_bossbar"]
 [ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="19_perks"]
 [ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="20_picker"]
+[ext_resource type="PackedScene" path="res://3D/Items/Boost/boost_orb.tscn" id="21_boost"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_uepvo"]
 sky_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
@@ -61,8 +62,9 @@ script = ExtResource("3_gq62a")
 
 [node name="PauseMenu" parent="." unique_id=1958909121 instance=ExtResource("15_pause")]
 
-[node name="Camera3D" parent="." unique_id=1390694438 instance=ExtResource("3_dwu0v")]
+[node name="Camera3D" parent="." unique_id=1390694438 node_paths=PackedStringArray("bottom_wall") instance=ExtResource("3_dwu0v")]
 transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.86602545, 0, -0.86602545, 0.49999997, 0, 30, 17.36)
+bottom_wall = NodePath("../Walls/Wall")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=772667376]
 transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 23.241423, 0)
@@ -170,3 +172,61 @@ boss = NodePath("../Boss")
 [node name="Perks" type="Node" parent="." unique_id=884120395 node_paths=PackedStringArray("picker")]
 script = ExtResource("19_perks")
 picker = NodePath("../PerkPicker")
+
+[node name="BoostOrbs" type="Node3D" parent="." unique_id=967115014]
+
+[node name="BigOrb1" parent="BoostOrbs" unique_id=394334009 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, 30)
+amount = 100.0
+respawn_time = 10.0
+
+[node name="BigOrb2" parent="BoostOrbs" unique_id=30988281 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, 30)
+amount = 100.0
+respawn_time = 10.0
+
+[node name="BigOrb3" parent="BoostOrbs" unique_id=472433110 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, -30)
+amount = 100.0
+respawn_time = 10.0
+
+[node name="BigOrb4" parent="BoostOrbs" unique_id=360340765 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -30)
+amount = 100.0
+respawn_time = 10.0
+
+[node name="Orb5" parent="BoostOrbs" unique_id=355225564 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, 0)
+
+[node name="Orb6" parent="BoostOrbs" unique_id=1766584200 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, 0)
+
+[node name="Orb7" parent="BoostOrbs" unique_id=331449645 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 18)
+
+[node name="Orb8" parent="BoostOrbs" unique_id=437103325 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
+
+[node name="Orb9" parent="BoostOrbs" unique_id=56397342 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 10)
+
+[node name="Orb10" parent="BoostOrbs" unique_id=1054607532 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, 10)
+
+[node name="Orb11" parent="BoostOrbs" unique_id=503203078 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -10)
+
+[node name="Orb12" parent="BoostOrbs" unique_id=1173350277 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, -10)
+
+[node name="Orb13" parent="BoostOrbs" unique_id=322410775 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0, 0)
+
+[node name="Orb14" parent="BoostOrbs" unique_id=805038493 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, 0)
+
+[node name="Orb15" parent="BoostOrbs" unique_id=93544424 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 24)
+
+[node name="Orb16" parent="BoostOrbs" unique_id=189706302 instance=ExtResource("21_boost")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -24)

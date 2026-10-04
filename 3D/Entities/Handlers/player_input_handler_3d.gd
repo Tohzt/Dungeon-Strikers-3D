@@ -1,23 +1,27 @@
 class_name PlayerInputHandler3D extends Node
 @onready var Master: CharacterBody3D = get_parent()
 
-var move_jump: bool = false
+## The boost button is held (see PlayerClass3D.boost).
+var boost_held: bool = false
 var move_dir: Vector3
 var look_dir: Vector3 = Vector3.ZERO
 var action_left: bool = false
 var action_right: bool = false
 var action_heavy_left: bool = false
 var action_heavy_right: bool = false
-## Simple controls: hold Throw and click a hand's attack button (left/right
-## mouse, LB/RB) to throw that hand's weapon; held to charge, thrown on release.
+## Simple controls: hold Throw and press a hand's button (left/right mouse,
+## LB/RB) to throw that hand's weapon; held to charge, thrown on release.
 var throw_left: bool = false
 var throw_right: bool = false
 var interact: bool = false
+## Swap what's in each hand (R / Select); stays set until the player acts on it.
+var swap_hands: bool = false
 var interact_held: bool = false
 var target_toggle: bool = false
 var target_scroll: bool = false
-# The dodge button: a quick tap rolls (on release), holding it sprints.
-## Held past DODGE_TAP_TIME: sprinting.
+# The controller's dodge button: a quick tap rolls (on release), holding it
+# sprints. Keyboard has its own roll (Ctrl) and sprint (Shift) keys.
+## Sprinting: Shift held, or the dodge button held past DODGE_TAP_TIME.
 var move_dodge: bool = false
 var dodge_dur: float = 0.0
 const DODGE_TAP_TIME: float = 0.2
@@ -37,11 +41,7 @@ var camera: Camera3D = null
 ## player. Null = legacy mode that reads the shared actions from any device.
 var slot: PlayerSlot = null
 
-## Simple controls: which hand the current Attack press went to, and which
-## went last (dual-wielding alternates, for combos).
-var _attack_was_pressed: bool = false
-var _attack_hand_left: bool = false
-var _last_attack_left: bool = true
+## Simple controls: the hand buttons as of last frame.
 var _left_click_was_pressed: bool = false
 var _right_click_was_pressed: bool = false
 
@@ -55,9 +55,9 @@ func action(base: StringName) -> StringName:
 	return slot.action(base) if slot else base
 
 
-## Simple controls (the default): Attack, Guard and Throw buttons, which this
-## turns into the per-hand presses the player reads; Attack swings on press,
-## and holding Throw turns the left/right attack buttons into per-hand throws.
+## Simple controls (the default): a button per hand that swings on press,
+## plus Guard and Throw; holding Throw turns the hand buttons into per-hand
+## throws, and the offhand button swings a matching pair together.
 ## Advanced: every hand has its own attack and heavy buttons, and a hold
 ## throws. See PlayerSlot.advanced_controls.
 func uses_simple_controls() -> bool:
@@ -110,7 +110,8 @@ func release_all() -> void:
 	look_dir = Vector3.ZERO
 	aim_release_timer = 0.0
 	interact = false
-	move_jump = false
+	swap_hands = false
+	boost_held = false
 
 
 func _process(delta: float) -> void:
@@ -126,82 +127,68 @@ func _process(delta: float) -> void:
 	else:
 		# Update action_left to track current held state (for ball throwing and other actions)
 		action_left = Input.is_action_pressed(action("attack_left"))
-	move_jump = Input.is_action_just_pressed(action("move_jump"))
+	boost_held = Input.is_action_pressed(action("boost"))
 	# Stays set until the player acts on it
 	if Input.is_action_just_pressed(action("interact")):
 		interact = true
+	if Input.is_action_just_pressed(action("swap_hands")):
+		swap_hands = true
 	_handle_input_dodge(delta)
 	_handle_input_look(delta)
 
-## Attack goes to one hand for the whole press, chosen when it goes down;
-## Guard raises any shield held. While Throw is held, neither works: the
-## left/right attack buttons throw that hand's weapon instead.
+## Each hand has its own button (left click/LB, right click/RB); a hand
+## holding a shield raises it while its button is held. While Throw is
+## held, the hand buttons throw that hand's weapon instead.
 func _handle_simple_controls() -> void:
-	var throw_mode: bool = Input.is_action_pressed(action("throw"))
-	_apply_simple_buttons(Input.is_action_pressed(action("attack")), Input.is_action_pressed(action("guard")),
-		throw_mode, Input.is_action_pressed(action("attack_left")), Input.is_action_pressed(action("attack_right")))
+	_apply_simple_buttons(Input.is_action_pressed(action("attack_left")), Input.is_action_pressed(action("attack_right")),
+		false, Input.is_action_pressed(action("throw")))
 
 
 ## Simple controls' buttons (held or not) into the per-hand presses the player
-## reads. `throw_mode` is Throw held; `left_click`/`right_click` then throw
-## that hand. Only presses that start in the right mode count, so letting go
-## of Throw mid-click doesn't swing, and a click held from before doesn't
-## throw. Bots press them through here too.
-func _apply_simple_buttons(attack: bool, guard: bool, throw_mode: bool, left_click: bool, right_click: bool) -> void:
-	var attacking: bool = attack and not throw_mode and (action_left or action_right or not _attack_was_pressed)
-	if attacking and not (action_left or action_right):
-		_attack_hand_left = _pick_attack_hand()
-		_last_attack_left = _attack_hand_left
-	_attack_was_pressed = attack
-	action_left = attacking and _attack_hand_left
-	action_right = attacking and not _attack_hand_left
-	throw_left = throw_mode and left_click and (throw_left or not _left_click_was_pressed)
-	throw_right = throw_mode and right_click and (throw_right or not _right_click_was_pressed)
-	_left_click_was_pressed = left_click
-	_right_click_was_pressed = right_click
+## reads. `guard` raises any shield held (bots only); `throw_mode` is Throw held; the hand buttons then throw that hand.
+## Only presses that start in the right mode count, so letting go of Throw
+## mid-click doesn't swing, and a click held from before doesn't throw.
+## Bots press them through here too.
+func _apply_simple_buttons(left: bool, right: bool, guard: bool, throw_mode: bool) -> void:
 	var player := Master as PlayerClass3D
-	guard = guard and not throw_mode
-	action_heavy_left = guard and player != null and player.held_weapon_left is ShieldClass3D
-	action_heavy_right = guard and player != null and player.held_weapon_right is ShieldClass3D
+	var shield_left: bool = player != null and player.held_weapon_left is ShieldClass3D and not player.held_ball
+	var shield_right: bool = player != null and player.held_weapon_right is ShieldClass3D and not player.held_ball
+	action_left = left and not throw_mode and not shield_left and (action_left or not _left_click_was_pressed)
+	action_right = right and not throw_mode and not shield_right and (action_right or not _right_click_was_pressed)
+	throw_left = throw_mode and left and (throw_left or not _left_click_was_pressed)
+	throw_right = throw_mode and right and (throw_right or not _right_click_was_pressed)
+	_left_click_was_pressed = left
+	_right_click_was_pressed = right
+	action_heavy_left = shield_left and not throw_mode and (guard or left)
+	action_heavy_right = shield_right and not throw_mode and (guard or right)
 
 
-## Which hand an Attack press uses (true = left). Weapons beat shields (a
-## shield only bashes when it's all you hold); two weapons, or two fists,
-## take turns, skipping an arm that's still mid-swing.
-func _pick_attack_hand() -> bool:
-	var player := Master as PlayerClass3D
-	if not player or player.held_ball:
-		return false  # Either hand bonks or throws the ball
-	var left: Weapon3D = player.held_weapon_left
-	var right: Weapon3D = player.held_weapon_right
-	var left_attacks: bool = left != null and not left is ShieldClass3D
-	var right_attacks: bool = right != null and not right is ShieldClass3D
-	if left_attacks != right_attacks:
-		return left_attacks
-	if not left_attacks and (left != null) != (right != null):
-		return left != null  # Just a shield: bash with it
-	# Both hands alike: take turns, unless the next one is still busy
-	var next_left: bool = not _last_attack_left
-	if player.is_arm_swinging(next_left) and not player.is_arm_swinging(not next_left):
-		next_left = not next_left
-	return next_left
+## Whether this hand's button is the offhand one, which swings a matching
+## pair of weapons together: the less dominant button of the device, so
+## right click on a mouse and LB on a controller.
+func is_offhand(is_left: bool) -> bool:
+	return is_left != uses_mouse()
 
 
-## Tap = roll, hold = sprint. The roll goes off on release (like the souls
-## games), since until then a tap can't be told apart from a hold.
+## Keyboard: Ctrl rolls on press, Shift sprints while held. Controller:
+## dodge tap = roll, hold = sprint; that roll goes off on release (like the
+## souls games), since until then a tap can't be told apart from a hold.
 func _handle_input_dodge(delta: float) -> void:
+	if Input.is_action_just_pressed(action("roll")):
+		dodge_request_msec = Time.get_ticks_msec()
+	var dodge_held_long: bool = false
 	if Input.is_action_pressed(action("move_dodge")):
 		dodge_dur += delta
-		move_dodge = dodge_dur >= DODGE_TAP_TIME
+		dodge_held_long = dodge_dur >= DODGE_TAP_TIME
 	elif dodge_dur > 0.0:
 		if dodge_dur < DODGE_TAP_TIME:
 			dodge_request_msec = Time.get_ticks_msec()
 		dodge_dur = 0.0
-		move_dodge = false
+	move_dodge = dodge_held_long or Input.is_action_pressed(action("sprint"))
 
 ## look_dir is where the player wants to face; zero means "face the walking
 ## direction". Mouse players always aim at the cursor, except while holding
-## face_movement (Ctrl); controller players aim with the right stick.
+## face_movement (Alt); controller players aim with the right stick.
 ## Souls-like controls face the lock-on target, if any.
 func _handle_input_look(delta: float) -> void:
 	if souls_camera:
@@ -254,9 +241,6 @@ func _input(event: InputEvent) -> void:
 	if not uses_simple_controls():
 		_input_advanced_hands(event)
 
-	if event.is_action(action("move_dodge")):
-		move_dodge = event.is_action_pressed(action("move_dodge"))
-	
 	if event.is_action(action("target")):
 		target_toggle = event.is_action_pressed(action("target"))
 	

@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
-[ext_resource type="PackedScene" path="res://Assets/Weapons/dagger_common.gltf.glb" id="4_model"]
+[ext_resource type="PackedScene" uid="uid://bwruu215xil0p" path="res://Assets/BetterDungeon/glb/dagger_common.glb" id="4_model"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.14, 0.85, 0.1)
@@ -34,7 +34,7 @@ weapon_name = "Dagger"
 throw_force = 22.0
 throw_spin_speed = 14.0
 durability_scale = 1.0
-swing_duration = 0.18
+swing_duration = 0.144
 swing_stamina_scale = 0.5
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

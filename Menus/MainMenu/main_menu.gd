@@ -5,6 +5,9 @@ extends Control
 ## Joined players go into the Players autoload, which Game3D spawns from.
 
 const GAME_SCENE := "res://3D/Game/Game3D.tscn"
+## Offline two-team matches are played here instead. Online always uses
+## GAME_SCENE, since the server loads that one (Net.MATCH_SCENE).
+const DUNGEON_SCENE := "res://3D/Game/DungeonArena.tscn"
 const MIN_LOBBY_PLAYERS := 2
 const COPIED_FEEDBACK_TIME := 1.5
 
@@ -205,9 +208,9 @@ func _cycle_team_count() -> void:
 	_refresh_online_lobby()
 
 
-## Bots button: fill the empty seats with computer players, or don't.
+## Bots button: cycle the match size bots fill up to (Off, 1v1, 2v2, ...).
 func _toggle_bots() -> void:
-	Players.fill_with_bots = not Players.fill_with_bots
+	Players.bot_fill_count = Players.next_bot_fill_count()
 	_refresh_lobby()
 
 
@@ -242,17 +245,26 @@ func _refresh_lobby() -> void:
 			card_labels[i].text = "P%d\n%s" % [i + 1, Players.device_name(slot.device)]
 		else:
 			card_styles[i].bg_color = Color(1, 1, 1, 0.06)
-			card_labels[i].text = ("Bot\n" if Players.fill_with_bots else "") + "Press A or Enter\nto join"
-	var needed: int = 1 if Players.fill_with_bots else MIN_LOBBY_PLAYERS
+			var bot: bool = i < Players.bot_fill_count
+			card_labels[i].text = ("Bot\n" if bot else "") + "Press A or Enter\nto join"
+	var bots: bool = Players.bot_fill_count > 0
+	var needed: int = 1 if bots else MIN_LOBBY_PLAYERS
 	start_button.disabled = Players.slots.size() < needed
-	start_button.text = "Start" if Players.fill_with_bots else "Start (2+ players)"
-	# With bots every seat gets filled
-	var seats: int = Players.MAX_PLAYERS if Players.fill_with_bots else maxi(Players.slots.size(), MIN_LOBBY_PLAYERS)
+	start_button.text = "Start" if bots else "Start (2+ players)"
+	# Bots fill up to bot_fill_count; more joined players still all play
+	var seats: int = maxi(Players.slots.size(), Players.bot_fill_count if bots else MIN_LOBBY_PLAYERS)
 	lobby_teams.text = "Teams: " + Players.format_name(seats)
-	solo_teams.text = "Teams: " + Players.format_name(Players.MAX_PLAYERS if Players.fill_with_bots else 1)
-	var bots_text: String = "Bots: " + ("On (fill empty seats)" if Players.fill_with_bots else "Off")
-	lobby_bots.text = bots_text
-	solo_bots.text = bots_text
+	solo_teams.text = "Teams: " + Players.format_name(maxi(Players.bot_fill_count, 1))
+	lobby_bots.text = _bots_text(seats)
+	solo_bots.text = _bots_text(Players.bot_fill_count)
+
+
+## "Bots: 2v2"-style label for the Bots buttons, for a match of `seats` players.
+func _bots_text(seats: int) -> String:
+	if Players.bot_fill_count == 0:
+		return "Bots: Off"
+	var sizes: String = Players.format_name(seats).get_slice("(", 1).trim_suffix(")")
+	return "Bots: Fill to " + sizes
 
 
 # ===== ONLINE =====
@@ -368,4 +380,5 @@ func _on_match_started() -> void:
 
 
 func _start_game() -> void:
-	get_tree().change_scene_to_file(GAME_SCENE)
+	var dungeon: bool = Players.team_count == 2 and not Net.in_session()
+	get_tree().change_scene_to_file(DUNGEON_SCENE if dungeon else GAME_SCENE)
