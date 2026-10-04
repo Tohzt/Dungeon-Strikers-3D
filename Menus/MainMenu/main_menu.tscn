@@ -87,6 +87,22 @@ theme_override_font_sizes/font_size = 22
 text = "Choose your device"
 horizontal_alignment = 1
 
+[node name="SoloCharacter" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Character: Knight"
+
+[node name="SoloTeam" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Team: Blue"
+
 [node name="SoloTeams" type="Button" parent="Center/Content/SinglePlayer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
@@ -134,6 +150,7 @@ theme_override_constants/separation = 16
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Join: A / Start on a controller, or Enter / Space on the keyboard.
+Character: D-pad / stick left-right, or A / D.   Team: LB / RB, or Q / E.
 Leave: B / Esc."
 horizontal_alignment = 1
 
@@ -367,6 +384,22 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = ""
 horizontal_alignment = 1
+
+[node name="OnlineCharacter" type="Button" parent="Center/Content/OnlineLobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Character: Knight"
+
+[node name="OnlineTeam" type="Button" parent="Center/Content/OnlineLobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Team: Blue"
 
 [node name="OnlineTeams" type="Button" parent="Center/Content/OnlineLobby"]
 unique_name_in_owner = true

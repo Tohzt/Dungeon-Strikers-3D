@@ -2,7 +2,9 @@ extends Control
 ## Title screen: start single player on a chosen device, open the local
 ## multiplayer lobby where each device joins by pressing a button on it, or
 ## host/join an online session by access code (through the Net autoload).
-## Joined players go into the Players autoload, which Game3D spawns from.
+## Every player picks a character and a team (which sets their color) on
+## the way in. Joined players go into the Players autoload, which Game3D
+## spawns from.
 
 const GAME_SCENE := "res://3D/Game/Game3D.tscn"
 ## Offline two-team matches are played here instead. Online always uses
@@ -10,6 +12,8 @@ const GAME_SCENE := "res://3D/Game/Game3D.tscn"
 const DUNGEON_SCENE := "res://3D/Game/DungeonArena.tscn"
 const MIN_LOBBY_PLAYERS := 2
 const COPIED_FEEDBACK_TIME := 1.5
+## How far a stick must be pushed sideways to change character in the lobby.
+const STICK_STEP_THRESHOLD := 0.6
 
 @onready var home: Control = %Home
 @onready var single_player: Control = %SinglePlayer
@@ -21,6 +25,8 @@ const COPIED_FEEDBACK_TIME := 1.5
 @onready var lobby_bots: Button = %LobbyBots
 @onready var solo_teams: Button = %SoloTeams
 @onready var solo_bots: Button = %SoloBots
+@onready var solo_character: Button = %SoloCharacter
+@onready var solo_team: Button = %SoloTeam
 @onready var online: Control = %Online
 @onready var host_setup: Control = %HostSetup
 @onready var join_setup: Control = %JoinSetup
@@ -35,6 +41,8 @@ const COPIED_FEEDBACK_TIME := 1.5
 @onready var online_status: Label = %OnlineStatus
 @onready var online_start: Button = %OnlineStart
 @onready var online_teams: Button = %OnlineTeams
+@onready var online_character: Button = %OnlineCharacter
+@onready var online_team: Button = %OnlineTeam
 
 ## Last joypad that sent input, so "Controller" picks the pad that pressed it.
 var last_joypad: int = -1
@@ -49,6 +57,12 @@ var card_labels: Array[Label] = []
 var online_card_styles: Array[StyleBoxFlat] = []
 var online_card_labels: Array[Label] = []
 var copy_feedback: Tween
+## Single player's picks, used when they choose a device to start on.
+var solo_team_choice: int = 0
+var solo_character_choice: int = 0
+## Local lobby: which way each joypad's left stick is pushed (-1, 0, 1), so
+## holding it changes character once rather than every frame.
+var stick_dirs: Dictionary[int, int] = {}
 
 
 func _ready() -> void:
@@ -69,6 +83,10 @@ func _ready() -> void:
 	solo_teams.pressed.connect(_cycle_team_count)
 	lobby_bots.pressed.connect(_toggle_bots)
 	solo_bots.pressed.connect(_toggle_bots)
+	_setup_cycler(solo_character, _step_solo_character)
+	_setup_cycler(solo_team, _step_solo_team)
+	_setup_cycler(online_character, _step_online_character)
+	_setup_cycler(online_team, _step_online_team)
 	%LobbyBack.pressed.connect(_back_to_home)
 
 	%HostButton.pressed.connect(_open_host_setup)
@@ -137,8 +155,52 @@ func _go_back() -> void:
 
 func _start_single_player(device: int) -> void:
 	Players.leave_all()
-	Players.join(device)
+	Players.join(device, solo_team_choice, -1, solo_character_choice)
 	_start_game()
+
+
+func _step_solo_character(step: int) -> void:
+	solo_character_choice = posmod(solo_character_choice + step, Players.character_count())
+	_refresh_lobby()
+
+
+func _step_solo_team(step: int) -> void:
+	solo_team_choice = posmod(solo_team_choice + step, Players.team_count)
+	_refresh_lobby()
+
+
+# ===== PICKERS =====
+
+## A button that cycles through choices: click, A or Enter (and Right) step
+## forward; right-click and Left step back. `on_step` gets 1 or -1.
+func _setup_cycler(button: Button, on_step: Callable) -> void:
+	button.pressed.connect(on_step.bind(1))
+	button.gui_input.connect(func(event: InputEvent) -> void:
+		var step: int = 0
+		if event.is_action_pressed("ui_left"):
+			step = -1
+		elif event.is_action_pressed("ui_right"):
+			step = 1
+		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+			step = -1
+		if step != 0:
+			on_step.call(step)
+			button.accept_event())
+
+
+func _character_text(character: int) -> String:
+	return "Character:  <  %s  >" % Players.character_name(character)
+
+
+func _team_text(team: int) -> String:
+	return "Team:  <  %s  >" % Players.team_name(team)
+
+
+## Tint a picker button with the team's color, so it reads at a glance.
+func _tint_team_button(button: Button, team: int) -> void:
+	var color: Color = Players.team_color(team)
+	for state: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, color.lightened(0.35))
 
 
 func _start_single_player_controller() -> void:
@@ -162,6 +224,8 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey or event is InputEventMouseButton:
 		last_device = PlayerSlot.KEYBOARD_MOUSE
 
+	if lobby.visible and event is InputEventJoypadMotion:
+		_lobby_stick_input(event)
 	if not event.is_pressed() or event.is_echo():
 		return
 	var device: int = Players.device_of(event)
@@ -183,6 +247,55 @@ func _lobby_input(event: InputEvent, device: int) -> void:
 	elif slot and Players.is_back_press(event):
 		Players.leave(slot)
 		accept_event()
+	elif slot and _character_step(event) != 0:
+		Players.cycle_character(slot, _character_step(event))
+		accept_event()
+	elif slot and _team_step(event) != 0:
+		Players.cycle_team(slot, _team_step(event))
+		accept_event()
+
+
+## Lobby: D-pad left/right, or A/D and the arrow keys, change character.
+func _character_step(event: InputEvent) -> int:
+	if event is InputEventJoypadButton:
+		match event.button_index:
+			JOY_BUTTON_DPAD_LEFT: return -1
+			JOY_BUTTON_DPAD_RIGHT: return 1
+	elif event is InputEventKey:
+		match event.physical_keycode:
+			KEY_A, KEY_LEFT: return -1
+			KEY_D, KEY_RIGHT: return 1
+	return 0
+
+
+## Lobby: the shoulder buttons, or Q/E, change team.
+func _team_step(event: InputEvent) -> int:
+	if event is InputEventJoypadButton:
+		match event.button_index:
+			JOY_BUTTON_LEFT_SHOULDER: return -1
+			JOY_BUTTON_RIGHT_SHOULDER: return 1
+	elif event is InputEventKey:
+		match event.physical_keycode:
+			KEY_Q: return -1
+			KEY_E: return 1
+	return 0
+
+
+## Lobby: pushing a seated pad's left stick sideways changes character once
+## per push.
+func _lobby_stick_input(event: InputEventJoypadMotion) -> void:
+	if event.axis != JOY_AXIS_LEFT_X:
+		return
+	var dir: int = 0
+	if absf(event.axis_value) >= STICK_STEP_THRESHOLD:
+		dir = int(signf(event.axis_value))
+	if dir == stick_dirs.get(event.device, 0):
+		return
+	stick_dirs[event.device] = dir
+	var slot: PlayerSlot = Players.get_slot_for_device(event.device)
+	if slot and dir != 0:
+		Players.cycle_character(slot, dir)
+		accept_event()
 
 
 ## A or Enter on any device picks it to play with; the menus themselves can
@@ -201,11 +314,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		accept_event()
 
 
-## Teams button: 2 teams (2P field) <-> 4 teams (4P field).
+## Teams button: 2 teams (2P field) <-> 4 teams (4P field). Online, only
+## the leader has it, and the server passes it on to everyone.
 func _cycle_team_count() -> void:
+	if online_lobby.visible:
+		Net.set_team_count(Players.next_team_count())
+		return
 	Players.set_team_count(Players.next_team_count())
+	solo_team_choice = posmod(solo_team_choice, Players.team_count)
 	_refresh_lobby()
-	_refresh_online_lobby()
 
 
 ## Bots button: cycle the match size bots fill up to (Off, 1v1, 2v2, ...).
@@ -242,29 +359,44 @@ func _refresh_lobby() -> void:
 				slot = s
 		if slot:
 			card_styles[i].bg_color = slot.color.darkened(0.35)
-			card_labels[i].text = "P%d\n%s" % [i + 1, Players.device_name(slot.device)]
+			card_labels[i].text = "P%d\n%s\n\n<  %s  >\nTeam %s" % [i + 1, Players.device_name(slot.device),
+				Players.character_name(slot.character), Players.team_name(slot.team)]
 		else:
 			card_styles[i].bg_color = Color(1, 1, 1, 0.06)
 			var bot: bool = i < Players.bot_fill_count
 			card_labels[i].text = ("Bot\n" if bot else "") + "Press A or Enter\nto join"
 	var bots: bool = Players.bot_fill_count > 0
-	var needed: int = 1 if bots else MIN_LOBBY_PLAYERS
-	start_button.disabled = Players.slots.size() < needed
-	start_button.text = "Start" if bots else "Start (2+ players)"
 	# Bots fill up to bot_fill_count; more joined players still all play
+	var seated: Array[int] = Players.slot_teams()
+	var match_teams: Array[int] = Players.teams_with_bots(Players.bot_fill_count, seated)
+	var enough: bool = Players.slots.size() >= (1 if bots else MIN_LOBBY_PLAYERS)
+	var split: bool = Players.team_split(match_teams) != ""
+	start_button.disabled = not enough or not split
+	if not enough:
+		start_button.text = "Start (2+ players)"
+	elif not split:
+		start_button.text = "Start (2+ teams)"
+	else:
+		start_button.text = "Start"
 	var seats: int = maxi(Players.slots.size(), Players.bot_fill_count if bots else MIN_LOBBY_PLAYERS)
-	lobby_teams.text = "Teams: " + Players.format_name(seats)
-	solo_teams.text = "Teams: " + Players.format_name(maxi(Players.bot_fill_count, 1))
-	lobby_bots.text = _bots_text(seats)
-	solo_bots.text = _bots_text(Players.bot_fill_count)
+	var lobby_match: Array[int] = Players.teams_with_bots(seats, seated)
+	lobby_teams.text = "Teams: " + Players.format_name(lobby_match)
+	lobby_bots.text = _bots_text(lobby_match)
+
+	var solo_match: Array[int] = Players.teams_with_bots(Players.bot_fill_count, [solo_team_choice])
+	solo_teams.text = "Teams: " + Players.format_name(solo_match)
+	solo_bots.text = _bots_text(solo_match)
+	solo_character.text = _character_text(solo_character_choice)
+	solo_team.text = _team_text(solo_team_choice)
+	_tint_team_button(solo_team, solo_team_choice)
 
 
-## "Bots: 2v2"-style label for the Bots buttons, for a match of `seats` players.
-func _bots_text(seats: int) -> String:
+## "Bots: Fill to 2v2"-style label for the Bots buttons, for a match of
+## players on `teams`.
+func _bots_text(teams: Array[int]) -> String:
 	if Players.bot_fill_count == 0:
 		return "Bots: Off"
-	var sizes: String = Players.format_name(seats).get_slice("(", 1).trim_suffix(")")
-	return "Bots: Fill to " + sizes
+	return "Bots: Fill to " + Players.team_split(teams)
 
 
 # ===== ONLINE =====
@@ -347,11 +479,13 @@ func _refresh_online_lobby() -> void:
 	for i in online_card_labels.size():
 		if i < Net.peers.size():
 			var id: int = Net.peers[i]
-			online_card_styles[i].bg_color = Players.team_color(Players.team_for_seat(i)).darkened(0.35)
+			var loadout: Array = Net.loadout_of(id)
+			online_card_styles[i].bg_color = Players.team_color(loadout[0]).darkened(0.35)
 			var text: String = "P%d\n%s" % [i + 1, "Host" if i == 0 else "Guest"]
 			if id == my_id:
 				text += " (You)\n" + ("Press A or Enter\nto pick your device" if online_device == Players.NO_DEVICE
 					else Players.device_name(online_device))
+			text += "\n\n%s\nTeam %s" % [Players.character_name(loadout[1]), Players.team_name(loadout[0])]
 			online_card_labels[i].text = text
 		else:
 			online_card_styles[i].bg_color = Color(1, 1, 1, 0.06)
@@ -359,23 +493,45 @@ func _refresh_online_lobby() -> void:
 	online_start.visible = Net.is_host
 	# Only the leader picks the format; it's sent with the match start
 	online_teams.visible = Net.is_host
-	online_teams.text = "Teams: " + Players.format_name(maxi(Net.peers.size(), MIN_LOBBY_PLAYERS))
-	online_start.disabled = Net.peers.size() < MIN_LOBBY_PLAYERS or online_device == Players.NO_DEVICE
+	var teams: Array[int] = []
+	for id: int in Net.peers:
+		teams.append(Net.loadout_of(id)[0])
+	var split: bool = Players.team_split(teams) != ""
+	online_teams.text = "Teams: " + Players.format_name(teams)
+	online_start.disabled = Net.peers.size() < MIN_LOBBY_PLAYERS or online_device == Players.NO_DEVICE or not split
+	var mine: Array = Net.local_loadout()
+	online_character.text = _character_text(mine[1])
+	online_team.text = _team_text(mine[0])
+	_tint_team_button(online_team, mine[0])
 	if online_device == Players.NO_DEVICE:
 		online_status.text = "Press A or Enter on the device you'll play with."
+	elif Net.peers.size() >= MIN_LOBBY_PLAYERS and not split:
+		online_status.text = "Everyone's on one team. Someone needs to switch."
 	elif Net.is_host:
 		online_status.text = "Send the code to your friends."
 	else:
 		online_status.text = "Waiting for the host to start."
 
 
-## Each machine seats only its own player, in its session seat; Game3D
-## spawns everyone else as remote players. A guest who never picked a device
-## gets the last one they touched (and can change it from the pause menu).
+func _step_online_character(step: int) -> void:
+	var mine: Array = Net.local_loadout()
+	Net.set_loadout(mine[0], mine[1] + step)
+
+
+func _step_online_team(step: int) -> void:
+	var mine: Array = Net.local_loadout()
+	Net.set_loadout(mine[0] + step, mine[1])
+
+
+## Each machine seats only its own player, in its session seat, as the
+## team and character picked in the lobby; Game3D spawns everyone else as
+## remote players. A guest who never picked a device gets the last one they
+## touched (and can change it from the pause menu).
 func _on_match_started() -> void:
 	Players.leave_all()
 	var device: int = online_device if online_device != Players.NO_DEVICE else last_device
-	Players.join(device, -1, Net.local_seat())
+	var mine: Array = Net.local_loadout()
+	Players.join(device, mine[0], Net.local_seat(), mine[1])
 	_start_game()
 
 

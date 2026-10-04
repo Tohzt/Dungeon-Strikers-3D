@@ -46,7 +46,7 @@ var _last_tip: Vector3
 ## fired from - a held weapon is tagged with the Player collision layer (see
 ## Weapon3D._update_collisions), which the hit mask below deliberately
 ## includes so arrows can hit other players later, so without this the arrow
-## detects the crossbow it just spawned next to as an instant hit.
+## detects the bow it just spawned next to as an instant hit.
 ## (Area3D has no add_collision_exception_with - that's PhysicsBody3D-only -
 ## so this is a plain manual skip-list instead.)
 func exclude_body(body: Node) -> void:

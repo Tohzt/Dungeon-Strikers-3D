@@ -9,13 +9,46 @@ class_name Weapon3D extends RigidBody3D
 @export var Behavior: WeaponBehavior3D
 @onready var Collision := $CollisionShape3D
 
-## Whether a quick tap plays the shoulder-swipe swing animation. Melee
-## weapons want the swing; a weapon that just fires in place (like the
-## crossbow) turns this off.
+## Whether a quick tap swings it (a melee weapon). A weapon that just fires
+## in place (like the bow) turns this off.
 @export var plays_swipe_animation: bool = true
 
+## Which hand can hold it. The right hand is the main hand: the KayKit
+## one-handed clips all swing with it. The left is the off hand, and swings
+## only with the left arm of the dual-wield clips, which suits few weapons.
+enum Grip {
+	MAIN_HAND,  ## Right hand only
+	OFF_HAND,  ## Left hand only (shield)
+	EITHER_HAND,  ## Light enough to swing from either hand
+	TWO_HANDED,  ## Right hand, and the left hand has to be free too
+}
+@export var grip: Grip = Grip.MAIN_HAND
+## A two-handed weapon that sits in the left hand rather than the right, like
+## a bow (drawn with the right). It still counts as the right hand's weapon.
+@export var rides_left_hand: bool = false
+
+@export_group("Animation")
+## Clip (library/name, see PlayerVisual3D.CLIP_KEYS) the arm plays when this
+## swings or fires from the right hand, or both hands if two-handed.
+@export var swing_clip: StringName = &"CombatMelee/Melee_1H_Attack_Slice_Horizontal"
+## The same, swung from the left hand.
+@export var offhand_swing_clip: StringName = &"CombatMelee/Melee_Dualwield_Attack_Slice"
+## Pose the arm holds while is_holding_pose() (aiming, blocking). Empty = none.
+## The torso turns into it too (see PlayerVisual3D.TORSO_BONES).
+@export var hold_clip: StringName = &""
+## Thrown point first, like a spear: it flies straight along its throw
+## instead of tumbling end over end.
+@export var throw_point_first: bool = false
+## Where it sits on the hand's handslot bone. The grip is the weapon's
+## origin and the blade runs along its +Y, like the KayKit props, so most
+## weapons need none.
+@export var hold_offset: Transform3D = Transform3D.IDENTITY
+@export_group("")
+
 var wielder: Node3D = null
-var held_hand: Area3D = null
+## The wielder's hand bone (see PlayerVisual3D.hand()), which this rides
+## rigidly while held.
+var held_hand: Node3D = null
 var is_held: bool = false
 var is_thrown: bool = false
 
@@ -83,6 +116,16 @@ var _blade_in_wall: bool = false
 var _swing_reference_speed: float = SWING_REFERENCE_SPEED
 
 const THROWN_SETTLE_SPEED: float = 0.4
+## Loose and in the air (thrown or dropped) until it first touches the
+## world. It stops tumbling then, and lands lying flat if that was the
+## ground. Set from contacts in _integrate_forces, acted on in _physics_process.
+var _landed: bool = true
+var _touched_world: bool = false
+var _touched_floor: bool = false
+## A thrown weapon that's down but somehow still sliding counts as settled
+## after this long, so it can't stay a projectile forever.
+const LANDED_SETTLE_TIME := 1.5
+var _landed_time: float = 0.0
 const DEFAULT_THROW_FORCE: float = 15.0
 const DEFAULT_THROW_UPWARD_RATIO: float = 0.15
 const DEFAULT_THROW_SPIN_SPEED: float = 8.0
@@ -93,11 +136,9 @@ var _next_request_msec: int = 0
 var _last_sent_transform: Transform3D
 var _last_sent_frame: int = -1
 var _last_sent_msec: int = 0
-## Replicas: the owner's recent poses, played back smoothly. While held they
-## are relative to the wielder, so the weapon moves rigidly with the
-## (also smoothed) body holding it.
+## Replicas: the owner's recent poses, played back smoothly. Not while
+## held: every machine poses a held weapon from its wielder's hand.
 var _net_motion: NetInterpolator = null
-var _net_motion_is_local: bool = false
 var _net_motion_sender: int = 0
 
 
@@ -105,6 +146,13 @@ func _ready() -> void:
 	# Thrown weapons are fast and thin: without this they can pass through
 	# walls and floors in a single physics step.
 	continuous_cd = true
+	# Frozen while held, and on machines that don't simulate it
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	# To notice landing (see _integrate_forces)
+	contact_monitor = true
+	max_contacts_reported = 4
+	# Spawned loose (e.g. a chest's loot): settle flat when it lands
+	_landed = false
 	_set_props()
 	set_rarity(rarity)
 
@@ -113,23 +161,91 @@ func _process(delta: float) -> void:
 	_update_worn_glow()
 	_handle_pickup_cooldown(delta)
 	_send_pose()
-	# A held replica is posed by its wielder, right after the wielder moves
-	if not wielder:
-		follow_net_pose(delta)
+	follow_net_pose(delta)
 
 
 func _physics_process(delta: float) -> void:
 	if not simulates():
 		return
+	# The wielder may have moved since the hand's last pose
+	follow_hand()
+	_update_landing(delta)
 	_handle_thrown_settle()
 	_update_hits(delta)
-	if is_thrown:
-		var spin_speed: float = Properties.throw_spin_speed if Properties else DEFAULT_THROW_SPIN_SPEED
-		# Spin around the weapon's own local Z axis (perpendicular to its
-		# length, which runs along local Y for a capsule-shaped weapon), so
-		# it tumbles end-over-end like a flicked frisbee no matter which way
-		# it happened to be pointing at the moment it was released.
-		rotate_object_local(Vector3.FORWARD, spin_speed * throw_spin_direction * delta)
+	if is_thrown and not _landed:
+		if throw_point_first:
+			_point_along(linear_velocity)
+		else:
+			var spin_speed: float = Properties.throw_spin_speed if Properties else DEFAULT_THROW_SPIN_SPEED
+			# Spin around the weapon's own local Z axis (perpendicular to its
+			# length, which runs along local Y), so it tumbles end over end
+			# whichever way it was pointing when it was let go.
+			rotate_object_local(Vector3.FORWARD, spin_speed * throw_spin_direction * delta)
+
+
+## Notes when a loose weapon in the air first touches the world, and
+## whether that was the ground (a contact pushing it up).
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if _landed or is_held:
+		return
+	for i in state.get_contact_count():
+		var other: Object = state.get_contact_collider_object(i)
+		var layer: Variant = other.get("collision_layer") if other else null
+		if layer == null or (int(layer) & Combat.WORLD_MASK) == 0:
+			continue  # A player, the ball, another weapon...
+		_touched_world = true
+		if state.get_contact_local_normal(i).y > 0.6:
+			_touched_floor = true
+
+
+## Down: no more tumbling. Off the floor it lies flat, so it rests still
+## instead of balancing on an end.
+func _update_landing(delta: float) -> void:
+	if is_held:
+		return
+	if _landed:
+		if is_thrown:
+			_landed_time += delta
+			if _landed_time > LANDED_SETTLE_TIME:
+				linear_velocity = Vector3.ZERO
+		return
+	if not _touched_world:
+		return
+	if not _touched_floor:
+		return  # Off a wall: keep falling (and tumbling) until it's down
+	_landed = true
+	_landed_time = 0.0
+	global_basis = _lying_flat_basis()
+
+
+## Its thinnest side up, keeping the way its length points.
+func _lying_flat_basis() -> Basis:
+	var box := Collision.shape as BoxShape3D if Collision else null
+	var size: Vector3 = box.size if box else Vector3(0.3, 1.0, 0.15)
+	var thin: int = size.min_axis_index()
+	var long: int = size.max_axis_index()
+	var current: Basis = global_basis.orthonormalized()
+	var along: Vector3 = current[long]
+	along.y = 0.0
+	along = along.normalized() if along.length() > 0.01 else Vector3.FORWARD
+	var flat := Basis()
+	flat[thin] = Vector3.UP
+	flat[long] = along
+	var other: int = 3 - thin - long
+	flat[other] = flat[(other + 1) % 3].cross(flat[(other + 2) % 3])
+	return flat
+
+
+## Point its blade (local +Y) along `direction`.
+func _point_along(direction: Vector3) -> void:
+	if direction.length() < 0.5:
+		return
+	var y: Vector3 = direction.normalized()
+	var x: Vector3 = y.cross(Vector3.UP)
+	if x.length() < 0.01:
+		x = Vector3.RIGHT
+	x = x.normalized()
+	global_basis = Basis(x, y, x.cross(y))
 
 
 func _set_props() -> void:
@@ -272,16 +388,15 @@ func _swing_hit_direction(away: Vector3) -> Vector3:
 
 
 ## High-level API: called when a quick tap resolves to an attack rather than a
-## hold-to-throw. Base weapons rely on the shoulder-swipe animation alone;
-## ranged weapons (like the crossbow) override this to fire a projectile.
+## hold-to-throw. Base weapons rely on the swing alone; ranged weapons (like
+## the bow) override this to fire a projectile.
 func attack(_aim_direction: Vector3) -> void:
 	pass
 
 
 ## High-level API: called by player/enemy when picking up this weapon.
-## `hand` is the Area3D of the hand it's being equipped into, used by
-## weapon behaviors (like the spring-follow sword) to know what to track.
-func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
+## `hand` is the hand bone it rides from now on.
+func equip(new_wielder: Node3D, hand: Node3D = null) -> void:
 	wielder = new_wielder
 	held_hand = hand
 	is_held = true
@@ -302,28 +417,47 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 		add_collision_exception_with(new_wielder)
 		new_wielder.add_collision_exception_with(self)
 
-	# Snap straight to the hand instead of leaving the weapon at its pickup
-	# spot for the hand-follow spring to violently close the gap. A large,
-	# fast RigidBody3D lurching up off the ground right under the wielder's
-	# feet gets picked up by move_and_slide() as if standing on a launching
-	# platform, flinging the wielder into the air.
-	if hand:
-		global_position = hand.global_position
-		linear_velocity = Vector3.ZERO
-		angular_velocity = Vector3.ZERO
+	# Held, it's posed by the hand (on every machine), not by physics, and
+	# steps after the wielder so its swing checks see where the wielder is now
+	freeze = true
+	process_physics_priority = new_wielder.process_physics_priority + 1
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	follow_hand()
 
 	if Behavior:
 		Behavior.equip(new_wielder)
 
 
-## Jump straight to the holding hand, e.g. after the wielder teleports, so
-## the hand-follow spring doesn't fling it across the map to catch up.
-func snap_to_hand() -> void:
-	if not held_hand:
+## Held: sit in the hand, wherever its bone is now. The wielder calls this
+## each time its skeleton is posed; the weapon's own physics step calls it
+## too, in case the wielder moved since.
+func follow_hand() -> void:
+	if not is_held or not held_hand:
 		return
-	global_position = held_hand.global_position
-	linear_velocity = Vector3.ZERO
-	angular_velocity = Vector3.ZERO
+	# Without the body's scale: physics bodies mustn't be scaled
+	var hand := Transform3D(held_hand.global_basis.orthonormalized(), held_hand.global_position)
+	global_transform = hand * hold_offset
+
+
+## Its wielder's skeleton was just posed (once per rendered frame).
+func on_hand_posed() -> void:
+	follow_hand()
+
+
+## Whether the arm holding this should hold `hold_clip`'s pose right now.
+func is_holding_pose() -> bool:
+	return hold_clip != &""
+
+
+## Off the hand: back to its own physics, if this machine simulates it,
+## falling until it lands (see _update_landing).
+func _release_from_hand() -> void:
+	freeze = not simulates()
+	process_physics_priority = 0
+	_landed = false
+	_touched_world = false
+	_touched_floor = false
 
 
 ## High-level API: called when the weapon is dropped/unequipped.
@@ -339,6 +473,7 @@ func unequip() -> void:
 	wielder = null
 	held_hand = null
 	is_held = false
+	_release_from_hand()
 	_update_collisions("on-ground")
 
 
@@ -365,6 +500,8 @@ func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0,
 	var launch_dir: Vector3 = (horizontal_dir + Vector3.UP * upward_ratio).normalized()
 	linear_velocity = launch_dir * throw_force
 	angular_velocity = Vector3.ZERO
+	if throw_point_first:
+		_point_along(launch_dir)
 
 
 ## The part of a throw every machine does: out of the wielder's hand and
@@ -387,6 +524,7 @@ func _let_go_thrown(spin_direction: float) -> void:
 	wielder = null
 	held_hand = null
 	is_held = false
+	_release_from_hand()
 	is_thrown = true
 	can_pickup = false
 	can_pickup_cd = can_pickup_dur_in_sec
@@ -568,14 +706,13 @@ func forget_departed_owner() -> void:
 	_set_net_owner(Net.SERVER_ID)
 
 
-## Once per physics tick at most, and only when it moved. Held weapons
-## send their pose relative to the wielder.
+## Once per physics tick at most, and only when it moved. Not while held
+## (see _net_motion).
 func _send_pose() -> void:
-	if not Net.match_synced or not is_multiplayer_authority():
+	if not Net.match_synced or not is_multiplayer_authority() or wielder:
 		return
 	var frame: int = Engine.get_physics_frames()
-	var is_local: bool = wielder != null
-	var xform: Transform3D = wielder.global_transform.affine_inverse() * global_transform if is_local else global_transform
+	var xform: Transform3D = global_transform
 	var now_msec: int = Time.get_ticks_msec()
 	if frame == _last_sent_frame or (xform.is_equal_approx(_last_sent_transform) \
 			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC):
@@ -583,7 +720,7 @@ func _send_pose() -> void:
 	_last_sent_frame = frame
 	_last_sent_transform = xform
 	_last_sent_msec = now_msec
-	_net_pose.rpc(NetInterpolator.now(), xform, is_local)
+	_net_pose.rpc(NetInterpolator.now(), xform)
 
 
 func _is_from_owner() -> bool:
@@ -591,15 +728,13 @@ func _is_from_owner() -> bool:
 
 
 @rpc("any_peer", "unreliable_ordered")
-func _net_pose(time: float, xform: Transform3D, is_local: bool) -> void:
+func _net_pose(time: float, xform: Transform3D) -> void:
 	if not _is_from_owner() or not _net_motion:
 		return
-	# Snapshots in the other space, or stamped by another machine's clock,
-	# can't be blended with these
+	# Snapshots stamped by another machine's clock can't be blended with these
 	var sender: int = multiplayer.get_remote_sender_id()
-	if is_local != _net_motion_is_local or sender != _net_motion_sender:
+	if sender != _net_motion_sender:
 		_net_motion.clear()
-		_net_motion_is_local = is_local
 		_net_motion_sender = sender
 	_net_motion.push(time, xform)
 
@@ -609,11 +744,13 @@ func _net_pose(time: float, xform: Transform3D, is_local: bool) -> void:
 func follow_net_pose(delta: float) -> void:
 	if simulates() or not _net_motion:
 		return
-	if _net_motion_is_local != (wielder != null):
-		return  # e.g. just thrown here, world-space poses not in yet
+	if wielder:
+		# Poses from before it was picked up are stale by the time it's dropped
+		_net_motion.clear()
+		return
 	var sample: Array = _net_motion.sample(delta)
 	if not sample.is_empty():
-		global_transform = wielder.global_transform * sample[0] if wielder else sample[0]
+		global_transform = sample[0]
 
 
 @rpc("any_peer", "reliable")
@@ -651,7 +788,7 @@ func _request_equip(is_left: bool) -> void:
 	if not Net.is_server or wielder or not can_pickup:
 		return
 	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and not player.is_hand_occupied(is_left):
+	if player and player.can_hold(self, is_left):
 		_equipped.rpc(player.name, is_left)
 
 

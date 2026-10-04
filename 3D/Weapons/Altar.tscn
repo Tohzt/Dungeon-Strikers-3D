@@ -11,24 +11,32 @@
 [ext_resource type="PackedScene" path="res://3D/Weapons/Hammer/hammer_3d.tscn" id="9_hammer"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Staff/staff_3d.tscn" id="10_staff"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Axe/greataxe_3d.tscn" id="11_greataxe"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Spear/spear_3d.tscn" id="new_spear"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Halberd/halberd_3d.tscn" id="new_halberd"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Sword/scimitar_3d.tscn" id="new_scimitar"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Hammer/mace_3d.tscn" id="new_mace"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Knuckles/knuckles_3d.tscn" id="new_knuckles"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Staff/wand_3d.tscn" id="new_wand"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Sword/rapier_3d.tscn" id="new_rapier"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Sword/greatsword_3d.tscn" id="new_greatsword"]
 
 [sub_resource type="Resource" id="AltarTier_1"]
 script = ExtResource("2_tier")
-weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield"), ExtResource("6_dagger"), ExtResource("7_torch")])
+weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield"), ExtResource("6_dagger"), ExtResource("7_torch"), ExtResource("new_knuckles"), ExtResource("new_wand"), ExtResource("new_rapier")])
 arming_time = 0.0
 respawn_delay = 3.0
 rarity_weights = Array[float]([80.0, 18.0, 2.0, 0.0])
 
 [sub_resource type="Resource" id="AltarTier_2"]
 script = ExtResource("2_tier")
-weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield"), ExtResource("5_bow"), ExtResource("8_axe"), ExtResource("9_hammer"), ExtResource("10_staff")])
+weapons = Array[PackedScene]([ExtResource("3_sword"), ExtResource("4_shield"), ExtResource("5_bow"), ExtResource("8_axe"), ExtResource("9_hammer"), ExtResource("10_staff"), ExtResource("new_scimitar"), ExtResource("new_spear"), ExtResource("new_wand"), ExtResource("new_rapier")])
 arming_time = 3.0
 respawn_delay = 3.0
 rarity_weights = Array[float]([35.0, 40.0, 20.0, 5.0])
 
 [sub_resource type="Resource" id="AltarTier_3"]
 script = ExtResource("2_tier")
-weapons = Array[PackedScene]([ExtResource("5_bow"), ExtResource("10_staff"), ExtResource("11_greataxe"), ExtResource("9_hammer")])
+weapons = Array[PackedScene]([ExtResource("5_bow"), ExtResource("10_staff"), ExtResource("11_greataxe"), ExtResource("9_hammer"), ExtResource("new_halberd"), ExtResource("new_mace"), ExtResource("new_spear"), ExtResource("new_greatsword")])
 arming_time = 6.0
 respawn_delay = 2.0
 rarity_weights = Array[float]([10.0, 30.0, 40.0, 20.0])

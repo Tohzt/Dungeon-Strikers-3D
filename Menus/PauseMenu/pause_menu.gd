@@ -124,8 +124,8 @@ func _refresh_device_rows() -> void:
 		device_buttons[slot].text = "P%d: %s" % [slot.index + 1,
 			"Press A or Enter on new device..." if slot == rebinding else Players.device_name(slot.device)]
 		controls_buttons[slot].text = "Controls: %s" % ("Advanced" if slot.advanced_controls else "Simple")
-		controls_buttons[slot].tooltip_text = "Advanced: each hand has its own attack and guard buttons" \
-			if slot.advanced_controls else "Simple: a button per hand (a shield blocks), Throw button throws"
+		controls_buttons[slot].tooltip_text = "Advanced: tap Attack / Off-hand to swing, hold to throw; guard buttons block" \
+			if slot.advanced_controls else "Simple: Attack swings your weapon, hold Off-hand to block; Throw + a button throws"
 
 
 ## Simple <-> Advanced. Tells the slot's input handler, which lets go of

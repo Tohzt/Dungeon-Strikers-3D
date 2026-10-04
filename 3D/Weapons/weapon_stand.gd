@@ -68,14 +68,19 @@ func _make_display_copy(scene: PackedScene, tier: int) -> Node3D:
 
 ## Whether `player` could take this stand's weapon right now.
 func can_give_to(player: PlayerClass3D) -> bool:
-	return _is_stocked() and _may_take(player) and reach.overlaps_body(player) \
-		and (not player.is_hand_occupied(false) or not player.is_hand_occupied(true))
+	return has_weapon_for(player) and reach.overlaps_body(player)
 
 
 ## Whether `player` could take a weapon here once in reach (bots use this to
-## pick a stand to walk to).
+## pick a stand to walk to): one they have a free hand for.
 func has_weapon_for(player: PlayerClass3D) -> bool:
-	return _is_stocked() and _may_take(player)
+	return _is_stocked() and _may_take(player) and player.free_hand_for(_stock_grip()) != null
+
+
+## Which hand(s) the weapon handed out here goes in.
+func _stock_grip() -> Weapon3D.Grip:
+	var weapon := _display as Weapon3D
+	return weapon.grip if weapon else Weapon3D.Grip.EITHER_HAND
 
 
 ## Whether there's a weapon here ready to hand out.
@@ -94,7 +99,7 @@ func _may_take(_player: PlayerClass3D) -> bool:
 func request_take(player: PlayerClass3D) -> bool:
 	if not can_give_to(player):
 		return false
-	var is_left: bool = player.is_hand_occupied(false)
+	var is_left: bool = player.free_hand_for(_stock_grip())
 	if not Net.in_session():
 		_given(player.name, is_left, _next_weapon_name())
 	else:
@@ -112,7 +117,7 @@ func _request_take(is_left: bool) -> void:
 	if not Net.is_server or not _is_stocked():
 		return
 	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and _may_take(player) and not player.is_hand_occupied(is_left):
+	if player and _may_take(player) and player.can_hold_grip(_stock_grip(), is_left):
 		_given.rpc(player.name, is_left, _next_weapon_name())
 
 

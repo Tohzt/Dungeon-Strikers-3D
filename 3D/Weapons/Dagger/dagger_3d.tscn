@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
-[ext_resource type="PackedScene" uid="uid://bwruu215xil0p" path="res://Assets/BetterDungeon/glb/dagger_common.glb" id="4_model"]
+[ext_resource type="PackedScene" uid="uid://cjj1p4qbtpw3l" path="res://Assets/Weapons/dagger_A.glb" id="model"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
-size = Vector3(0.14, 0.85, 0.1)
+size = Vector3(0.44, 1.03, 0.15)
 
 [node name="Dagger_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
 collision_layer = 8
@@ -16,10 +16,11 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 0.6
 script = ExtResource("1_script")
-follow_strength = 60.0
-follow_damping = 6.0
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
+grip = 2
+swing_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+offhand_swing_clip = &"CombatMelee/Melee_Dualwield_Attack_Stab"
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 ball_power = 2.5
@@ -38,8 +39,7 @@ swing_duration = 0.144
 swing_stamina_scale = 0.5
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.515, -0.005)
 shape = SubResource("BoxShape3D_hit")
 
-[node name="dagger_common_gltf" parent="." instance=ExtResource("4_model")]
-transform = Transform3D(1.0, 0, 0, 0, 1.0, 0, 0, 0, 1.0, 0, 0.0, 0)
+[node name="Model" parent="." instance=ExtResource("model")]

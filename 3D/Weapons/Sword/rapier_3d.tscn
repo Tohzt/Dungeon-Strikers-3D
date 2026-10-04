@@ -1,0 +1,42 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
+[ext_resource type="PackedScene" uid="uid://c0inwy7313on" path="res://Assets/Weapons/sword_D.glb" id="model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.71, 1.72, 0.4)
+
+[node name="Rapier_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 0.9
+script = ExtResource("script")
+swing_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+weapon_name = "Rapier"
+base_damage = 32.0
+knockback_force = 7.0
+ball_power = 2.2
+ball_lift = 0.1
+ball_exact = true
+
+[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+weapon_name = "Rapier"
+throw_force = 19.0
+throw_spin_speed = 12.0
+swing_duration = 0.16
+swing_stamina_scale = 0.8
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.005, 0.86, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

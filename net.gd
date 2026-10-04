@@ -42,13 +42,17 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 5
+const PROTOCOL_VERSION := 6
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
 var is_host := false
 ## Verified players' peer ids in seat order (leader first). Never the server.
 var peers: Array[int] = []
+## What each player picked in the lobby: peer id -> [team, character]. Kept
+## by the server and sent to everyone with the peer list, along with the
+## leader's Players.team_count.
+var loadouts: Dictionary = {}
 var in_match := false
 ## Every machine has the match scene loaded, so match nodes (players, ball,
 ## weapons) can send each other updates without hitting missing nodes.
@@ -132,16 +136,54 @@ func leave() -> void:
 	access_code = ""
 	is_host = false
 	peers.clear()
+	loadouts.clear()
 	in_match = false
 	match_synced = false
 	_request = ""
 
 
-## Leader only: ask the server to send everyone into the match, played
-## with the leader's Players.team_count.
+## Leader only: ask the server to send everyone into the match.
 func start_match() -> void:
 	if is_host:
-		_request_start.rpc_id(SERVER_ID, Players.team_count)
+		_request_start.rpc_id(SERVER_ID)
+
+
+## Our team and character in the lobby (sent to everyone through the
+## server). Applied here straight away, so quick changes build on each
+## other instead of on what the server last said.
+func set_loadout(team: int, character: int) -> void:
+	if in_session() and not in_match:
+		loadouts[multiplayer.get_unique_id()] = _clamp_loadout(team, character)
+		peers_changed.emit()
+		_request_loadout.rpc_id(SERVER_ID, team, character)
+
+
+## Leader only: the number of teams to play with.
+func set_team_count(count: int) -> void:
+	if is_host and not in_match:
+		_request_team_count.rpc_id(SERVER_ID, count)
+
+
+## [team, character] picked by `peer_id`.
+func loadout_of(peer_id: int) -> Array:
+	return loadouts.get(peer_id, [0, 0])
+
+
+## Our own [team, character].
+func local_loadout() -> Array:
+	return loadout_of(multiplayer.get_unique_id())
+
+
+func _clamp_loadout(team: int, character: int) -> Array:
+	return [posmod(team, Players.team_count), posmod(character, Players.character_count())]
+
+
+## Whether the players are on at least two different teams.
+func _teams_split() -> bool:
+	var teams: Array[int] = []
+	for id: int in peers:
+		teams.append(loadout_of(id)[0])
+	return Players.team_split(teams) != ""
 
 
 ## Call once the match scene has spawned everyone.
@@ -197,6 +239,8 @@ func _close_session() -> void:
 	print("Session %s closed." % access_code)
 	access_code = ""
 	peers.clear()
+	loadouts.clear()
+	Players.set_team_count(Players.TEAM_COUNTS[0])
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -208,8 +252,16 @@ func _broadcast_peers() -> void:
 	for id: int in peers:
 		# Skip anyone whose connection just dropped but isn't cleaned up yet.
 		if multiplayer.get_peers().has(id):
-			_sync_peers.rpc_id(id, peers)
+			_sync_peers.rpc_id(id, peers, loadouts, Players.team_count)
 	peers_changed.emit()
+
+
+## A new player starts on the smallest team, as the seat's usual character.
+func _add_loadout(id: int) -> void:
+	var teams: Array[int] = []
+	for loadout: Array in loadouts.values():
+		teams.append(loadout[0])
+	loadouts[id] = [Players.smallest_team(teams), Players.default_character(peers.find(id))]
 
 
 ## Tell the joiner why, then drop them (after a beat so the message arrives).
@@ -273,6 +325,7 @@ func _on_peer_disconnected(id: int) -> void:
 	if not is_server or not peers.has(id):
 		return
 	peers.erase(id)
+	loadouts.erase(id)
 	print("Peer %d left session %s." % [id, access_code])
 	if peers.is_empty():
 		_close_session()
@@ -312,6 +365,7 @@ func _request_host(code: String, version: int) -> void:
 	else:
 		access_code = code
 		peers.assign([id])
+		_add_loadout(id)
 		print("Peer %d opened session %s." % [id, code])
 		_broadcast_peers()
 
@@ -331,6 +385,7 @@ func _request_join(code: String, version: int) -> void:
 		_reject(id, "That session is full.")
 	elif not peers.has(id):
 		peers.append(id)
+		_add_loadout(id)
 		print("Peer %d joined session %s." % [id, code])
 		_broadcast_peers()
 
@@ -341,12 +396,30 @@ func _version_mismatch(version: int) -> String:
 
 
 @rpc("any_peer", "reliable")
-func _request_start(team_count: int) -> void:
-	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0]:
-		if not Players.TEAM_COUNTS.has(team_count):
-			team_count = Players.TEAM_COUNTS[0]
-		print("Session %s started a match with %d players in %d teams." % [access_code, peers.size(), team_count])
-		_start_match.rpc(team_count)
+func _request_loadout(team: int, character: int) -> void:
+	var id: int = multiplayer.get_remote_sender_id()
+	if is_server and not in_match and peers.has(id):
+		loadouts[id] = _clamp_loadout(team, character)
+		_broadcast_peers()
+
+
+@rpc("any_peer", "reliable")
+func _request_team_count(count: int) -> void:
+	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
+			and Players.TEAM_COUNTS.has(count):
+		Players.set_team_count(count)
+		# Teams no longer in play wrap around onto ones that are
+		for loadout: Array in loadouts.values():
+			loadout[0] = posmod(loadout[0], count)
+		_broadcast_peers()
+
+
+@rpc("any_peer", "reliable")
+func _request_start() -> void:
+	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
+			and _teams_split():
+		print("Session %s started a match with %d players in %d teams." % [access_code, peers.size(), Players.team_count])
+		_start_match.rpc(Players.team_count)
 
 
 @rpc("any_peer", "reliable")
@@ -363,8 +436,10 @@ func _join_rejected(reason: String) -> void:
 
 
 @rpc("authority", "reliable")
-func _sync_peers(ids: Array) -> void:
+func _sync_peers(ids: Array, new_loadouts: Dictionary, team_count: int) -> void:
 	peers.assign(ids)
+	loadouts = new_loadouts
+	Players.set_team_count(team_count)
 	is_host = peers[0] == multiplayer.get_unique_id()
 	var request := _request
 	_request = ""

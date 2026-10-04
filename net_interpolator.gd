@@ -25,7 +25,9 @@ const TELEPORT_DISTANCE := 3.0
 var delay: float
 var _times: Array[float] = []
 var _xforms: Array[Transform3D] = []
-## Extra values carried with each snapshot (angles), blended with lerp_angle.
+## Extra values carried with each snapshot. They aren't blended: each frame
+## gets the latest snapshot's at or before playback, so they can hold states
+## (e.g. which clip an arm plays) as well as amounts.
 var _extras: Array[PackedFloat32Array] = []
 var _render_time: float = -1.0
 
@@ -94,10 +96,7 @@ func sample(delta: float) -> Array:
 	if _render_time >= _times[-1]:
 		return [_xforms[-1], _extras[-1]]  # Ran out: hold, don't guess ahead
 	var t: float = inverse_lerp(_times[0], _times[1], _render_time)
-	var extras := PackedFloat32Array()
-	for i in _extras[0].size():
-		extras.append(lerp_angle(_extras[0][i], _extras[1][i], t))
-	return [_xforms[0].interpolate_with(_xforms[1], t), extras]
+	return [_xforms[0].interpolate_with(_xforms[1], t), _extras[0]]
 
 
 func _append(time: float, xform: Transform3D, extras: PackedFloat32Array) -> void:

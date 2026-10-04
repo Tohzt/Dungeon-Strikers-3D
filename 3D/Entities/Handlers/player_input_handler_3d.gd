@@ -5,12 +5,14 @@ class_name PlayerInputHandler3D extends Node
 var boost_held: bool = false
 var move_dir: Vector3
 var look_dir: Vector3 = Vector3.ZERO
+## Each hand's presses, worked out from the Attack and Off-hand buttons (see
+## _buttons_to_hands); the player acts on them per hand.
 var action_left: bool = false
 var action_right: bool = false
 var action_heavy_left: bool = false
 var action_heavy_right: bool = false
-## Simple controls: hold Throw and press a hand's button (left/right mouse,
-## LB/RB) to throw that hand's weapon; held to charge, thrown on release.
+## Simple controls: hold Throw and press Attack or Off-hand to throw that
+## hand's weapon; held to charge, thrown on release.
 var throw_left: bool = false
 var throw_right: bool = false
 var interact: bool = false
@@ -44,6 +46,9 @@ var slot: PlayerSlot = null
 ## Simple controls: the hand buttons as of last frame.
 var _left_click_was_pressed: bool = false
 var _right_click_was_pressed: bool = false
+## Which hand the Attack button works, settled while neither button is held
+## so a hand can't change mid-press (see PlayerClass3D.main_hand_is_left).
+var _main_is_left: bool = false
 
 ## Set while this player uses the souls-like controls: movement turns with
 ## this camera, and the player faces where they walk or their lock-on target.
@@ -55,11 +60,13 @@ func action(base: StringName) -> StringName:
 	return slot.action(base) if slot else base
 
 
-## Simple controls (the default): a button per hand that swings on press,
-## plus Guard and Throw; holding Throw turns the hand buttons into per-hand
-## throws, and the offhand button swings a matching pair together.
-## Advanced: every hand has its own attack and heavy buttons, and a hold
-## throws. See PlayerSlot.advanced_controls.
+## Buttons aren't tied to a hand. Attack (left click / RB) uses the main
+## weapon, normally the right hand's; Off-hand (right click / LB) the other
+## hand, and a shield there blocks.
+## Simple controls (the default): both swing on press and a shield blocks
+## while Off-hand is held; holding Throw turns them into throws instead.
+## Advanced: both swing on a tap and throw on a hold, and either guard
+## button raises a shield. See PlayerSlot.advanced_controls.
 func uses_simple_controls() -> bool:
 	return slot == null or not slot.advanced_controls
 
@@ -125,8 +132,7 @@ func _process(delta: float) -> void:
 	if uses_simple_controls():
 		_handle_simple_controls()
 	else:
-		# Update action_left to track current held state (for ball throwing and other actions)
-		action_left = Input.is_action_pressed(action("attack_left"))
+		_handle_advanced_controls()
 	boost_held = Input.is_action_pressed(action("boost"))
 	# Stays set until the player acts on it
 	if Input.is_action_just_pressed(action("interact")):
@@ -136,16 +142,46 @@ func _process(delta: float) -> void:
 	_handle_input_dodge(delta)
 	_handle_input_look(delta)
 
-## Each hand has its own button (left click/LB, right click/RB); a hand
-## holding a shield raises it while its button is held. While Throw is
-## held, the hand buttons throw that hand's weapon instead.
+## Attack and Off-hand press their hands' buttons; a shield in the off hand
+## rises while Off-hand is held. While Throw is held, they throw that hand's
+## weapon instead.
 func _handle_simple_controls() -> void:
-	_apply_simple_buttons(Input.is_action_pressed(action("attack_left")), Input.is_action_pressed(action("attack_right")),
-		false, Input.is_action_pressed(action("throw")))
+	var throw_mode: bool = Input.is_action_pressed(action("throw"))
+	# Throwing, Attack throws a lone shield too
+	var hands: Array[bool] = _buttons_to_hands(throw_mode)
+	_apply_simple_buttons(hands[0], hands[1], false, throw_mode)
 
 
-## Simple controls' buttons (held or not) into the per-hand presses the player
-## reads. `guard` raises any shield held (bots only); `throw_mode` is Throw held; the hand buttons then throw that hand.
+## Advanced controls: each button swings its hand on a tap and throws on a
+## hold (the player times it), and either guard button raises a shield.
+func _handle_advanced_controls() -> void:
+	var hands: Array[bool] = _buttons_to_hands(true)
+	var guard: bool = Input.is_action_pressed(action("attack_heavy_left")) \
+		or Input.is_action_pressed(action("attack_heavy_right"))
+	# The mouse's guard is Alt+click: that click is the guard, not an attack
+	var swallow: bool = guard and uses_mouse()
+	action_left = hands[0] and not swallow
+	action_right = hands[1] and not swallow
+	action_heavy_left = guard
+	action_heavy_right = guard
+
+
+## [left hand, right hand] held, from the Attack and Off-hand buttons.
+## `shield_too`: a lone shield is Attack's (see PlayerClass3D.main_hand_is_left).
+func _buttons_to_hands(shield_too: bool) -> Array[bool]:
+	var main: bool = Input.is_action_pressed(action("attack_main"))
+	var off: bool = Input.is_action_pressed(action("attack_off"))
+	if not main and not off:
+		var player := Master as PlayerClass3D
+		_main_is_left = player != null and player.main_hand_is_left(shield_too)
+	if _main_is_left:
+		return [main, off]
+	return [off, main]
+
+
+## Simple controls' per-hand buttons (held or not) into the presses the
+## player reads. `guard` raises any shield held (bots only); `throw_mode` is
+## Throw held; the hand buttons then throw that hand.
 ## Only presses that start in the right mode count, so letting go of Throw
 ## mid-click doesn't swing, and a click held from before doesn't throw.
 ## Bots press them through here too.
@@ -161,13 +197,6 @@ func _apply_simple_buttons(left: bool, right: bool, guard: bool, throw_mode: boo
 	_right_click_was_pressed = right
 	action_heavy_left = shield_left and not throw_mode and (guard or left)
 	action_heavy_right = shield_right and not throw_mode and (guard or right)
-
-
-## Whether this hand's button is the offhand one, which swings a matching
-## pair of weapons together: the less dominant button of the device, so
-## right click on a mouse and LB on a controller.
-func is_offhand(is_left: bool) -> bool:
-	return is_left != uses_mouse()
 
 
 ## Keyboard: Ctrl rolls on press, Shift sprints while held. Controller:
@@ -238,27 +267,9 @@ func _get_mouse_aim() -> Vector3:
 
 
 func _input(event: InputEvent) -> void:
-	if not uses_simple_controls():
-		_input_advanced_hands(event)
-
 	if event.is_action(action("target")):
 		target_toggle = event.is_action_pressed(action("target"))
 	
 	if event.is_action(action("target_scroll")):
 		if event.is_action_pressed(action("target_scroll")):
 			target_scroll = true
-
-
-## Advanced controls: each hand's own attack and heavy buttons.
-func _input_advanced_hands(event: InputEvent) -> void:
-	if event.is_action(action("attack_left")):
-		action_left = event.is_action_pressed(action("attack_left"))
-	
-	if event.is_action(action("attack_right")):
-		action_right = event.is_action_pressed(action("attack_right"))
-
-	if event.is_action(action("attack_heavy_left")):
-		action_heavy_left = event.is_action_pressed(action("attack_heavy_left"))
-
-	if event.is_action(action("attack_heavy_right")):
-		action_heavy_right = event.is_action_pressed(action("attack_heavy_right"))

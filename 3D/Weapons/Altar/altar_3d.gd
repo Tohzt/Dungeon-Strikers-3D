@@ -167,14 +167,27 @@ func _newest_armed() -> HeldWeapon:
 	return null
 
 
-## Hands out the newest armed weapon. Falls back to the newest one, so a
-## machine whose charge timer runs a touch behind still gives the same weapon.
-func _take_stock() -> PackedScene:
+## The weapon _take_stock() would hand out: the newest armed one, or else
+## the newest one, so a machine whose charge timer runs a touch behind still
+## gives the same weapon.
+func _next_given() -> HeldWeapon:
 	var item: HeldWeapon = _newest_armed()
-	if not item:
-		if _held.is_empty():
-			return null
+	if not item and not _held.is_empty():
 		item = _held.back()
+	return item
+
+
+func _stock_grip() -> Weapon3D.Grip:
+	var item: HeldWeapon = _next_given()
+	var weapon: Weapon3D = item.pivot.get_child(0) as Weapon3D if item else null
+	return weapon.grip if weapon else super()
+
+
+## Hands out the next weapon (see _next_given).
+func _take_stock() -> PackedScene:
+	var item: HeldWeapon = _next_given()
+	if not item:
+		return null
 	cooldown_left = _cooldown_after_take()
 	_remove_held(item)
 	_given_rarity = item.rarity

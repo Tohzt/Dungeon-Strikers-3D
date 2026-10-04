@@ -328,11 +328,6 @@ func _pick_attack_hand(player: PlayerClass3D) -> bool:
 	return next_left
 
 
-## Bots always swing a matching pair together.
-func is_offhand(_is_left: bool) -> bool:
-	return true
-
-
 func _separation(player: PlayerClass3D) -> Vector3:
 	var push: Vector3 = Vector3.ZERO
 	for other: PlayerClass3D in Global.Game3D.players:

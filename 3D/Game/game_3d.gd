@@ -18,8 +18,6 @@ signal player_killed(victim: PlayerClass3D, killer: PlayerClass3D)
 ## Someone reached kills_to_win. On every machine.
 signal match_won(team: int)
 
-## Matches Players.TEAM_COLORS.
-const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 const BOT_INPUT := preload("res://3D/Entities/Handlers/bot_input_handler_3d.gd")
 ## Which side of the arena each team starts on and defends (its goal and
 ## altar): Blue left, Red right, Green nearest the camera, Yellow far.
@@ -91,6 +89,8 @@ var _balls_made: int = 0
 var _bosses_made: int = 0
 
 var players: Array[PlayerClass3D] = []
+## Everyone in the match (including remote players and bots), in seat order.
+var match_slots: Array[PlayerSlot] = []
 ## Each player's HUD, so it can go when an online player leaves.
 var huds: Dictionary[PlayerClass3D, HUD3D] = {}
 ## Goals per team, for every team that has a goal to attack.
@@ -116,7 +116,8 @@ func _ready() -> void:
 		if Players.slots.is_empty():
 			Players.join_default_devices(default_player_count)
 		Players.fill_bots()
-		for slot: PlayerSlot in Players.slots:
+		match_slots = Players.slots.duplicate()
+		for slot: PlayerSlot in match_slots:
 			_spawn_player(slot)
 	_setup_scores()
 	for child: Node in get_children():
@@ -134,7 +135,8 @@ func _ready() -> void:
 
 
 ## Online: one player per session seat, named the same on every machine so
-## their synchronizers line up. Only our own seat reads local input.
+## their synchronizers line up. Only our own seat reads local input. Each
+## wears the team and character its player picked in the lobby.
 func _spawn_online_players() -> void:
 	var my_seat: int = Net.local_seat()
 	for seat in Net.peers.size():
@@ -142,11 +144,14 @@ func _spawn_online_players() -> void:
 		if seat == my_seat and not Players.slots.is_empty():
 			slot = Players.slots[0]
 		else:
+			var loadout: Array = Net.loadout_of(Net.peers[seat])
 			slot = PlayerSlot.new()
 			slot.index = seat
-			slot.team = Players.team_for_seat(seat)
-			slot.color = Players.team_color(slot.team)
-		_spawn_player(slot, Net.peers[seat])
+			Players.set_team(slot, loadout[0])
+			slot.character = loadout[1]
+		match_slots.append(slot)
+	for seat in match_slots.size():
+		_spawn_player(match_slots[seat], Net.peers[seat])
 	for weapon: Weapon3D in weapons():
 		weapon.setup_network()
 	Net.all_loaded.connect(_on_net_all_loaded)
@@ -193,14 +198,14 @@ func _spawn_position(slot: PlayerSlot) -> Vector3:
 	elif goal and altar:
 		center = (goal.global_position + altar.global_position) / 2.0
 		center.y = 0.0
-	var seat_count: int = Net.peers.size() if Net.in_session() else Players.slots.size()
-	var team_size: int = 0
-	for seat: int in maxi(seat_count, slot.index + 1):
-		if Players.team_for_seat(seat) == slot.team:
-			team_size += 1
-	@warning_ignore("integer_division")
-	var rank: int = slot.index / Players.team_count  # Seats take turns between teams
-	return center + across * (rank - (team_size - 1) / 2.0) * spawn_spacing + Vector3.UP
+	# Teammates stand side by side, in seat order
+	var teammates: Array[int] = []
+	for other: PlayerSlot in match_slots:
+		if other.team == slot.team:
+			teammates.append(other.index)
+	teammates.sort()
+	var rank: int = maxi(teammates.find(slot.index), 0)
+	return center + across * (rank - (teammates.size() - 1) / 2.0) * spawn_spacing + Vector3.UP
 
 
 func _spawn_point_of_team(team: int) -> SpawnPoint3D:
@@ -555,7 +560,7 @@ func _team_color(team: int) -> Color:
 
 
 func _team_name(team: int) -> String:
-	return TEAM_NAMES[team % TEAM_NAMES.size()]
+	return Players.team_name(team)
 
 
 func _player_label(player: PlayerClass3D) -> String:

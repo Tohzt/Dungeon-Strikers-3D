@@ -138,7 +138,7 @@ func _process(delta: float) -> void:
 		elif _just_pressed(hand, &"move_right"):
 			_select(hand, hand.selected + 1)
 		elif _just_pressed(hand, &"interact") or _just_pressed(hand, &"attack") \
-				or _just_pressed(hand, &"attack_left") or _just_pressed(hand, &"attack_right"):
+				or _just_pressed(hand, &"attack_main") or _just_pressed(hand, &"attack_off"):
 			chosen.emit(hand.player, hand.selected)
 
 

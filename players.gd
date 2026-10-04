@@ -6,13 +6,14 @@ extends Node
 ## events, so bindings stay editable in Project Settings > Input Map and
 ## players never read each other's input.
 ##
-## A future lobby/team-select menu should call join()/leave() and set each
-## slot's team/color; Game3D only seats players automatically when nothing
-## has been joined yet.
+## The menus call join()/leave() and let each player pick their team and
+## character (set_team, cycle_team, cycle_character); Game3D only seats
+## players automatically when nothing has been joined yet.
 ##
 ## team_count picks the match format: 2 teams play end to end on the 2P
-## field, 4 teams get a goal on every side (4P field). Seats are spread
-## across the teams in order, so 4 players make 2v2 or a four-way match.
+## field, 4 teams get a goal on every side (4P field). New seats start out
+## spread across the teams in order (see team_for_seat), and bots join
+## whichever team is smallest.
 
 signal slot_joined(slot: PlayerSlot)
 signal slot_left(slot: PlayerSlot)
@@ -29,6 +30,8 @@ const TEAM_COLORS: Array[Color] = [
 	Color(0.1, 0.8, 0.2),   # Green
 	Color(1, 0.85, 0.1),    # Yellow
 ]
+## Matches TEAM_COLORS.
+const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 
 ## Team counts a match can be played with (see team_count).
 const TEAM_COUNTS: Array[int] = [2, 4]
@@ -51,15 +54,16 @@ func _ready() -> void:
 			_base_actions.append(action_name)
 
 
-## index picks a specific seat (online play uses the session seat); -1 = next free.
-func join(device: int, team: int = -1, index: int = -1) -> PlayerSlot:
+## index picks a specific seat (online play uses the session seat); -1 = next
+## free. team and character default by seat.
+func join(device: int, team: int = -1, index: int = -1, character: int = -1) -> PlayerSlot:
 	if slots.size() >= MAX_PLAYERS or get_slot_for_device(device):
 		return null
 	var slot := PlayerSlot.new()
 	slot.index = index if index >= 0 else _next_free_index()
 	slot.device = device
-	slot.team = team if team >= 0 else team_for_seat(slot.index)
-	slot.color = team_color(slot.team)
+	_assign_team(slot, team if team >= 0 else team_for_seat(slot.index))
+	slot.character = character if character >= 0 else default_character(slot.index)
 	slots.append(slot)
 	_register_actions(slot)
 	slot_joined.emit(slot)
@@ -74,8 +78,8 @@ func add_bot() -> PlayerSlot:
 	slot.index = _next_free_index()
 	slot.device = PlayerSlot.BOT
 	slot.is_bot = true
-	slot.team = team_for_seat(slot.index)
-	slot.color = team_color(slot.team)
+	_assign_team(slot, smallest_team(slot_teams()))
+	slot.character = unused_character()
 	slots.append(slot)
 	slot_joined.emit(slot)
 	return slot
@@ -126,7 +130,7 @@ func leave_all() -> void:
 		leave(slot)
 
 
-## The team a seat plays on: seats take turns, P1 on Blue, P2 Red, P3 Blue
+## The team a seat starts on: seats take turns, P1 on Blue, P2 Red, P3 Blue
 ## (or Green with four teams), and so on.
 func team_for_seat(index: int) -> int:
 	return index % team_count
@@ -136,7 +140,89 @@ func team_color(team: int) -> Color:
 	return TEAM_COLORS[team % TEAM_COLORS.size()]
 
 
-## Switch the match format; every joined slot moves to its seat's new team.
+func team_name(team: int) -> String:
+	return TEAM_NAMES[team % TEAM_NAMES.size()]
+
+
+## Put `slot` on `team` (wrapping around the teams in play).
+func set_team(slot: PlayerSlot, team: int) -> void:
+	_assign_team(slot, team)
+	slot_changed.emit(slot)
+
+
+## Move `slot` to the next (step 1) or previous (step -1) team.
+func cycle_team(slot: PlayerSlot, step: int) -> void:
+	set_team(slot, slot.team + step)
+
+
+func _assign_team(slot: PlayerSlot, team: int) -> void:
+	slot.team = posmod(team, team_count)
+	slot.color = team_color(slot.team)
+
+
+## The teams of everyone seated, in seat order.
+func slot_teams() -> Array[int]:
+	var teams: Array[int] = []
+	for slot: PlayerSlot in slots:
+		teams.append(slot.team)
+	return teams
+
+
+## How many of `teams` are on each team in play.
+func team_sizes(teams: Array[int]) -> Array[int]:
+	var sizes: Array[int] = []
+	sizes.resize(team_count)
+	for team: int in teams:
+		sizes[posmod(team, team_count)] += 1
+	return sizes
+
+
+## The team with the fewest of `teams` on it (the first one on a tie).
+func smallest_team(teams: Array[int]) -> int:
+	var sizes: Array[int] = team_sizes(teams)
+	return sizes.find(sizes.min())
+
+
+## `seated` (the teams of players already in), plus the teams of the bots
+## fill_bots() would add to reach `total` players.
+func teams_with_bots(total: int, seated: Array[int]) -> Array[int]:
+	var teams: Array[int] = seated.duplicate()
+	while teams.size() < total:
+		teams.append(smallest_team(teams))
+	return teams
+
+
+# ===== CHARACTERS =====
+
+func character_count() -> int:
+	return PlayerVisual3D.CHARACTERS.size()
+
+
+func character_name(character: int) -> String:
+	return PlayerVisual3D.CHARACTER_NAMES[posmod(character, character_count())]
+
+
+## Seats start on different characters so players don't all look alike.
+func default_character(index: int) -> int:
+	return index % character_count()
+
+
+## The first character nobody seated is playing (the first one if all are).
+func unused_character() -> int:
+	for character: int in character_count():
+		if not slots.any(func(s: PlayerSlot) -> bool: return s.character == character):
+			return character
+	return 0
+
+
+## Switch `slot` to the next (step 1) or previous (step -1) character.
+func cycle_character(slot: PlayerSlot, step: int) -> void:
+	slot.character = posmod(slot.character + step, character_count())
+	slot_changed.emit(slot)
+
+
+## Switch the match format. Players keep their team when it's still in
+## play; teams that aren't wrap around onto ones that are.
 func set_team_count(count: int) -> void:
 	if not TEAM_COUNTS.has(count):
 		return
@@ -144,8 +230,7 @@ func set_team_count(count: int) -> void:
 	if not bot_fill_options().has(bot_fill_count):
 		bot_fill_count = bot_fill_options()[-1]
 	for slot: PlayerSlot in slots:
-		slot.team = team_for_seat(slot.index)
-		slot.color = team_color(slot.team)
+		_assign_team(slot, slot.team)
 		slot_changed.emit(slot)
 
 
@@ -154,17 +239,18 @@ func next_team_count() -> int:
 	return TEAM_COUNTS[(TEAM_COUNTS.find(team_count) + 1) % TEAM_COUNTS.size()]
 
 
-## "2 (2v2)"-style label for the current format with `player_count` players.
-func format_name(player_count: int) -> String:
+## "2 (2v1)"-style label for the current format with players on `teams`.
+func format_name(teams: Array[int]) -> String:
+	return "%d (%s)" % [team_count, team_split(teams)] if team_split(teams) != "" else str(team_count)
+
+
+## "2v1"-style split of `teams`, or "" if fewer than two teams have players.
+func team_split(teams: Array[int]) -> String:
 	var sizes: Array[String] = []
-	for team: int in team_count:
-		var size: int = 0
-		for seat: int in player_count:
-			if team_for_seat(seat) == team:
-				size += 1
+	for size: int in team_sizes(teams):
 		if size > 0:
 			sizes.append(str(size))
-	return "%d (%s)" % [team_count, "v".join(sizes)] if sizes.size() > 1 else str(team_count)
+	return "v".join(sizes) if sizes.size() > 1 else ""
 
 
 func get_slot_for_device(device: int) -> PlayerSlot:

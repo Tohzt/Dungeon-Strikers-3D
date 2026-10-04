@@ -330,3 +330,104 @@ become.
   (the current boss is `3D/Entities/Boss_Slime`).
 - **Skeletons_\* clips** (Rig_Medium) suit undead minions. No skeleton mesh is
   included; KayKit's Skeletons pack would provide one.
+
+## Progress
+
+**Step 1 (visual swap): done 2026-10-03.**
+- `Rig_Medium/*.glb` import as Animation Libraries; loop flags are set in each
+  `.import` `_subresources` (Idle/Walking/Running/Blocking/Aiming/etc.).
+  Rig_Large is still imported as plain scenes.
+- `3D/player_3d/player_visual_3d.gd` (`PlayerVisual3D`, node `Player/Visual`)
+  owns the body. It swaps `Visual/Character` for a character picked by
+  `player_id` (or the `character` export) and builds its AnimationTree in
+  code: root BlendTree = `base` state machine (Move blendspace + TimeScale,
+  Roll, Backstep, Stagger, Spawn) → `hit` OneShot filtered to the upper body.
+  New upper-body attack layers should be added the same way as `hit`.
+- Team color is a ring at the feet (`Visual/TeamRing`). The iframe fade uses
+  `GeometryInstance3D.transparency`.
+- The player now syncs `anim_pose` (`Pose.NONE/ROLL/BACKSTEP/STAGGER`).
+  `body_tilt` now carries only the boost lean. The roll tumble is gone.
+- The capsule, shoulder and hand spheres are hidden, not deleted. The
+  procedural `Appendages` still drive combat, so weapons float at the old
+  hand spots.
+- Death has no clip because the player is hidden as soon as they die.
+
+**Steps 2–3 (weapons on bones, animated attacks): done 2026-10-03.**
+Decisions 1 and 2 above are settled: **independent arms**, and **the right
+hand is the main hand**.
+- `Appendages` and the capsule mesh are deleted, along with the whole
+  procedural swing (shoulders, wrists, sway, hand-mesh sync, weapon springs).
+- Held weapons ride the `handslot` bones rigidly. `PlayerVisual3D.hand(is_left)`
+  is posed on `Skeleton3D.skeleton_updated` and re-poses held weapons at the
+  same moment. While held, a weapon is frozen (kinematic) and its physics step
+  runs after its wielder's. Thrown and dropped weapons get full physics back.
+  Held weapons no longer stream their pose online; every machine poses them
+  from the hand.
+- **Hand rules** (`Weapon3D.grip`): MAIN_HAND = right only (sword, axe,
+  hammer, staff, crossbow); OFF_HAND = left only (shield); EITHER_HAND
+  (dagger, torch); TWO_HANDED = right, and it fills the left hand too
+  (greataxe; either button swings it). Pickup, stands/altars, swap and the
+  server's equip check all go through `PlayerClass3D.can_hold*` /
+  `free_hand_for`. The matching-pair dual-wield follow-up was removed.
+- **Attacks:** each arm has a Blend2 layer filtered to its arm bones, holding
+  a frozen clip that is seeked every frame. `PlayerClass3D.arm_anim` =
+  [action, phase] per arm (REST/SWING/THROW/HOLD; phase 0–1 wind-up, 1–2
+  strike, 2–3 recovery). It is computed from the existing swing timers, so
+  hitstop, rebound, draw-backs and `swing_duration`/`swing_windup` tuning
+  all still work. Online it rides in `net_pose` in place of the shoulder
+  yaws. `NetInterpolator` extras are now stepped rather than blended.
+- Per weapon: `swing_clip`, `offhand_swing_clip`, `hold_clip` and
+  `hold_offset` (exported on `Weapon3D`). Clip timing lives in
+  `PlayerVisual3D.CLIP_KEYS`, measured from hand speed in each clip.
+- The crossbow aims with `General/Use_Item`, because the `Ranged_1H_*` clips
+  aim by turning the torso, which the arm-only layer leaves out.
+- The ball is carried at the `Hold` node.
+
+**Still to do:** carry pose for the ball; spawn/death clips for weapons;
+tune weapon scales against the KayKit props (ours are noticeably bigger);
+left-hand throws use the dual-wield chop and look weak; playtest swing feel
+and re-check TTK (step 5).
+
+**Weapon models (2026-10-03):** the weapons now use the KayKit weapons pack,
+`Assets/Weapons/*.glb`. It was converted from FBX with Blender; the texture
+is embedded, and the imports are set to keep it embedded
+(`gltf/embedded_image_handling=3`). Like the character props, each model has
+its grip at the origin and its blade along +Y, so it sits on the handslot
+with no offset. The bows are the exception: they lie flat, so `bow_3d.tscn`
+turns its model +90° about Y. The old BetterDungeon weapon models are deleted;
+its torch model is kept, since the new pack has no torch.
+- Re-skinned: Sword (`sword_B`), Axe (`axe_A`), Greataxe (`axe_B`), Dagger
+  (`dagger_A`), Hammer (`hammer_A`), Shield (`shield_B`), Staff (`staff_B`)
+  and arrows (`arrow_A`). "Bow" is now a real bow (`bow_A_withString`), not
+  a crossbow. It is two-handed and rides the left hand (`Weapon3D.rides_left_hand`),
+  holds `Ranged_Bow_Aiming_Idle` and shoots with `Ranged_Bow_Release`.
+- New weapons: Scimitar (`sword_C`), Rapier (`sword_D`), Greatsword
+  (`sword_E` at 0.75 scale, two-handed), Mace (`hammer_B`), Spear and
+  Halberd (two-handed), Knuckles (`fistweapon_A`, either hand) and Wand
+  (`wand_A`, fires `wand_bolt_3d`). They're in the altar tiers, chest loot
+  and `GameTools3D.test_weapons`, but not on the DungeonArena's fixed stands.
+- Unused variants left for later (e.g. rarity skins): sword_A (wooden),
+  axe_C, hammer_C, dagger_B, shield_A/C, staff_A, bow_A/B, arrow_B and the
+  other fist weapons.
+
+**Fit fixes (2026-10-03):** the bow and block poses are side-on. The torso
+twists into them (the bow's is mostly the hips, −45°), and an arm-only layer
+left the bow beside the body, half inside it. There is now a `torso` layer
+(hips, spine, chest, head) between `hit` and the arm layers. It plays the
+clip of whichever arm is in a HOLD pose, or swinging a weapon with
+`Weapon3D.turns_torso` (the bow). `shield_B` was about 1.5× KayKit's
+character-pack shield and sat with the forearm through it, so its model is
+at 0.8 scale with `hold_offset` (0, 0.1, 0.06).
+
+**Swing feel and throws (2026-10-04):**
+- The torso layer now follows every arm action, not just held poses.
+- `PlayerVisual3D.CLIP_SWEEP` adds a whole-body yaw and pitch per attack
+  clip. It winds back during the wind-up, whips through the strike, then
+  settles. The yaw signs come from measuring each clip's strike direction.
+- `WeaponTrail3D` is a ribbon behind melee blades. It's driven by the
+  synced `arm_anim` strike phase plus blade speed, so it needs no
+  networking, and it's tinted by rarity.
+- Loose weapons stop tumbling on their first world contact, and lie flat
+  (thinnest side up) once they hit the floor. `throw_point_first` (the spear)
+  keeps the blade along the flight path.
+- A lone shield is thrown with Throw + Attack (`main_hand_is_left(shield_too)`).

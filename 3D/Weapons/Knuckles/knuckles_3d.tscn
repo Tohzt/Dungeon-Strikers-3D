@@ -1,0 +1,43 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
+[ext_resource type="PackedScene" uid="uid://danww4xldad2r" path="res://Assets/Weapons/fistweapon_A.glb" id="model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.23, 0.15, 0.32)
+
+[node name="Knuckles_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 0.6
+script = ExtResource("script")
+grip = 2
+swing_clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"
+offhand_swing_clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+weapon_name = "Knuckles"
+base_damage = 20.0
+knockback_force = 9.0
+ball_power = 1.4
+ball_lift = 0.4
+
+[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+weapon_name = "Knuckles"
+throw_force = 18.0
+throw_spin_speed = 12.0
+swing_duration = 0.16
+swing_stamina_scale = 0.6
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055, 0.025, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

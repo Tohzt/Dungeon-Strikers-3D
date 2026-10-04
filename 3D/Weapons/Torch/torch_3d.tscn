@@ -30,10 +30,9 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 0.8
 script = ExtResource("1_script")
-follow_strength = 70.0
-follow_damping = 7.0
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
+grip = 2
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 ball_ignite_time = 5.0

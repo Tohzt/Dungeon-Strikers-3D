@@ -1,0 +1,44 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
+[ext_resource type="PackedScene" uid="uid://cgxiyh7fnqmls" path="res://Assets/Weapons/hammer_B.glb" id="model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.65, 1.04, 0.68)
+
+[node name="Mace_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 1.6
+script = ExtResource("script")
+swing_clip = &"CombatMelee/Melee_1H_Attack_Chop"
+vertical_swing = true
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+weapon_name = "Mace"
+base_damage = 52.0
+knockback_force = 16.0
+ball_power = 0.8
+ball_lift = 0.9
+
+[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+weapon_name = "Mace"
+throw_force = 13.0
+throw_spin_speed = 6.0
+durability_scale = 1.2
+swing_duration = 0.28
+swing_windup = 0.14
+swing_stamina_scale = 1.5
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.005, 0.52, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

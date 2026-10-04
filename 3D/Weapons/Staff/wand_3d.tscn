@@ -1,0 +1,44 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://cxfcslpgv6kke" path="res://3D/Weapons/Bow and Arrow/crossbow_3d.gd" id="script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
+[ext_resource type="PackedScene" path="res://3D/Weapons/Staff/wand_bolt_3d.tscn" id="bolt"]
+[ext_resource type="PackedScene" uid="uid://byg2qeigxynlu" path="res://Assets/Weapons/wand_A.glb" id="model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.21, 1.16, 0.21)
+
+[node name="Wand_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 0.5
+script = ExtResource("script")
+plays_swipe_animation = false
+arrow_scene = ExtResource("bolt")
+arrow_speed = 30.0
+muzzle_forward_offset = 0.3
+muzzle_height_offset = 0.3
+swing_clip = &"CombatRanged/Ranged_Magic_Shoot"
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+weapon_name = "Wand"
+base_damage = 12.0
+knockback_force = 6.0
+
+[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+weapon_name = "Wand"
+throw_force = 18.0
+durability_scale = 2.5
+swing_stamina_scale = 0.6
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.005, 0.26, -0.005)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

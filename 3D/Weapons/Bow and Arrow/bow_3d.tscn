@@ -3,14 +3,11 @@
 [ext_resource type="Script" uid="uid://cxfcslpgv6kke" path="res://3D/Weapons/Bow and Arrow/crossbow_3d.gd" id="1_crossbow"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
-[ext_resource type="PackedScene" uid="uid://dc1fwcax10xqe" path="res://Assets/BetterDungeon/glb/crossbow_common.glb" id="4_cn188"]
 [ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://3D/Weapons/Bow and Arrow/arrow_3d.tscn" id="5_arrow"]
+[ext_resource type="PackedScene" uid="uid://dd145n33a3po2" path="res://Assets/Weapons/bow_A_withString.glb" id="model"]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_p6jv2"]
-size = Vector3(0.22460938, 0.5996094, 0.1821289)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_8hcp5"]
-size = Vector3(1.1992188, 0.5052643, 0.18182373)
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.78, 0.15, 1.96)
 
 [node name="Bow_3D" type="RigidBody3D" unique_id=92531580 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
 collision_layer = 8
@@ -22,28 +19,25 @@ mass = 1.5
 script = ExtResource("1_crossbow")
 plays_swipe_animation = false
 arrow_scene = ExtResource("5_arrow")
-follow_strength = 1500.0
-follow_damping = 50.0
-held_pitch = 0.0
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
+grip = 3
+rides_left_hand = true
+swing_clip = &"CombatRanged/Ranged_Bow_Release"
+hold_clip = &"CombatRanged/Ranged_Bow_Aiming_Idle"
 
 [node name="WeaponBehavior" parent="." unique_id=1417607145 instance=ExtResource("2_behavior")]
 base_damage = 20.0
 knockback_force = 8.0
-weapon_name = "Crossbow"
+weapon_name = "Bow"
 
 [node name="WeaponProperties" parent="." unique_id=937272670 instance=ExtResource("3_properties")]
-weapon_name = "Crossbow"
+weapon_name = "Bow"
 durability_scale = 1.5
 
-[node name="crossbow_common_gltf" parent="." unique_id=613123724 instance=ExtResource("4_cn188")]
-transform = Transform3D(1.75, 0, 0, 0, 1.75, 0, 0, 0, 1.75, 0, 0, 0)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.34, -0.005, 0)
+shape = SubResource("BoxShape3D_hit")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=316060565]
-transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.010986328, 0.12161252)
-shape = SubResource("BoxShape3D_p6jv2")
-
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="." unique_id=1451312623]
-transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, -0.011138916, 0.68011904)
-shape = SubResource("BoxShape3D_8hcp5")
+[node name="Model" parent="." instance=ExtResource("model")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 0, 0)

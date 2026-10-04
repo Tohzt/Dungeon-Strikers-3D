@@ -153,42 +153,17 @@ func apply_knockback(direction: Vector3, force: float) -> void:
 ## Online, other machines call this on their copy to show the same fade.
 func start_iframes() -> void:
 	is_in_iframes = true
-	# Visual feedback for iframes - apply alpha to mesh materials
-	if Master is PlayerClass3D and Master.mesh_instance_3d:
-		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
-			if not mesh_instance:
-				continue
-			
-			var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
-			if not material:
-				# Create new material if no override exists
-				material = StandardMaterial3D.new()
-				mesh_instance.set_surface_override_material(0, material)
-			
-			if material is StandardMaterial3D:
-				material.albedo_color.a = 0.5
+	if Master is PlayerClass3D and Master.visual:
+		Master.visual.set_iframe_fade(true)
 	
 	var timer: SceneTreeTimer = get_tree().create_timer(iframes_duration)
 	timer.timeout.connect(end_iframes)
 
 
+## The player's team color, shown by the ring at their feet.
 func set_color(color: Color = Color.WHITE) -> void:
-	# Apply color to all meshes in the player's mesh array
-	if Master is PlayerClass3D and Master.mesh_instance_3d:
-		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
-			if not mesh_instance:
-				continue
-			
-			# Get or create material
-			var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
-			if not material:
-				# Create new material if no override exists
-				material = StandardMaterial3D.new()
-				mesh_instance.set_surface_override_material(0, material)
-			
-			# Apply color to material
-			if material is StandardMaterial3D:
-				material.albedo_color = color
+	if Master is PlayerClass3D and Master.visual:
+		Master.visual.set_team_color(color)
 
 
 func reset(active_status: bool = true) -> void:
@@ -242,13 +217,6 @@ func _perk_stat(stat_name: StringName) -> float:
 
 func end_iframes() -> void:
 	is_in_iframes = false
-	# Restore visual feedback - restore full alpha to mesh materials
-	if Master is PlayerClass3D and Master.mesh_instance_3d:
-		for mesh_instance: MeshInstance3D in Master.mesh_instance_3d:
-			if not mesh_instance:
-				continue
-			
-			var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
-			if material is StandardMaterial3D:
-				material.albedo_color.a = 1.0
+	if Master is PlayerClass3D and Master.visual:
+		Master.visual.set_iframe_fade(false)
 

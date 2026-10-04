@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cq1yr1m1s5rw4"]
 
 [ext_resource type="Script" uid="uid://b2mlctqjvr1bb" path="res://3D/Weapons/Bow and Arrow/arrow_3d.gd" id="1_arrow"]
-[ext_resource type="PackedScene" uid="uid://i2nd56fmfm6d" path="res://Assets/BetterDungeon/glb/arrow.glb" id="1_s1qdh"]
+[ext_resource type="PackedScene" uid="uid://4p011urmntf6" path="res://Assets/Weapons/arrow_A.glb" id="1_s1qdh"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_p6jv2"]
 height = 1.3123779
@@ -12,8 +12,8 @@ collision_layer = 0
 collision_mask = 0
 script = ExtResource("1_arrow")
 
-[node name="arrow_gltf" parent="." unique_id=1981662479 instance=ExtResource("1_s1qdh")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, -0.41389436)
+[node name="Model" parent="." instance=ExtResource("1_s1qdh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.37)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1696974647]
 transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, -0.49499488)

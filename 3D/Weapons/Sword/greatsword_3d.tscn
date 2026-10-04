@@ -1,0 +1,45 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
+[ext_resource type="PackedScene" uid="uid://fx7o4rvlrymn" path="res://Assets/Weapons/sword_E.glb" id="model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.66, 2.115, 0.18)
+
+[node name="Greatsword_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 2.4
+script = ExtResource("script")
+grip = 3
+swing_clip = &"CombatMelee/Melee_2H_Attack_Slice"
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+weapon_name = "Greatsword"
+base_damage = 65.0
+knockback_force = 14.0
+ball_power = 1.4
+ball_lift = 0.3
+ball_curve = 8.0
+
+[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+weapon_name = "Greatsword"
+throw_force = 11.0
+throw_spin_speed = 5.0
+swing_duration = 0.36
+swing_windup = 0.22
+swing_stamina_scale = 2.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0575, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]
+transform = Transform3D(0.75, 0, 0, 0, 0.75, 0, 0, 0, 0.75, 0, 0, 0)
