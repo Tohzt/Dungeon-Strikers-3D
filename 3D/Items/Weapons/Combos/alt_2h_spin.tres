@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponCombo3D" format=3]
+[gd_resource type="Resource" script_class="WeaponCombo3D" format=3 uid="uid://ddr1okjhy0ep3"]
 
-[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_sbabx"]
-[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_v2dcf"]
+[ext_resource type="Script" uid="uid://m3xltna86b7j" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_sbabx"]
+[ext_resource type="Script" uid="uid://dqt2l4uq7314e" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_v2dcf"]
 
 [sub_resource type="Resource" id="Resource_yygq8"]
 script = ExtResource("2_v2dcf")

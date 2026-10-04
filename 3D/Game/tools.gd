@@ -29,8 +29,8 @@ class_name GameTools3D extends Node
 ## centered on (G * i, G * j).
 const G := 4.0
 const NAV_GROUP := "dungeon_nav"
-const WALL_LIB := "res://Game/Dungeon/dungeon_mesh_library.tres"
-const FLOOR_LIB := "res://Game/Dungeon/dungeon_floor_library.tres"
+const WALL_LIB := "res://Game/Dungeon/dungeon_mesh_library.res"
+const FLOOR_LIB := "res://Game/Dungeon/dungeon_floor_library.res"
 ## Wall cells either side of the middle of the doorway behind the altar.
 const DOOR_HALF_WIDTH := 1
 const N := Vector3(0, 0, -1)

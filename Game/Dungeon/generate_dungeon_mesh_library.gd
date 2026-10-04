@@ -2,13 +2,13 @@
 extends EditorScript
 ## Rebuilds the dungeon GridMap palettes from res://Assets/BetterDungeon/glb/:
 ##
-## - dungeon_mesh_library.tres  Walls, pillars, stairs, scaffolds. 4m grid,
+## - dungeon_mesh_library.res   Walls, pillars, stairs, scaffolds. 4m grid,
 ##                              cell_center_y off; walls run through cell centers.
-## - dungeon_floor_library.tres Floor tiles, shifted so their top is at y=0.
+## - dungeon_floor_library.res  Floor tiles, shifted so their top is at y=0.
 ##                              4m grid (medium tiles fill one cell). No collision:
 ##                              levels put one flat floor body underneath instead,
 ##                              so balls and players never catch on tile seams.
-## - dungeon_props_library.tres Furniture and clutter, shifted to sit on y=0.
+## - dungeon_props_library.res  Furniture and clutter, shifted to sit on y=0.
 ##                              Meant for a 0.5m grid. Big pieces get a box
 ##                              collider; small clutter has none.
 ##
@@ -21,9 +21,9 @@ extends EditorScript
 ## ever append new pieces to the end of a list. Reordering scrambles levels.
 
 const SOURCE_DIR := "res://Assets/BetterDungeon/glb/"
-const STRUCTURE_PATH := "res://Game/Dungeon/dungeon_mesh_library.tres"
-const FLOOR_PATH := "res://Game/Dungeon/dungeon_floor_library.tres"
-const PROPS_PATH := "res://Game/Dungeon/dungeon_props_library.tres"
+const STRUCTURE_PATH := "res://Game/Dungeon/dungeon_mesh_library.res"
+const FLOOR_PATH := "res://Game/Dungeon/dungeon_floor_library.res"
+const PROPS_PATH := "res://Game/Dungeon/dungeon_props_library.res"
 
 enum Collision { NONE, TRIMESH, BOX, WALL }
 enum Align { AS_IS, FLOOR_TOP, SIT_ON_FLOOR }
@@ -230,7 +230,7 @@ static func _wall_shapes(piece_name: String, bounds: AABB) -> Array:
 static func _save(library: MeshLibrary, path: String) -> void:
 	# Saving a fresh resource drops the UID that scenes reference it by.
 	var uid := ResourceLoader.get_resource_uid(path) if ResourceLoader.exists(path) else ResourceUID.INVALID_ID
-	var err := ResourceSaver.save(library, path)
+	var err := ResourceSaver.save(library, path, ResourceSaver.FLAG_COMPRESS)
 	if err != OK:
 		push_error("Failed to save %s: %s" % [path, err])
 		return

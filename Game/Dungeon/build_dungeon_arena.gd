@@ -30,17 +30,19 @@ extends Node
 const G := 4.0  # Wall grid
 const OUT := "res://3D/Game/DungeonArena.tscn"
 const TORCH_OUT := "res://3D/Game/Level/wall_torch.tscn"
+const RED_OUT := "res://3D/Game/Level/%s_red.tscn"
 const GLB := "res://Assets/BetterDungeon/glb/%s.glb"
 const NAV_GROUP := "dungeon_nav"
+const LibGen := preload("res://Game/Dungeon/generate_dungeon_mesh_library.gd")
 
 const N := Vector3(0, 0, -1)
 const S := Vector3(0, 0, 1)
 const E := Vector3(1, 0, 0)
 const W := Vector3(-1, 0, 0)
 
-var struct_lib: MeshLibrary = load("res://Game/Dungeon/dungeon_mesh_library.tres")
-var floor_lib: MeshLibrary = load("res://Game/Dungeon/dungeon_floor_library.tres")
-var props_lib: MeshLibrary = load("res://Game/Dungeon/dungeon_props_library.tres")
+var struct_lib: MeshLibrary = load("res://Game/Dungeon/dungeon_mesh_library.res")
+var floor_lib: MeshLibrary = load("res://Game/Dungeon/dungeon_floor_library.res")
+var props_lib: MeshLibrary = load("res://Game/Dungeon/dungeon_props_library.res")
 
 var walls := {}   # Vector2i -> true
 var forced := {}  # Vector2i -> piece name (straight pieces)
@@ -51,6 +53,7 @@ var props_map: GridMap
 var decor: Node3D
 var torch_scene: PackedScene
 var _counter: int = 0
+var _red_saved: Array[String] = []
 ## Added to Blue x coordinates while placing (the base was moved out as a block).
 var _dx: float = 0.0
 
@@ -377,24 +380,40 @@ func _prop(piece: String, x: float, z: float, deg: float = 0.0, y: float = 0.0) 
 
 ## A freely placed model (for things off the grid: stacked, hung, tilted).
 ## `y` is the height of the surface it stands on (props sit on their base).
+## Placed as a GLB instance rather than the library's mesh, so the scene
+## references the model instead of embedding a copy of its mesh data.
 func _model(piece: String, x: float, y: float, z: float, deg: float = 0.0, team_tint: bool = false) -> void:
 	var item: int = props_lib.find_item_by_name(piece)
 	for team in 2:
 		var at := Transform3D(Basis(Vector3.UP, deg_to_rad(_rot(team, deg))), Vector3(_mx(team, x + _dx), y, z))
-		var node: Node3D
-		if item >= 0:
-			var mi := MeshInstance3D.new()
-			mi.mesh = props_lib.get_item_mesh(item)
-			mi.transform = at * props_lib.get_item_mesh_transform(item)
-			node = mi
-		else:
-			node = _inst(GLB % piece, piece)
-			node.transform = at
+		var path: String = _red_variant(piece) if team_tint and team == 1 else GLB % piece
+		var node: Node3D = _inst(path, piece)
+		node.transform = at
+		var mi := LibGen._find_mesh_instance(node)
+		if item >= 0 and mi:
+			# Line the model's mesh up with the library's floor-aligned placement.
+			node.transform = at * props_lib.get_item_mesh_transform(item) * LibGen._transform_to_root(mi, node).affine_inverse()
 		_counter += 1
 		node.name = "%s_%s%d" % [piece, "Blue" if team == 0 else "Red", _counter]
 		_add(decor, node)
-		if team_tint and team == 1:
-			_tint_red(node)
+
+
+## Saves (once per build) a scene inheriting `piece`'s GLB with Red's colors.
+## Overrides on nodes inside an instanced GLB aren't saved with the level,
+## so the tint has to live in its own scene.
+func _red_variant(piece: String) -> String:
+	var out := RED_OUT % piece
+	if out in _red_saved:
+		return out
+	var base: Node3D = (load(GLB % piece) as PackedScene).instantiate(PackedScene.GEN_EDIT_STATE_MAIN_INHERITED)
+	base.name = piece + "_red"
+	_tint_red(LibGen._find_mesh_instance(base))
+	var packed := PackedScene.new()
+	packed.pack(base)
+	ResourceSaver.save(packed, out)
+	base.free()
+	_red_saved.append(out)
+	return out
 
 
 ## Banners come blue; Red's get red cloth.
