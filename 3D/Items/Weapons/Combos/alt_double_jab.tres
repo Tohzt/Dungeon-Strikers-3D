@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WeaponCombo3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_e706s"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_uj5ne"]
+
+[sub_resource type="Resource" id="Resource_1ng5d"]
+script = ExtResource("2_uj5ne")
+hand = 1
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.6
+lunge_scale = 0.5
+
+[sub_resource type="Resource" id="Resource_lusql"]
+script = ExtResource("2_uj5ne")
+hand = 1
+delay = 0.14
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.6
+lunge_scale = 0.5
+
+[resource]
+script = ExtResource("1_e706s")
+steps = Array[ExtResource("2_uj5ne")]([SubResource("Resource_1ng5d"), SubResource("Resource_lusql")])

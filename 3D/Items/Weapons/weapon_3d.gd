@@ -15,9 +15,10 @@ class_name Weapon3D extends RigidBody3D
 
 ## Which hand can hold it. The right hand is the main hand: the KayKit
 ## one-handed clips all swing with it. The left is the off hand, and swings
-## only with the left arm of the dual-wield clips, which suits few weapons.
+## with the left arm of the dual-wield clips. A one-handed weapon in each
+## hand turns the Off-hand button into a special (see WeaponCombo3D).
 enum Grip {
-	MAIN_HAND,  ## Right hand only
+	MAIN_HAND,  ## One-handed: the right hand first, the left if that's taken
 	OFF_HAND,  ## Left hand only (shield)
 	EITHER_HAND,  ## Light enough to swing from either hand
 	TWO_HANDED,  ## Right hand, and the left hand has to be free too
@@ -43,6 +44,16 @@ enum Grip {
 ## origin and the blade runs along its +Y, like the KayKit props, so most
 ## weapons need none.
 @export var hold_offset: Transform3D = Transform3D.IDENTITY
+@export_group("Specials")
+## Weapons of the same family (e.g. "blade" for sword and scimitar) pair up
+## like two of the same weapon. Empty = it only pairs with itself.
+@export var combo_family: StringName = &""
+## The special (Off-hand button) with a compatible weapon in the other hand
+## (see WeaponCombo3D.find_for). Empty = both swing at once.
+@export var pair_combo: WeaponCombo3D
+## The Off-hand button's attack while the other hand is empty (or this is
+## two-handed). Empty = the same as the Attack button.
+@export var alt_attack: WeaponCombo3D
 @export_group("")
 
 var wielder: Node3D = null
@@ -94,6 +105,8 @@ const THROWN_DAMAGE_MULTIPLIER := 1.25
 const THROWN_HIT_MIN_SPEED := 4.0
 const THROWN_SLOWDOWN_ON_HIT := 0.3  # Keeps this much speed after hitting a player
 var swing_time_left: float = 0.0
+## Times the damage of the current swing (a combo beat may hit harder).
+var _swing_damage_scale: float = 1.0
 var thrower: Node3D = null  # Who threw it, so it can't hit them mid-flight
 var _hit_this_action: Array[Node] = []
 
@@ -285,9 +298,11 @@ func _handle_thrown_settle() -> void:
 		_update_collisions("on-ground")
 
 
-## Makes the next `duration` seconds of this held weapon's swing able to hit.
-func start_swing(duration: float) -> void:
+## Makes the next `duration` seconds of this held weapon's swing able to
+## hit, for `damage_scale` times its usual damage.
+func start_swing(duration: float, damage_scale: float = 1.0) -> void:
 	swing_time_left = duration
+	_swing_damage_scale = damage_scale
 	_swing_reference_speed = SWING_REFERENCE_SPEED * REFERENCE_SWING_DURATION / max(duration, 0.01)
 	_hit_this_action.clear()
 	_worn_this_action = false
@@ -305,7 +320,7 @@ func _update_hits(delta: float) -> void:
 		swing_time_left -= delta
 		if is_held and wielder:
 			_track_blade(delta)
-			_hit_overlapping(wielder, 1.0, false)
+			_hit_overlapping(wielder, _swing_damage_scale, false)
 			var was_in_wall: bool = _blade_in_wall
 			_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
 			if swing_time_left > 0.0 and _blade_in_wall and not was_in_wall:
@@ -387,6 +402,17 @@ func _swing_hit_direction(away: Vector3) -> Vector3:
 	return away.normalized() + travel.normalized()
 
 
+## Whether this and `other` pair up for a special (see WeaponCombo3D): the
+## same weapon, or the same combo_family.
+func is_compatible_with(other: Weapon3D) -> bool:
+	if combo_family != &"" and combo_family == other.combo_family:
+		return true
+	if not scene_file_path.is_empty():
+		return scene_file_path == other.scene_file_path
+	return Properties != null and other.Properties != null \
+		and Properties.weapon_name == other.Properties.weapon_name
+
+
 ## High-level API: called when a quick tap resolves to an attack rather than a
 ## hold-to-throw. Base weapons rely on the swing alone; ranged weapons (like
 ## the bow) override this to fire a projectile.
@@ -437,7 +463,23 @@ func follow_hand() -> void:
 		return
 	# Without the body's scale: physics bodies mustn't be scaled
 	var hand := Transform3D(held_hand.global_basis.orthonormalized(), held_hand.global_position)
+	if _mirrors_in_left_hand():
+		hand = hand * LEFT_HAND_TURN
 	global_transform = hand * hold_offset
+
+
+## The left handslot is the right one mirrored on every axis but X (a turn
+## can't mirror all three), so a weapon made for the right hand would sit
+## in the left with its edge (and a katana's curve) on the wrong side.
+## Turning it half round its blade puts that right. Off-hand-only weapons
+## (shields) and ones made to ride the left hand (bows) are set up for it.
+const LEFT_HAND_TURN := Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO)
+
+
+func _mirrors_in_left_hand() -> bool:
+	if grip == Grip.OFF_HAND or rides_left_hand or not wielder:
+		return false
+	return "held_weapon_left" in wielder and wielder.held_weapon_left == self
 
 
 ## Its wielder's skeleton was just posed (once per rendered frame).
@@ -819,7 +861,7 @@ func _update_collisions(state: String) -> void:
 			set_collision_layer_value(2, false)
 			set_collision_layer_value(4, true)
 			set_collision_mask_value(1, true)  # World
-			set_collision_mask_value(2, true)  # Player
+			set_collision_mask_value(2, false)  # Player: walked over, picked up with interact
 			set_collision_mask_value(3, true)  # Enemy
 			set_collision_mask_value(4, true)  # Weapon
 

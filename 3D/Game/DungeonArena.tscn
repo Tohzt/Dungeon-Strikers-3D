@@ -16,13 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="14_dlak7"]
 [ext_resource type="Script" uid="uid://ckfkkyu27xi51" path="res://3D/Game/Level/boss_trigger.gd" id="15_ne6ha"]
 [ext_resource type="Script" uid="uid://b0d37x1lanq1f" path="res://3D/Game/Level/spawn_point.gd" id="16_xn8s7"]
-[ext_resource type="PackedScene" uid="uid://k7wywaa0oom" path="res://3D/Weapons/weapon_stand.tscn" id="17_o7i6c"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="18_gr3ut"]
-[ext_resource type="PackedScene" uid="uid://d2kahxg7py4ps" path="res://3D/Weapons/Axe/axe_3d.tscn" id="19_od7cf"]
-[ext_resource type="PackedScene" path="res://3D/Weapons/Hammer/hammer_3d.tscn" id="20_5wgig"]
-[ext_resource type="PackedScene" uid="uid://gwtg3n8y37dp" path="res://3D/Weapons/Bow and Arrow/bow_3d.tscn" id="21_8ra4c"]
-[ext_resource type="PackedScene" path="res://3D/Weapons/Staff/staff_3d.tscn" id="22_uptqx"]
-[ext_resource type="PackedScene" path="res://3D/Weapons/Dagger/dagger_3d.tscn" id="23_6s02a"]
 [ext_resource type="PackedScene" path="res://3D/Items/Boost/boost_orb.tscn" id="24_qcq50"]
 [ext_resource type="PackedScene" uid="uid://bfxkjqagjl318" path="res://3D/Weapons/Chest/chest.tscn" id="25_cgqqt"]
 [ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="26_k31i0"]
@@ -30,6 +24,7 @@
 [ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="28_pivql"]
 [ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="29_8kjxy"]
 [ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="30_us62g"]
+[ext_resource type="PackedScene" path="res://3D/Items/Armor/armor_pickup.tscn" id="40_armor"]
 
 [sub_resource type="Environment" id="Environment_8qp10"]
 background_mode = 1
@@ -1254,6 +1249,7 @@ max_team_count = 2
 
 [node name="Tools" type="Node" parent="." unique_id=7709918]
 script = ExtResource("3_ae7db")
+testing_mode = true
 
 [node name="HUD" parent="." unique_id=1338016074 instance=ExtResource("4_fy3xe")]
 
@@ -1890,56 +1886,6 @@ transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 75, 
 script = ExtResource("16_xn8s7")
 team = 1
 
-[node name="WeaponStands" type="Node3D" parent="." unique_id=344106558]
-
-[node name="sword_3d_Blue" parent="WeaponStands" unique_id=1310319628 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, -27)
-weapon_scene = ExtResource("18_gr3ut")
-
-[node name="sword_3d_Red" parent="WeaponStands" unique_id=1379800490 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 0, -27)
-weapon_scene = ExtResource("18_gr3ut")
-
-[node name="axe_3d_Blue" parent="WeaponStands" unique_id=264180204 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -76, 0, -27)
-weapon_scene = ExtResource("19_od7cf")
-
-[node name="axe_3d_Red" parent="WeaponStands" unique_id=30732934 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76, 0, -27)
-weapon_scene = ExtResource("19_od7cf")
-
-[node name="hammer_3d_Blue" parent="WeaponStands" unique_id=1067887959 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -72, 0, -27)
-weapon_scene = ExtResource("20_5wgig")
-
-[node name="hammer_3d_Red" parent="WeaponStands" unique_id=1864351012 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 72, 0, -27)
-weapon_scene = ExtResource("20_5wgig")
-
-[node name="bow_3d_Blue" parent="WeaponStands" unique_id=162108700 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, -22)
-weapon_scene = ExtResource("21_8ra4c")
-
-[node name="bow_3d_Red" parent="WeaponStands" unique_id=2092183970 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 0, -22)
-weapon_scene = ExtResource("21_8ra4c")
-
-[node name="staff_3d_Blue" parent="WeaponStands" unique_id=1751513738 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -76, 0, -22)
-weapon_scene = ExtResource("22_uptqx")
-
-[node name="staff_3d_Red" parent="WeaponStands" unique_id=1988974142 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76, 0, -22)
-weapon_scene = ExtResource("22_uptqx")
-
-[node name="dagger_3d_Blue" parent="WeaponStands" unique_id=1380531365 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -72, 0, -22)
-weapon_scene = ExtResource("23_6s02a")
-
-[node name="dagger_3d_Red" parent="WeaponStands" unique_id=1289856986 instance=ExtResource("17_o7i6c")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 72, 0, -22)
-weapon_scene = ExtResource("23_6s02a")
-
 [node name="BoostOrbs" type="Node3D" parent="." unique_id=1473308528]
 
 [node name="BigOrb1" parent="BoostOrbs" unique_id=604502658 instance=ExtResource("24_qcq50")]
@@ -1987,6 +1933,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 11)
 
 [node name="Orb14" parent="BoostOrbs" unique_id=261686205 instance=ExtResource("24_qcq50")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 11)
+
+[node name="ArmorPickups" type="Node3D" parent="." unique_id=1471835506]
+
+[node name="Armor_Blue" parent="ArmorPickups" unique_id=1370636487 instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, -18.5)
+
+[node name="Armor_Red" parent="ArmorPickups" unique_id=229073114 instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44, 0, -18.5)
 
 [node name="Chests" type="Node3D" parent="." unique_id=1815327350]
 

@@ -1,7 +1,9 @@
 class_name WeaponTrail3D extends MeshInstance3D
 ## A fading ribbon behind a held weapon's blade while it's swung fast, so a
 ## swing reads as a sweep. Purely for looks: it follows the blade's pose,
-## which every machine animates the same, so it needs no syncing.
+## which every machine animates the same, so it needs no syncing. It's kept
+## relative to the wielder, so it travels with a lunge instead of being
+## left behind where the swing started.
 
 ## Seconds a stretch of ribbon lasts before it has faded out.
 const LIFETIME := 0.16
@@ -18,6 +20,7 @@ const PHASE_TO := 2.4
 const FROM := 0.35
 
 class Sample:
+	## In the wielder's space (see _space)
 	var base: Vector3
 	var tip: Vector3
 	var msec: int
@@ -33,6 +36,9 @@ var _sampled_frame: int = -1
 var _mesh := ImmediateMesh.new()
 var _base_local: Vector3
 var _tip_local: Vector3
+## Where the wielder is: the samples move with this. Kept as it last was
+## once there's no wielder (dropped), so what's left fades where it was.
+var _space := Transform3D.IDENTITY
 
 
 ## Runs along `weapon`'s blade (local +Y), as long as its collision box.
@@ -63,7 +69,8 @@ func sample() -> void:
 	var wielder: Node3D = weapon.wielder
 	var fast: bool = false
 	if weapon.is_held and wielder:
-		var tip_local: Vector3 = wielder.global_transform.affine_inverse() * (weapon.global_transform * _tip_local)
+		_space = wielder.global_transform
+		var tip_local: Vector3 = _space.affine_inverse() * (weapon.global_transform * _tip_local)
 		if _last_usec >= 0 and now_usec > _last_usec and _striking(wielder):
 			var speed: float = tip_local.distance_to(_last_tip_local) / ((now_usec - _last_usec) / 1000000.0)
 			fast = speed > MIN_SPEED
@@ -75,8 +82,9 @@ func sample() -> void:
 		if not _emitting:
 			_strip += 1
 		var s := Sample.new()
-		s.base = weapon.global_transform * _base_local
-		s.tip = weapon.global_transform * _tip_local
+		var to_space: Transform3D = _space.affine_inverse() * weapon.global_transform
+		s.base = to_space * _base_local
+		s.tip = to_space * _tip_local
 		s.msec = Time.get_ticks_msec()
 		s.strip = _strip
 		_samples.append(s)
@@ -99,6 +107,8 @@ func _process(_delta: float) -> void:
 	# This can run before this frame's posing, so last frame's still counts.
 	if Engine.get_process_frames() - _sampled_frame > 1 and not _samples.is_empty():
 		_emitting = false
+		if weapon.is_held and weapon.wielder:
+			_space = weapon.wielder.global_transform
 		_rebuild()
 
 
@@ -118,8 +128,8 @@ func _rebuild() -> void:
 				var s: Sample = _samples[k]
 				var alpha: float = ALPHA * clampf(1.0 - (now - s.msec) / (LIFETIME * 1000.0), 0.0, 1.0)
 				_mesh.surface_set_color(Color(1, 1, 1, alpha * 0.4))
-				_mesh.surface_add_vertex(s.base)
+				_mesh.surface_add_vertex(_space * s.base)
 				_mesh.surface_set_color(Color(1, 1, 1, alpha))
-				_mesh.surface_add_vertex(s.tip)
+				_mesh.surface_add_vertex(_space * s.tip)
 			_mesh.surface_end()
 		i = j + 1

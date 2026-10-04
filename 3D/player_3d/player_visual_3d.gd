@@ -27,6 +27,10 @@ const LIBRARIES: Dictionary[StringName, AnimationLibrary] = {
 	&"Tools": preload("res://Assets/Characters/Animations/Rig_Medium/Rig_Medium_Tools.glb"),
 }
 const SKELETON_PATH := "Rig_Medium/Skeleton3D"
+## Each character's headgear and cape, by mesh name minus the model prefix
+## (e.g. Knight_Helmet). Hidden until the player picks up armor (see
+## PlayerClass3D.armored). The Ranger's quiver isn't armor, so it stays.
+const ARMOR_MESHES: Array[String] = ["Helmet", "HelmetVisor", "Hat", "BearHat", "Mask", "Cape"]
 
 const IDLE_CLIP := &"General/Idle_A"
 const WALK_CLIP := &"MovementBasic/Walking_A"
@@ -109,6 +113,11 @@ const CLIP_KEYS: Dictionary[StringName, Vector4] = {
 	&"CombatRanged/Ranged_Bow_Aiming_Idle": Vector4(0.5, 0.5, 0.5, 0.5),
 	&"CombatRanged/Ranged_Bow_Release": Vector4(0.0, 0.0, 0.1, 0.8),
 }
+## The dual-wield clips where the right arm doesn't strike when the left
+## does (CLIP_KEYS has the left's timing): the right arm's own.
+const RIGHT_ARM_CLIP_KEYS: Dictionary[StringName, Vector4] = {
+	&"CombatMelee/Melee_Dualwield_Attack_Chop": Vector4(0.0, 0.4, 0.6, 1.0),
+}
 const STATE_XFADE := 0.1
 const RETURN_XFADE := 0.15
 const IFRAME_TRANSPARENCY := 0.5
@@ -124,6 +133,7 @@ var tree: AnimationTree = null
 var skeleton: Skeleton3D = null
 var _playback: AnimationNodeStateMachinePlayback = null
 var _last_pose: int = PlayerClass3D.Pose.NONE
+var _armored: bool = false
 
 ## Follow the handslot bones, which is where weapons are held (see hand()).
 var _hand_left := Node3D.new()
@@ -180,6 +190,7 @@ func _set_character(scene: PackedScene) -> void:
 	_hand_bone_left = skeleton.find_bone("handslot.l")
 	_hand_bone_right = skeleton.find_bone("handslot.r")
 	skeleton.skeleton_updated.connect(_on_skeleton_updated)
+	set_armored(_armored)
 	if tree:
 		tree.queue_free()
 	_build_tree()
@@ -321,9 +332,10 @@ func _process(delta: float) -> void:
 	_update_arm(false, delta)
 	_update_torso(delta)
 	_update_sweep(delta)
-	# Leaning into a boost, pivoting at the feet, and sweeping into attacks
+	# Leaning into a boost, pivoting at the feet, sweeping into attacks and
+	# spinning through a spin combo
 	body.rotation.x = player.body_tilt + _sweep_pitch
-	body.rotation.y = _sweep_yaw
+	body.rotation.y = _sweep_yaw + player.arm_anim[6]
 
 
 ## Blend the arm into (or out of) its action's clip, at the action's phase.
@@ -338,11 +350,13 @@ func _update_arm(is_left: bool, delta: float) -> void:
 		phase = arm[3]
 		clip_is_left = false
 	var layer: String = "arm_l" if is_left else "arm_r"
-	var clip: StringName = _arm_clip(action, clip_is_left) if action != PlayerClass3D.ArmAction.REST else &""
+	var clip: StringName = &""
+	if action != PlayerClass3D.ArmAction.REST:
+		clip = _arm_clip(action, clip_is_left, clip_at(arm[4 if clip_is_left else 5]))
 	var torso_want: Array = []
 	var sweep_want: Array = []
 	if clip != &"":
-		torso_want = [clip, _clip_time(clip, phase)]
+		torso_want = [clip, _clip_time(clip, phase, clip_is_left)]
 		if action != PlayerClass3D.ArmAction.HOLD and CLIP_SWEEP.has(clip):
 			sweep_want = _sweep_at(CLIP_SWEEP[clip], clip_is_left, phase)
 	if is_left:
@@ -362,7 +376,7 @@ func _update_arm(is_left: bool, delta: float) -> void:
 			_arm_clip_left = clip
 		else:
 			_arm_clip_right = clip
-		tree.set("parameters/%s_seek/seek_request" % layer, _clip_time(clip, phase))
+		tree.set("parameters/%s_seek/seek_request" % layer, _clip_time(clip, phase, clip_is_left))
 	if is_left:
 		_arm_weight_left = weight
 	else:
@@ -422,13 +436,16 @@ func _holds_two_handed() -> bool:
 	return weapon != null and weapon.grip == Weapon3D.Grip.TWO_HANDED
 
 
-## The clip an arm plays for `action`, given what's in that hand.
-func _arm_clip(action: int, is_left: bool) -> StringName:
+## The clip an arm plays for `action`, given what's in that hand. A combo
+## beat's own swing clip (`combo_clip`) wins over the weapon's.
+func _arm_clip(action: int, is_left: bool, combo_clip: StringName = &"") -> StringName:
 	var weapon: Weapon3D = player.held_weapon_left if is_left else player.held_weapon_right
 	match action:
 		PlayerClass3D.ArmAction.SWING:
 			if not weapon or player.held_ball:
 				return PUNCH_CLIP
+			if combo_clip != &"":
+				return combo_clip
 			return weapon.offhand_swing_clip if is_left else weapon.swing_clip
 		PlayerClass3D.ArmAction.THROW:
 			return OFFHAND_THROW_CLIP if is_left else THROW_CLIP
@@ -437,9 +454,28 @@ func _arm_clip(action: int, is_left: bool) -> StringName:
 	return &""
 
 
-## Seconds into `clip` for an action `phase` (see CLIP_KEYS).
-func _clip_time(clip: StringName, phase: float) -> float:
+## `clip` as a number for PlayerClass3D.arm_anim: its place in CLIP_KEYS,
+## or -1 for none.
+static func clip_index(clip: StringName) -> int:
+	if clip == &"":
+		return -1
+	var index: int = CLIP_KEYS.keys().find(clip)
+	if index < 0:
+		push_warning("Combo clip %s isn't in PlayerVisual3D.CLIP_KEYS" % clip)
+	return index
+
+
+## The clip clip_index() numbered, or none.
+static func clip_at(index: float) -> StringName:
+	var i: int = roundi(index)
+	return CLIP_KEYS.keys()[i] if i >= 0 and i < CLIP_KEYS.size() else &""
+
+
+## Seconds into `clip` for an action `phase` (see CLIP_KEYS) of that arm.
+func _clip_time(clip: StringName, phase: float, is_left: bool) -> float:
 	var keys: Vector4 = CLIP_KEYS.get(clip, Vector4(-1.0, 0.0, 0.0, 0.0))
+	if not is_left:
+		keys = RIGHT_ARM_CLIP_KEYS.get(clip, keys)
 	if keys.x < 0.0:
 		if not _warned_clips.has(clip):
 			_warned_clips[clip] = true
@@ -495,6 +531,14 @@ func set_team_color(color: Color) -> void:
 	var material := team_ring.material_override as StandardMaterial3D
 	if material:
 		material.albedo_color = color
+
+
+## Show or hide the character's headgear and cape (see ARMOR_MESHES).
+func set_armored(on: bool) -> void:
+	_armored = on
+	for mesh: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):
+		if String(mesh.name).get_slice("_", 1) in ARMOR_MESHES:
+			mesh.visible = on
 
 
 ## Half see-through while in iframes. Uses each mesh's transparency rather

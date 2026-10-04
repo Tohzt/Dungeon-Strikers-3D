@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
 [ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://3D/Weapons/Bow and Arrow/arrow_3d.tscn" id="5_arrow"]
 [ext_resource type="PackedScene" uid="uid://dd145n33a3po2" path="res://Assets/Weapons/bow_A_withString.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_bash.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.78, 0.15, 1.96)
@@ -17,6 +18,7 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 1.5
 script = ExtResource("1_crossbow")
+alt_attack = ExtResource("alt")
 plays_swipe_animation = false
 arrow_scene = ExtResource("5_arrow")
 Properties = NodePath("WeaponProperties")

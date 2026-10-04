@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Staff/magic_bolt_3d.tscn" id="5_bolt"]
 [ext_resource type="PackedScene" uid="uid://bh1cikhe0gnor" path="res://Assets/Weapons/staff_B.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_bonk.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.62, 2.32, 0.27)
@@ -16,6 +17,7 @@ axis_lock_angular_x = true
 axis_lock_angular_y = true
 axis_lock_angular_z = true
 script = ExtResource("1_script")
+alt_attack = ExtResource("alt")
 plays_swipe_animation = false
 arrow_scene = ExtResource("5_bolt")
 arrow_speed = 22.0

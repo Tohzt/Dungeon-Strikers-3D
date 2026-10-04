@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponCombo3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_d5xal"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_5snlf"]
+
+[sub_resource type="Resource" id="Resource_y2tf4"]
+script = ExtResource("2_5snlf")
+main_clip = &"CombatMelee/Melee_Dualwield_Attack_Chop"
+off_clip = &"CombatMelee/Melee_Dualwield_Attack_Chop"
+duration_scale = 1.15
+damage_scale = 1.25
+lunge_scale = 1.2
+
+[resource]
+script = ExtResource("1_d5xal")
+steps = Array[ExtResource("2_5snlf")]([SubResource("Resource_y2tf4")])

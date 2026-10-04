@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="WeaponCombo3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_vkt66"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_5x7pt"]
+
+[sub_resource type="Resource" id="Resource_uw80q"]
+script = ExtResource("2_5x7pt")
+hand = 0
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+off_clip = &"CombatMelee/Melee_Dualwield_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.55
+lunge_scale = 0.4
+
+[sub_resource type="Resource" id="Resource_ys7iy"]
+script = ExtResource("2_5x7pt")
+hand = 1
+delay = 0.12
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+off_clip = &"CombatMelee/Melee_Dualwield_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.55
+lunge_scale = 0.4
+
+[sub_resource type="Resource" id="Resource_jmifh"]
+script = ExtResource("2_5x7pt")
+hand = 0
+delay = 0.12
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+off_clip = &"CombatMelee/Melee_Dualwield_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.55
+lunge_scale = 0.4
+
+[sub_resource type="Resource" id="Resource_4mwx7"]
+script = ExtResource("2_5x7pt")
+hand = 1
+delay = 0.12
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+off_clip = &"CombatMelee/Melee_Dualwield_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.55
+lunge_scale = 0.4
+
+[resource]
+script = ExtResource("1_vkt66")
+steps = Array[ExtResource("2_5x7pt")]([SubResource("Resource_uw80q"), SubResource("Resource_ys7iy"), SubResource("Resource_jmifh"), SubResource("Resource_4mwx7")])

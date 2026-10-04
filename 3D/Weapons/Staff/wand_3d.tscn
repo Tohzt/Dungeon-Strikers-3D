@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Staff/wand_bolt_3d.tscn" id="bolt"]
 [ext_resource type="PackedScene" uid="uid://byg2qeigxynlu" path="res://Assets/Weapons/wand_A.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_poke.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.21, 1.16, 0.21)
@@ -17,6 +18,7 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 0.5
 script = ExtResource("script")
+alt_attack = ExtResource("alt")
 plays_swipe_animation = false
 arrow_scene = ExtResource("bolt")
 arrow_speed = 30.0

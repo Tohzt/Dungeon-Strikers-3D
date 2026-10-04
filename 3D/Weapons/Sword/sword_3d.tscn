@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_lnps2"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_tmecx"]
 [ext_resource type="PackedScene" uid="uid://qopseg1swcub" path="res://Assets/Weapons/sword_B.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/x_slash.tres" id="combo"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_thrust.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.61, 1.42, 0.15)
@@ -15,6 +17,9 @@ axis_lock_angular_x = true
 axis_lock_angular_y = true
 axis_lock_angular_z = true
 script = ExtResource("1_gvrid")
+alt_attack = ExtResource("alt")
+combo_family = &"blade"
+pair_combo = ExtResource("combo")
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 

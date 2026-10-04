@@ -233,7 +233,7 @@ func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class) -> bool:
 	var best: Node3D = null
 	var best_dist: float = WEAPON_SEARCH_RANGE
 	for weapon: Weapon3D in game.weapons():
-		if weapon.wielder or weapon.is_held or weapon.is_thrown or not weapon.can_pickup:
+		if not player.can_pick_up(weapon):
 			continue
 		var dist: float = _flat_dist(player, weapon)
 		if dist < best_dist:
@@ -249,8 +249,11 @@ func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class) -> bool:
 	if not best:
 		return false
 	_move_target = best.global_position
-	# Loose weapons are picked up by walking into them; stands need interact
-	_want_interact = best is WeaponStand3D and best.can_give_to(player)
+	# Interact once in reach, of a loose weapon or a stand
+	if best is WeaponStand3D:
+		_want_interact = best.can_give_to(player)
+	else:
+		_want_interact = _flat_dist(player, best) <= PlayerClass3D.WEAPON_REACH
 	return true
 
 

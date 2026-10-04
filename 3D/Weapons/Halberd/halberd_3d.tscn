@@ -1,14 +1,15 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dn31k1bqus112"]
 
-[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
-[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" uid="uid://exm48fj6lnc8" path="res://Assets/Weapons/halberd.glb" id="model"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_2h_poke.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(1.29, 1.82, 0.29)
 
-[node name="Halberd_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+[node name="Halberd_3D" type="RigidBody3D" unique_id=450500734 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
 collision_layer = 8
 collision_mask = 7
 axis_lock_angular_x = true
@@ -16,13 +17,14 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 2.2
 script = ExtResource("script")
-grip = 3
-swing_clip = &"CombatMelee/Melee_2H_Attack_Chop"
+alt_attack = ExtResource("alt")
 vertical_swing = true
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
+grip = 3
+swing_clip = &"CombatMelee/Melee_2H_Attack_Chop"
 
-[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+[node name="WeaponBehavior" parent="." unique_id=1501511482 instance=ExtResource("behavior")]
 weapon_name = "Halberd"
 base_damage = 55.0
 knockback_force = 15.0
@@ -30,7 +32,7 @@ ball_power = 1.3
 ball_lift = 0.35
 ball_curve = 10.0
 
-[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+[node name="WeaponProperties" parent="." unique_id=1934957277 instance=ExtResource("properties")]
 weapon_name = "Halberd"
 throw_force = 12.0
 throw_spin_speed = 6.0
@@ -38,8 +40,9 @@ swing_duration = 0.34
 swing_windup = 0.2
 swing_stamina_scale = 1.8
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.145, 0.91, -0.005)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=984142832]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.19446228, 0.91, -0.005)
 shape = SubResource("BoxShape3D_hit")
 
-[node name="Model" parent="." instance=ExtResource("model")]
+[node name="Model" parent="." unique_id=717797189 instance=ExtResource("model")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)

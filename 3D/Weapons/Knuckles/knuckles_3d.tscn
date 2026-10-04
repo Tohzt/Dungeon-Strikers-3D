@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" uid="uid://danww4xldad2r" path="res://Assets/Weapons/fistweapon_A.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/one_two.tres" id="combo"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_hammer_fist.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.23, 0.15, 0.32)
@@ -16,6 +18,8 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 0.6
 script = ExtResource("script")
+alt_attack = ExtResource("alt")
+pair_combo = ExtResource("combo")
 grip = 2
 swing_clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"
 offhand_swing_clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"

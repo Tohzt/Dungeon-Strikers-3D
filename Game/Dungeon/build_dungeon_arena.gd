@@ -431,15 +431,14 @@ func _orb(x: float, z: float, big: bool) -> void:
 		_add(holder, orb)
 
 
-func _stand(weapon: String, x: float, z: float) -> void:
-	var holder: Node = root.get_node_or_null("WeaponStands")
+func _armor(x: float, z: float) -> void:
+	var holder: Node = root.get_node_or_null("ArmorPickups")
 	if holder == null:
-		holder = Node3D.new(); holder.name = "WeaponStands"; _add(root, holder)
+		holder = Node3D.new(); holder.name = "ArmorPickups"; _add(root, holder)
 	for team in 2:
-		var stand: Node3D = _inst("res://3D/Weapons/weapon_stand.tscn", "%s_%s" % [weapon.get_file().get_basename(), "Blue" if team == 0 else "Red"])
-		stand.position = Vector3(_mx(team, x + _dx), 0, z)
-		stand.set("weapon_scene", load(weapon))
-		_add(holder, stand)
+		var armor: Node3D = _inst("res://3D/Items/Armor/armor_pickup.tscn", "Armor_%s" % ("Blue" if team == 0 else "Red"))
+		armor.position = Vector3(_mx(team, x + _dx), 0, z)
+		_add(holder, armor)
 
 
 ## The team's treasure chest (one per side), facing `deg`.
@@ -505,18 +504,13 @@ func _rooms() -> void:
 	_prop("lootSackB", -48.25, 14.25)
 
 	# --- Armory: x (-52, -36), z (-32, -16) ---
-	var weapons := [
-		"res://3D/Weapons/Sword/sword_3d.tscn", "res://3D/Weapons/Axe/axe_3d.tscn",
-		"res://3D/Weapons/Hammer/hammer_3d.tscn", "res://3D/Weapons/Bow and Arrow/bow_3d.tscn",
-		"res://3D/Weapons/Staff/staff_3d.tscn", "res://3D/Weapons/Dagger/dagger_3d.tscn",
-	]
-	for i in 6:
-		@warning_ignore("integer_division")
-		_stand(weapons[i], -48.0 + (i % 3) * 4.0, -27.0 + (i / 3) * 5.0)
+	# Racks for show only: a team's weapons come from its altar and chest
+	# (Tools' testing mode adds a room of every weapon behind each altar).
 	for x: float in [-49.0, -44.0, -39.0]:
 		_prop("weaponRack", x, -30.75, 180.0)
 	_model("quiver_full", -50.5, 0.0, -30.4, 180.0)
 	_model("shield_rare", -41.0, 0.45, -30.9, 0.0)
+	_armor(-44.0, -18.5)
 	_prop("cratePlatform_medium", -50.25, -18.25)
 	_prop("barrel", -37.75, -30.25); _prop("barrel", -37.75, -29.25, 90.0)
 	_torch(-44.0, -31.1, 0.0); _torch(-51.1, -24.0, 90.0)

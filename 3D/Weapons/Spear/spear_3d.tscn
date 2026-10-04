@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" uid="uid://di6gs2vcgx8h5" path="res://Assets/Weapons/spear_A.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_2h_sweep.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.28, 2.11, 0.25)
@@ -16,6 +17,7 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 1.8
 script = ExtResource("script")
+alt_attack = ExtResource("alt")
 grip = 3
 swing_clip = &"CombatMelee/Melee_2H_Attack_Stab"
 throw_point_first = true

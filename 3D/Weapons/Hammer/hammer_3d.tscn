@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
 [ext_resource type="PackedScene" uid="uid://bt01ggm0wtrmt" path="res://Assets/Weapons/hammer_A.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/double_chop.tres" id="combo"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_slam.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.81, 0.75, 0.45)
@@ -16,6 +18,9 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 2.0
 script = ExtResource("1_script")
+alt_attack = ExtResource("alt")
+combo_family = &"heavy"
+pair_combo = ExtResource("combo")
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 swing_clip = &"CombatMelee/Melee_1H_Attack_Chop"

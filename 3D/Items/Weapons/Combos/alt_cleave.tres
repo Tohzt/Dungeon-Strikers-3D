@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponCombo3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_i6hir"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_h1krb"]
+
+[sub_resource type="Resource" id="Resource_8jeq4"]
+script = ExtResource("2_h1krb")
+hand = 1
+main_clip = &"CombatMelee/Melee_1H_Attack_Slice_Horizontal"
+damage_scale = 0.9
+lunge_scale = 0.8
+
+[resource]
+script = ExtResource("1_i6hir")
+steps = Array[ExtResource("2_h1krb")]([SubResource("Resource_8jeq4")])

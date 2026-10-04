@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponCombo3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="1_6ctnx"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="2_kh3d8"]
+
+[sub_resource type="Resource" id="Resource_2ggs1"]
+script = ExtResource("2_kh3d8")
+hand = 0
+
+[sub_resource type="Resource" id="Resource_sbc80"]
+script = ExtResource("2_kh3d8")
+hand = 1
+delay = 0.14
+
+[resource]
+script = ExtResource("1_6ctnx")
+steps = Array[ExtResource("2_kh3d8")]([SubResource("Resource_2ggs1"), SubResource("Resource_sbc80")])

@@ -17,6 +17,7 @@
 [ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="19_perks"]
 [ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="20_picker"]
 [ext_resource type="PackedScene" path="res://3D/Items/Boost/boost_orb.tscn" id="21_boost"]
+[ext_resource type="PackedScene" path="res://3D/Items/Armor/armor_pickup.tscn" id="40_armor"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_uepvo"]
 sky_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
@@ -230,3 +231,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 24)
 
 [node name="Orb16" parent="BoostOrbs" unique_id=189706302 instance=ExtResource("21_boost")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -24)
+
+[node name="ArmorPickups" type="Node3D" parent="."]
+
+[node name="Armor1" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, 20)
+
+[node name="Armor2" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 20)
+
+[node name="Armor3" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -20)
+
+[node name="Armor4" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -20)

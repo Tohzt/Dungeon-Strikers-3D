@@ -65,6 +65,7 @@ func action(base: StringName) -> StringName:
 ## hand, and a shield there blocks.
 ## Simple controls (the default): both swing on press and a shield blocks
 ## while Off-hand is held; holding Throw turns them into throws instead.
+## With a weapon in each hand, Off-hand does a special (see WeaponCombo3D).
 ## Advanced: both swing on a tap and throw on a hold, and either guard
 ## button raises a shield. See PlayerSlot.advanced_controls.
 func uses_simple_controls() -> bool:

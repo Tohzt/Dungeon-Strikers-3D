@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" uid="uid://c0inwy7313on" path="res://Assets/Weapons/sword_D.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/double_stab.tres" id="combo"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_quick_slash.tres" id="alt"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.71, 1.72, 0.4)
@@ -16,6 +18,8 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 0.9
 script = ExtResource("script")
+alt_attack = ExtResource("alt")
+pair_combo = ExtResource("combo")
 swing_clip = &"CombatMelee/Melee_1H_Attack_Stab"
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
