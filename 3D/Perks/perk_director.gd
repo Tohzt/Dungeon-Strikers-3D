@@ -74,16 +74,18 @@ func _grant_hand(player_name: String, hand: PackedInt32Array) -> void:
 			player.slot.color if player.slot else Color.WHITE)
 
 
-## Server/offline: a find (e.g. a chest) deals `player` a hand of `size`
-## cards from any category, put first in line, and opens it for them on the
-## spot (bots pick theirs on their own).
-func grant_bonus_hand(player: PlayerClass3D, size: int) -> void:
+## Server/offline: a find deals `player` a hand of `size` cards, put first
+## in line, and opens it for them on the spot (bots pick theirs on their
+## own). A chest deals from every category but Relic; a skull's altar
+## (`relic`) deals Relic cards only.
+func grant_bonus_hand(player: PlayerClass3D, size: int, relic: bool = false) -> void:
 	if Net.in_session() and not Net.is_server:
 		return
 	var hand := PackedInt32Array()
 	var choices: Array[int] = []
 	for i in catalog.perks.size():
-		choices.append(i)
+		if (catalog.perks[i].category == Perk.Category.RELIC) == relic:
+			choices.append(i)
 	choices.shuffle()
 	for i in mini(size, choices.size()):
 		hand.append(choices[i])
@@ -167,9 +169,9 @@ func _deal_hand(categories: Array[Perk.Category]) -> PackedInt32Array:
 		for i in catalog.perks.size():
 			if catalog.perks[i].category == category and not hand.has(i):
 				choices.append(i)
-		if choices.is_empty():  # Category ran dry: anything not in the hand yet
+		if choices.is_empty():  # Category ran dry: anything not in the hand yet (but no relics)
 			for i in catalog.perks.size():
-				if not hand.has(i):
+				if not hand.has(i) and catalog.perks[i].category != Perk.Category.RELIC:
 					choices.append(i)
 		if not choices.is_empty():
 			hand.append(choices.pick_random())
@@ -236,7 +238,8 @@ func auto_pick(player: PlayerClass3D) -> void:
 ## Show `player` their oldest hand (at their altar). Nobody else's game
 ## stops. Call on the machine that controls the player.
 func open_for(player: PlayerClass3D) -> void:
-	if not can_open(player):
+	# Bots never look at cards: auto_pick only works while they aren't
+	if not can_open(player) or (player.slot and player.slot.is_bot):
 		return
 	if Net.in_session():
 		var now: int = Time.get_ticks_msec()

@@ -1,7 +1,7 @@
 class_name PlayerVisual3D extends Node3D
 ## The player's skinned KayKit body. It plays locomotion, dodge, stagger,
 ## hit and spawn clips from the player's state, and each arm's attack, throw
-## or hold clip on top; wears the team ring and fades during iframes. Held
+## or hold clip on top; wears the team ring and flashes red during iframes. Held
 ## weapons ride its hand bones. It reads only state that's synced online
 ## (velocity, anim_pose, body_tilt, arm_anim, iframes, what's in each hand),
 ## so remote copies animate the same as the owner without any extra sync.
@@ -120,7 +120,10 @@ const RIGHT_ARM_CLIP_KEYS: Dictionary[StringName, Vector4] = {
 }
 const STATE_XFADE := 0.1
 const RETURN_XFADE := 0.15
-const IFRAME_TRANSPARENCY := 0.5
+## The red tint pulsing over the character during iframes: its strongest
+## alpha, and pulses per second.
+const IFRAME_FLASH_ALPHA := 0.35
+const IFRAME_FLASH_RATE := 6.0
 
 ## Overrides the player's chosen character (e.g. for testing in a scene).
 @export var character: PackedScene
@@ -133,6 +136,9 @@ var tree: AnimationTree = null
 var skeleton: Skeleton3D = null
 var _playback: AnimationNodeStateMachinePlayback = null
 var _last_pose: int = PlayerClass3D.Pose.NONE
+var _iframe_flash: bool = false
+var _iframe_time: float = 0.0
+var _flash_material: StandardMaterial3D = null
 var _armored: bool = false
 
 ## Follow the handslot bones, which is where weapons are held (see hand()).
@@ -332,6 +338,7 @@ func _process(delta: float) -> void:
 	_update_arm(false, delta)
 	_update_torso(delta)
 	_update_sweep(delta)
+	_update_iframe_flash(delta)
 	# Leaning into a boost, pivoting at the feet, sweeping into attacks and
 	# spinning through a spin combo
 	body.rotation.x = player.body_tilt + _sweep_pitch
@@ -541,8 +548,23 @@ func set_armored(on: bool) -> void:
 			mesh.visible = on
 
 
-## Half see-through while in iframes. Uses each mesh's transparency rather
-## than a material override, so the textures are kept.
+## A light red pulse while in iframes, laid over each mesh (material_overlay)
+## so the textures are kept and nothing shows through the armor.
 func set_iframe_fade(on: bool) -> void:
+	_iframe_flash = on
+	_iframe_time = 0.0
+	if on and _flash_material == null:
+		_flash_material = StandardMaterial3D.new()
+		_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_flash_material.albedo_color = Color(1.0, 0.1, 0.1, IFRAME_FLASH_ALPHA)
 	for mesh: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):
-		mesh.transparency = IFRAME_TRANSPARENCY if on else 0.0
+		mesh.material_overlay = _flash_material if on else null
+
+
+func _update_iframe_flash(delta: float) -> void:
+	if not _iframe_flash:
+		return
+	_iframe_time += delta
+	var pulse: float = 0.5 + 0.5 * cos(_iframe_time * TAU * IFRAME_FLASH_RATE)
+	_flash_material.albedo_color.a = IFRAME_FLASH_ALPHA * pulse

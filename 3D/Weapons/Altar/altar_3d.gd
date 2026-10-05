@@ -1,12 +1,18 @@
 @tool
 class_name Altar3D extends WeaponStand3D
-## A team's own weapon stand. Only its team can take from it. It holds up to
+## A team's own weapon stand. Only its team can take from it, unless every
+## one of its players is dead: then it's unguarded and anyone can. It holds up to
 ## `capacity` weapons: each new one (a restock after a take, or a tier-up)
 ## goes on top and pushes the oldest off once it's full. Stronger tiers make
 ## a new weapon sit "charging" for a while before it can be taken.
 ## Online the server picks every restock and every tier change.
 ## During the intermission between rounds it's also where each of its
 ## team's players picks a perk (see PerkDirector): interact opens the cards.
+## A boss's skull brought here (see Skull3D) becomes a reward after
+## a random 10-20s (see reward_time_min/max): a strong weapon, or a perk
+## relic (pick one of two Relic perks, stronger than the usual cards). It floats above the altar and is taken
+## like the weapons. Play goes on meanwhile, so the other team has a chance
+## to wipe this one out and steal it; the round only ends once it's claimed.
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
 
@@ -28,6 +34,21 @@ const PLAYERS_SCRIPT := preload("res://players.gd")
 	set(value):
 		capacity = value
 		_trim_held()
+
+@export_group("Skull Reward")
+## Seconds a skull brought home takes to become its reward: a random time
+## in this range, picked by the server.
+@export var reward_time_min: float = 10.0
+@export var reward_time_max: float = 20.0
+## Chance the reward is a weapon; otherwise it's a perk relic.
+@export_range(0.0, 1.0) var reward_weapon_chance: float = 0.5
+## Weapons a skull can become, and their rarity odds (its arming_time and
+## respawn_delay aren't used; the wait is reward_time_min/max).
+@export var reward_weapons: AltarTier
+## Relic cards (Perk.Category.RELIC, stronger than the rest) a perk relic
+## offers; its taker picks one.
+@export_range(1, 5) var relic_hand_size: int = 2
+@export_group("")
 
 @onready var base_mesh: MeshInstance3D = $MeshInstance3D
 @onready var arming_ring: MeshInstance3D = $ArmingRing
@@ -73,6 +94,21 @@ const PIP_POP_SCALE := 1.8
 const PIP_POP_TIME := 0.5
 var _pip_pop: float = 0.0
 
+enum Reward { NONE, WEAPON, PERK }
+## What a delivered skull turned (or is turning) into. Set on every machine.
+var reward: Reward = Reward.NONE
+var _reward_scene: PackedScene = null
+var _reward_rarity: int = WeaponRarity.Tier.COMMON
+## Seconds until the reward can be taken.
+var _reward_left: float = 0.0
+## Holds the reward's display copy, above the stock.
+var _reward_pivot: Node3D = null
+var _reward_sign: Label3D = null
+const REWARD_HEIGHT := 1.2  # Above the weapon display
+const REWARD_SIGN_HEIGHT := 4.9
+const RELIC_COLOR := Color(1.0, 0.8, 0.3)
+const UNGUARDED_COLOR := Color(1.0, 0.25, 0.2)
+
 
 func _ready() -> void:
 	var first: AltarTier = _current_tier()
@@ -90,6 +126,7 @@ func _ready() -> void:
 	_apply_team_color()
 	if not Engine.is_editor_hint():
 		_make_perk_sign()
+		_make_reward_sign()
 		if has_first:
 			_add_held(0, 0, WeaponRarity.Tier.COMMON)
 
@@ -106,6 +143,7 @@ func _process(delta: float) -> void:
 		item.pivot.rotate_y(display_spin_speed * delta)
 	_update_arming_visual()
 	_update_perk_sign()
+	_update_reward(delta)
 	_update_pip_pop(delta)
 	_tick_tier_timer(delta)
 
@@ -121,12 +159,24 @@ func request_take(player: PlayerClass3D) -> bool:
 	if _has_perks_for(player):
 		Global.Game3D.perks.open_for(player)
 		return true
+	if has_reward_for(player) and reach.overlaps_body(player):
+		_take_reward(player)
+		return true
 	return super(player)
+
+
+## The skull's reward comes first, then the stock.
+func has_weapon_for(player: PlayerClass3D) -> bool:
+	return has_reward_for(player) or super(player)
 
 
 func _has_perks_for(player: PlayerClass3D) -> bool:
 	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
-	return perks != null and perks.can_open(player) and _may_take(player) and reach.overlaps_body(player)
+	# Bots take their cards on their own (BotInputHandler3D); opening them
+	# here would leave a bot stuck looking at them.
+	if player.slot and player.slot.is_bot:
+		return false
+	return perks != null and perks.can_open(player) and _is_ours(player) and reach.overlaps_body(player)
 
 
 func _make_perk_sign() -> void:
@@ -230,8 +280,28 @@ func _layout_held() -> void:
 		_held[i].pivot.position = display_anchor.position + Vector3(offset, 0, 0)
 
 
+## Our own team always may; anyone else only while the altar is unguarded.
 func _may_take(player: PlayerClass3D) -> bool:
+	return _is_ours(player) or (player.slot != null and is_unguarded())
+
+
+func _is_ours(player: PlayerClass3D) -> bool:
 	return player.slot != null and player.slot.team == owner_team
+
+
+## Every player on our team is dead right now (and there is one), so
+## enemies may take from us.
+func is_unguarded() -> bool:
+	var game: Game3D_Class = Global.Game3D
+	if not game:
+		return false
+	var guarded: bool = false
+	var anyone: bool = false
+	for player: PlayerClass3D in game.players:
+		if is_instance_valid(player) and _is_ours(player):
+			anyone = true
+			guarded = guarded or not player.is_dead()
+	return anyone and not guarded
 
 
 func _cooldown_after_take() -> float:
@@ -311,6 +381,155 @@ func _current_tier() -> AltarTier:
 	if tiers.is_empty():
 		return null
 	return tiers[clampi(tier, 0, tiers.size() - 1)]
+
+
+# ===== SKULL REWARD =====
+
+## Server/offline: what a skull brought here becomes, as
+## [Reward, weapon pick, rarity, seconds to charge], for start_reward on
+## every machine.
+func roll_reward() -> PackedInt32Array:
+	var seconds: int = roundi(randf_range(reward_time_min, maxf(reward_time_min, reward_time_max)))
+	if reward_weapons and not reward_weapons.weapons.is_empty() and randf() < reward_weapon_chance:
+		return PackedInt32Array([Reward.WEAPON, randi() % reward_weapons.weapons.size(),
+			WeaponRarity.roll(reward_weapons.rarity_weights), seconds])
+	return PackedInt32Array([Reward.PERK, 0, 0, seconds])
+
+
+## Every machine: a skull came home; start turning it into `roll` (see
+## roll_reward). An unclaimed earlier reward is replaced.
+func start_reward(roll: PackedInt32Array) -> void:
+	_clear_reward()
+	reward = roll[0] as Reward
+	_reward_left = roll[3]
+	_reward_pivot = Node3D.new()
+	_reward_pivot.position = display_anchor.position + Vector3.UP * REWARD_HEIGHT
+	if reward == Reward.WEAPON:
+		_reward_scene = reward_weapons.weapons[roll[1]]
+		_reward_rarity = roll[2]
+		_reward_pivot.add_child(_make_display_copy(_reward_scene, _reward_rarity))
+	else:
+		_reward_pivot.add_child(_make_relic())
+	add_child(_reward_pivot)
+
+
+func _clear_reward() -> void:
+	reward = Reward.NONE
+	_reward_scene = null
+	if _reward_pivot:
+		_reward_pivot.queue_free()
+		_reward_pivot = null
+
+
+func _reward_ready() -> bool:
+	return reward != Reward.NONE and _reward_left <= 0.0
+
+
+## Whether `player` could take the reward now, once in reach.
+func has_reward_for(player: PlayerClass3D) -> bool:
+	if not _reward_ready() or not _may_take(player):
+		return false
+	return reward == Reward.PERK or player.free_hand_for(_reward_grip()) != null
+
+
+func _reward_grip() -> Weapon3D.Grip:
+	var weapon: Weapon3D = _reward_pivot.get_child(0) as Weapon3D if _reward_pivot else null
+	return weapon.grip if weapon else Weapon3D.Grip.EITHER_HAND
+
+
+func _take_reward(player: PlayerClass3D) -> void:
+	var is_left: bool = reward == Reward.WEAPON and player.free_hand_for(_reward_grip())
+	if not Net.in_session():
+		_reward_given(player.name, is_left, _next_weapon_name())
+	else:
+		_request_reward.rpc_id(Net.SERVER_ID, is_left)
+
+
+@rpc("any_peer", "reliable")
+func _request_reward(is_left: bool) -> void:
+	if not Net.is_server or not _reward_ready():
+		return
+	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	if player and _may_take(player) and (reward == Reward.PERK or player.can_hold_grip(_reward_grip(), is_left)):
+		_reward_given.rpc(player.name, is_left, _next_weapon_name())
+
+
+## Offline, or server -> everyone: `player_name` takes the reward.
+@rpc("authority", "call_local", "reliable")
+func _reward_given(player_name: String, is_left: bool, weapon_name: String) -> void:
+	var game: Game3D_Class = Global.Game3D
+	var player: PlayerClass3D = game.get_node_or_null(player_name) as PlayerClass3D
+	var kind: Reward = reward
+	var scene: PackedScene = _reward_scene
+	var from: Transform3D = _reward_pivot.global_transform if _reward_pivot else display_anchor.global_transform
+	_clear_reward()
+	if player and kind == Reward.WEAPON and scene:
+		_hand_weapon(scene, _reward_rarity, player, is_left, weapon_name, from)
+	elif player and kind == Reward.PERK:
+		game.perks.grant_bonus_hand(player, relic_hand_size, true)  # Server/offline deals
+	game.check_round_over()  # The reward may have been the last thing the round waited on
+	if not player:
+		return
+	if not _is_ours(player):
+		var label: String = "P%d" % (player.slot.index + 1) if player.slot else player_name
+		game.scoreboard.announce("%s raided %s's altar!" % [label, Players.team_name(owner_team)],
+			player.slot.color if player.slot else Color.WHITE)
+
+
+## The perk relic's looks: a glowing gem.
+func _make_relic() -> Node3D:
+	var gem := MeshInstance3D.new()
+	var mesh := PrismMesh.new()
+	mesh.size = Vector3(0.5, 0.7, 0.5)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = RELIC_COLOR
+	material.emission_enabled = true
+	material.emission = RELIC_COLOR
+	material.emission_energy_multiplier = 2.5
+	mesh.material = material
+	gem.mesh = mesh
+	var light := OmniLight3D.new()
+	light.light_color = RELIC_COLOR
+	light.omni_range = 4.0
+	gem.add_child(light)
+	return gem
+
+
+func _make_reward_sign() -> void:
+	_reward_sign = Label3D.new()
+	_reward_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_reward_sign.no_depth_test = true
+	_reward_sign.pixel_size = 0.01
+	_reward_sign.font_size = 72
+	_reward_sign.outline_size = 18
+	_reward_sign.position = Vector3(0, REWARD_SIGN_HEIGHT, 0)
+	_reward_sign.visible = false
+	add_child(_reward_sign)
+
+
+## Count the reward down, spin it, and say what it is (and when it's
+## up for grabs to everyone).
+func _update_reward(delta: float) -> void:
+	_reward_sign.visible = reward != Reward.NONE
+	if reward == Reward.NONE:
+		return
+	_reward_left = max(_reward_left - delta, 0.0)
+	_reward_pivot.rotate_y(display_spin_speed * 1.5 * delta)
+	var t: float = Time.get_ticks_msec() / 1000.0
+	_reward_pivot.position.y = display_anchor.position.y + REWARD_HEIGHT + sin(t * 2.0) * 0.12
+	var see_through: float = 0.0 if _reward_ready() else 0.6
+	for node: Node in _reward_pivot.find_children("*", "GeometryInstance3D", true, false):
+		(node as GeometryInstance3D).transparency = see_through
+	var what: String = "WEAPON" if reward == Reward.WEAPON else "RELIC PERK"
+	if not _reward_ready():
+		_reward_sign.text = "%s  %ds" % [what, ceili(_reward_left)]
+		_reward_sign.modulate = Color(0.85, 0.85, 0.85)
+	elif is_unguarded():
+		_reward_sign.text = "UNGUARDED %s!" % what
+		_reward_sign.modulate = UNGUARDED_COLOR
+	else:
+		_reward_sign.text = "%s READY" % what
+		_reward_sign.modulate = RELIC_COLOR
 
 
 # ===== TIER PIPS =====

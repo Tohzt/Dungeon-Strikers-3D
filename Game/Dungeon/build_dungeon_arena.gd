@@ -33,6 +33,9 @@ const TORCH_OUT := "res://3D/Game/Level/wall_torch.tscn"
 const RED_OUT := "res://3D/Game/Level/%s_red.tscn"
 const GLB := "res://Assets/BetterDungeon/glb/%s.glb"
 const NAV_GROUP := "dungeon_nav"
+## Soccer goals at the arena's end walls. Off since skulls replaced the ball
+## here (bring them to your altar); goal.tscn is kept for other modes.
+const PLACE_GOALS := false
 const LibGen := preload("res://Game/Dungeon/generate_dungeon_mesh_library.gd")
 
 const N := Vector3(0, 0, -1)
@@ -639,12 +642,12 @@ func _crypt() -> void:
 	_mob_spawn("Crypt", -42.0, 22.0)
 
 
-func _arena(ref: Node, walls_root: Node) -> void:
+func _arena(_ref: Node, walls_root: Node) -> void:
 	# Goals in the middle of each end wall (Blue defends the west one).
-	for team in 2:
+	for team in 2 if PLACE_GOALS else 0:
 		var goal: Node3D = _inst("res://3D/Game/goal.tscn", "Goal" if team == 1 else "Goal2")
-		var ref_goal: Node3D = ref.get_node("Walls/Goal" if team == 1 else "Walls/Goal2")
-		goal.transform = Transform3D(ref_goal.transform.basis, Vector3(_mx(team, -18.6), 1.75, 0))
+		var facing := Basis() if team == 1 else Basis(Vector3.UP, PI)  # Net toward the end wall
+		goal.transform = Transform3D(facing, Vector3(_mx(team, -18.6), 1.75, 0))
 		goal.set("owner_team", team)
 		goal.set("scoring_team", 1 - team)
 		_add(walls_root, goal)

@@ -194,7 +194,8 @@ func _build_hand(hand: Hand, ui_scale: float) -> void:
 	root.add_theme_constant_override("separation", int(18 * ui_scale))
 	hand.root = root
 
-	var title := _label("Player %d, choose a perk" % (player.slot.index + 1 if player.slot else 1),
+	var relic: bool = hand.perks.all(func(perk: Perk) -> bool: return perk.category == Perk.Category.RELIC)
+	var title := _label("Player %d, choose a %s" % [player.slot.index + 1 if player.slot else 1, "relic" if relic else "perk"],
 		int(44 * ui_scale), color, 0.0)
 	title.add_theme_constant_override("outline_size", int(10 * ui_scale))
 	root.add_child(title)

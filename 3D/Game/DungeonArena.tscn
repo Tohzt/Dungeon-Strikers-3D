@@ -1,4 +1,4 @@
-[gd_scene format=4 uid="uid://dr1034qb7ohyb"]
+[gd_scene format=3 uid="uid://dr1034qb7ohyb"]
 
 [ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://3D/Game/game_3d.gd" id="1_ddysq"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="2_0jqmx"]
@@ -13,7 +13,6 @@
 [ext_resource type="MeshLibrary" uid="uid://du3ec8aekym6j" path="res://Game/Dungeon/dungeon_props_library.res" id="11_mohbt"]
 [ext_resource type="PackedScene" path="res://3D/Game/Level/wall_torch.tscn" id="12_8av44"]
 [ext_resource type="PackedScene" uid="uid://c2unbwt1hsje5" path="res://Assets/BetterDungeon/glb/shield_rare.glb" id="13_xlmdv"]
-[ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="14_dlak7"]
 [ext_resource type="Script" uid="uid://ckfkkyu27xi51" path="res://3D/Game/Level/boss_trigger.gd" id="15_ne6ha"]
 [ext_resource type="Script" uid="uid://b0d37x1lanq1f" path="res://3D/Game/Level/spawn_point.gd" id="16_xn8s7"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="18_gr3ut"]
@@ -579,14 +578,6 @@ transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -19.
 [node name="banner_Red150" parent="Walls/Decor" unique_id=535354061 instance=ExtResource("42_banner_red")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 19.2, 3.7, 4.6)
 
-[node name="Goal2" parent="Walls" unique_id=424337427 groups=["dungeon_nav"] instance=ExtResource("14_dlak7")]
-transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -18.6, 1.75, 0)
-scoring_team = 1
-owner_team = 0
-
-[node name="Goal" parent="Walls" unique_id=2079343980 groups=["dungeon_nav"] instance=ExtResource("14_dlak7")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.6, 1.75, 0)
-
 [node name="BossCage" type="StaticBody3D" parent="Walls" unique_id=2069175739]
 collision_layer = 32
 collision_mask = 0
@@ -791,11 +782,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 0, 22)
 
 [node name="Altar" parent="." unique_id=2138990566 groups=["dungeon_nav"] instance=ExtResource("26_k31i0")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -81, 0, 0)
+reward_time_min = null
+reward_time_max = null
+relic_hand_size = 3
 weapon_scene = ExtResource("18_gr3ut")
 
 [node name="Altar2" parent="." unique_id=466792934 groups=["dungeon_nav"] instance=ExtResource("26_k31i0")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 81, 0, 0)
 owner_team = 1
+reward_time_min = null
+reward_time_max = null
+relic_hand_size = 3
 weapon_scene = ExtResource("18_gr3ut")
 
 [node name="Boss" parent="." unique_id=446746520 instance=ExtResource("27_le4n0")]

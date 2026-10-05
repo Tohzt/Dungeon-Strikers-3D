@@ -5,7 +5,8 @@ class_name BotInputHandler3D extends PlayerInputHandler3D
 ## like anyone else. Offline only; Game3D swaps it in for slots with is_bot.
 ##
 ## Each think picks a goal - get a weapon, fight, play the ball toward the
-## other team's goal, pick a perk - and every frame steers toward it.
+## other team's goal (or carry a skull home to our altar), pick a perk -
+## and every frame steers toward it.
 
 ## Seconds between decisions (a little random, so bots don't move in lockstep).
 const THINK_TIME := 0.15
@@ -31,6 +32,9 @@ const SPRINT_DISTANCE := 18.0
 const SPACING := 2.5
 ## Seconds a bot waits before taking its perk, so it doesn't feel instant.
 const PERK_DELAY := 1.0
+## In the intermission, a bot that hasn't reached its altar after this long
+## (stuck, or a long way off) picks anyway, so it never holds the game up.
+const INTERMISSION_GIVE_UP := 10.0
 ## Below this much boost, a bot with nothing urgent to do grabs an orb this close.
 const BOOST_WANT := 50.0
 const BOOST_SEARCH_RANGE := 12.0
@@ -58,6 +62,7 @@ var _last_attack_left: bool = true
 var _shot_hold: float = 0.0
 var _interact_gap_left: float = 0.0
 var _perk_wait: float = 0.0
+var _intermission_time: float = 0.0
 
 
 func _ready() -> void:
@@ -97,11 +102,12 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if game.phase == Game3D_Class.Phase.INTERMISSION:
 		_think_intermission(player, game)
 		return
+	_intermission_time = 0.0
 	# A boss kill's perk: bots take it on the spot rather than walk back for it
 	if game.perks.can_open(player):
 		_take_perk_soon(player, game)
 	if player.held_ball:
-		_think_carry(player)
+		_think_carry(player, game)
 		return
 
 	var enemy: PlayerClass3D = _nearest_enemy(player, game)
@@ -113,6 +119,8 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 		_fight(player, enemy)
 		return
 
+	if _go_get_reward(player):
+		return
 	if _go_get_boost(player, enemy_dist):
 		return
 
@@ -138,9 +146,10 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 
 
 ## The player walks itself to the altar (PlayerClass3D._walk_to_altar);
-## once there, pick.
+## once there (or after INTERMISSION_GIVE_UP), pick.
 func _think_intermission(player: PlayerClass3D, game: Game3D_Class) -> void:
-	if player.at_altar and game.perks.can_open(player):
+	_intermission_time += THINK_TIME
+	if (player.at_altar or _intermission_time >= INTERMISSION_GIVE_UP) and game.perks.can_open(player):
 		_take_perk_soon(player, game)
 
 
@@ -152,8 +161,14 @@ func _take_perk_soon(player: PlayerClass3D, game: Game3D_Class) -> void:
 		game.perks.auto_pick(player)
 
 
-## Carrying the ball: run at the goal and shoot once in range.
-func _think_carry(player: PlayerClass3D) -> void:
+## Carrying the ball: run at the goal and shoot once in range. A skull is
+## walked all the way onto our altar.
+func _think_carry(player: PlayerClass3D, game: Game3D_Class) -> void:
+	if player.held_ball is Skull3D:
+		var altar: Altar3D = game.altar_of_team(player.slot.team if player.slot else 0)
+		if altar:
+			_move_target = altar.global_position
+		return
 	var goal: Goal3D = _goal_to_attack(player)
 	if not goal:
 		return
@@ -188,11 +203,17 @@ func _go_grab_ball(player: PlayerClass3D, ball: Ball3D) -> void:
 
 
 ## Armed: get behind the ball (seen from the goal) and swing it goalwards.
+## A skull gets knocked toward our altar instead.
 func _go_hit_ball(player: PlayerClass3D, ball: Ball3D) -> void:
-	var goal: Goal3D = _goal_to_attack(player)
+	var target: Node3D = null
+	if ball is Skull3D:
+		target = Global.Game3D.altar_of_team(player.slot.team if player.slot else 0)
+	else:
+		var goal: Goal3D = _goal_to_attack(player)
+		target = goal.net if goal else null
 	var to_goal: Vector3 = Vector3.ZERO
-	if goal:
-		to_goal = goal.net.global_position - ball.global_position
+	if target:
+		to_goal = target.global_position - ball.global_position
 		to_goal.y = 0.0
 		to_goal = to_goal.normalized()
 	var behind: Vector3 = ball.global_position - to_goal * 1.6
@@ -225,6 +246,22 @@ func _go_get_boost(player: PlayerClass3D, enemy_dist: float) -> bool:
 		return false
 	_move_target = best.global_position
 	return true
+
+
+## A skull's reward is ready on our altar (wherever it is), or on a nearby
+## enemy altar left unguarded: go take it. Returns false if there's none.
+func _go_get_reward(player: PlayerClass3D) -> bool:
+	var team: int = player.slot.team if player.slot else 0
+	for node: Node in get_tree().get_nodes_in_group("WeaponStand"):
+		var altar := node as Altar3D
+		if not altar or not altar.has_reward_for(player):
+			continue
+		if altar.owner_team != team and _flat_dist(player, altar) > WEAPON_SEARCH_RANGE:
+			continue
+		_move_target = altar.global_position
+		_want_interact = altar.can_give_to(player)
+		return true
+	return false
 
 
 ## Head for the nearest loose weapon or stocked stand. Returns false if

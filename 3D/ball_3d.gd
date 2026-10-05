@@ -13,6 +13,9 @@ var color_medium: Color = Color.YELLOW
 var color_fast: Color = Color.ORANGE
 var color_max: Color = Color.RED
 var color_cur: Color = Color.RED
+## Colors the mesh by speed (and the burn glow). Off for drops with their
+## own look, like the skull.
+var tint_by_speed: bool = true
 var speed_medium_threshold: float = max_ball_speed * 0.3
 var speed_fast_threshold: float = max_ball_speed * 0.6
 
@@ -94,13 +97,15 @@ func _process(delta: float) -> void:
 		var sample: Array = _net_motion.sample(delta)
 		if not sample.is_empty():
 			global_transform = sample[0]
-	if mesh_instance:
+	if mesh_instance and tint_by_speed:
 		var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
 		if not material:
 			material = StandardMaterial3D.new()
 			mesh_instance.set_surface_override_material(0, material)
 		material.albedo_color = color_cur
 		_update_burn_visual(material)
+	else:
+		_burn_light.visible = burn_left > 0.0
 	burn_left = max(burn_left - delta, 0.0)
 
 

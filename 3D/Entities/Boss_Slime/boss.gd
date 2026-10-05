@@ -4,7 +4,7 @@ class_name Boss3D extends CharacterBody3D
 ## and when it finds itself near the ball it dribbles it into whichever goal
 ## it's nearest, so it's a threat to both teams. Every so often it swells
 ## up and spits out little minion slimes (SlimeMinion3D) that chase players.
-## A ball floats in its core; beating it drops a fresh ball into play.
+## Its drop (see `drop`) floats in its core; beating it drops that into play.
 ## Online the server runs it and streams where it is (like the ball);
 ## everyone else just plays that back.
 
@@ -105,9 +105,9 @@ const DRIBBLE_SETUP_OFFSET := RADIUS + BALL_RADIUS + 0.5
 @export_category("Health")
 @export var display_name: String = "Gelatinous Colossus"
 @export var max_hp: float = 1200.0
-## Drop a ball into play when beaten (shown floating in the core until then).
-@export var drops_ball: bool = true
-## How hard the dropped ball pops out.
+## What it drops into play when beaten (shown floating in its core until then).
+@export var drop: BossDrop.Kind = BossDrop.Kind.SKULL
+## How hard the drop pops out.
 @export var release_impulse: float = 1.5
 ## Hits tint the slime this bright for a moment.
 const HIT_FLASH_TIME := 0.15
@@ -195,7 +195,7 @@ func _ready() -> void:
 	_stomp_cooldown = stomp_cooldown * 0.5
 	_spit_cooldown = spit_cooldown * 0.6
 	hp = max_hp
-	core.visible = drops_ball
+	_dress_core()
 	if Net.in_session() and not Net.is_server:
 		_net_motion = NetInterpolator.new()
 
@@ -617,10 +617,10 @@ func _defeat(killer_name: String) -> void:
 	for minion: SlimeMinion3D in _minions:
 		minion.die()
 	_minions.clear()
-	if drops_ball and Global.Game3D:
+	if drop != BossDrop.Kind.NONE and Global.Game3D:
 		core.visible = false
 		var dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
-		Global.Game3D.spawn_ball(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse)
+		Global.Game3D.spawn_ball(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse, drop)
 	var killer: PlayerClass3D = null
 	if Global.Game3D and killer_name != "":
 		killer = Global.Game3D.get_node_or_null(killer_name) as PlayerClass3D
@@ -773,7 +773,17 @@ func _update_squash(delta: float) -> void:
 	visual.scale = Vector3(side, _squash, side)
 
 
-## The ball floating inside: stays round however the slime squashes, and
+## Show the drop in the core: the ball mesh it has already, or the drop's
+## own model in its place.
+func _dress_core() -> void:
+	core.visible = drop != BossDrop.Kind.NONE
+	var model: PackedScene = BossDrop.model_of(drop)
+	if model:
+		core.mesh = null
+		core.add_child(model.instantiate())
+
+
+## The drop floating inside: stays round however the slime squashes, and
 ## drifts lazily around the middle.
 func _update_core() -> void:
 	if not core.visible:

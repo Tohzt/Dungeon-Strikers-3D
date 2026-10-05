@@ -1,9 +1,10 @@
 class_name Game3D_Class extends Node3D
 ## The match: the first team to `kills_to_win` player kills wins. Around
-## that it runs in rounds: a boss fight, then soccer with the ball the boss
-## drops, then (once every ball is scored and no boss is left) an
-## intermission where each player picks a perk at their altar, then the
-## next, tougher boss.
+## that it runs in rounds: a boss fight, then a scramble for what the boss
+## drops (see BossDrop): a skull to carry home to your altar for a reward,
+## or a ball to score in a goal. Once every drop is dealt with and no boss
+## is left, there's an intermission where each player picks a perk at their
+## altar, then the next, tougher boss.
 ## A goal is a comeback tool: a team behind on kills takes one back from
 ## the leader; otherwise it earns a bounty shield that soaks the next
 ## killing blow on one of its players.
@@ -25,7 +26,7 @@ const TEAM_SIDES: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.BACK, V
 
 enum Phase {
 	BOSS,          ## A boss is alive
-	SOCCER,        ## No boss, but a ball is in play
+	SOCCER,        ## No boss, but a drop (ball, skull...) is in play
 	INTERMISSION,  ## Everything's scored: players pick perks at their altars
 }
 
@@ -78,7 +79,7 @@ enum Phase {
 var souls_camera: SoulsCamera3D = null
 
 var phase: Phase = Phase.BOSS
-## Balls in play (bosses drop them; scoring removes them).
+## Boss drops in play: balls, skulls... (scoring or delivering removes them).
 var balls: Array[Ball3D] = []
 ## Bosses still fighting.
 var bosses: Array[Boss3D] = []
@@ -376,7 +377,7 @@ func _goal_scored(team: int, new_score: int, ball_name: String, erased_team: int
 	perks.record_goal(team)
 	goal_scored.emit(team)
 	_update_phase()
-	_check_round_over()
+	check_round_over()
 
 
 ## The team with the most kills among those with more than `team`, or -1
@@ -387,6 +388,35 @@ func _top_team_ahead_of(team: int) -> int:
 		if other != team and kills[other] > kills.get(team, 0) and (best < 0 or kills[other] > kills[best]):
 			best = other
 	return best
+
+
+## Server/offline: `skull` reached `team`'s altar (see Skull3D). Take it
+## out of play and have the altar start turning it into a reward, everywhere.
+func deliver_skull(team: int, skull: Ball3D) -> void:
+	if Net.in_session() and not (Net.is_server and Net.match_synced):
+		return
+	var altar: Altar3D = altar_of_team(team)
+	if not balls.has(skull) or not altar:
+		return
+	var roll: PackedInt32Array = altar.roll_reward()
+	if Net.in_session():
+		_skull_delivered.rpc(team, skull.name, roll)
+	else:
+		_skull_delivered(team, skull.name, roll)
+
+
+@rpc("authority", "call_local", "reliable")
+func _skull_delivered(team: int, skull_name: String, roll: PackedInt32Array) -> void:
+	var skull: Ball3D = get_node_or_null(skull_name) as Ball3D
+	if skull:
+		_remove_ball(skull)
+	var altar: Altar3D = altar_of_team(team)
+	if altar:
+		altar.start_reward(roll)
+	scoreboard.announce("%s brought the skull home! Their altar stirs... (%ds)" % [_team_name(team), roll[3]], _team_color(team))
+	perks.record_goal(team)
+	_update_phase()
+	check_round_over()
 
 
 # ===== KILLS =====
@@ -569,12 +599,16 @@ func _player_label(player: PlayerClass3D) -> String:
 
 # ===== BALLS =====
 
-## A new ball enters play at `pos`, launched with `impulse` (by whoever
-## simulates it). Call on every machine, in the same order (e.g. from a
-## boss's defeat), so the balls get the same names everywhere.
-func spawn_ball(pos: Vector3, impulse: Vector3) -> Ball3D:
+## A new boss drop of `kind` (a ball by default) enters play at `pos`,
+## launched with `impulse` (by whoever simulates it). Call on every machine,
+## in the same order (e.g. from a boss's defeat), so the drops get the same
+## names everywhere.
+func spawn_ball(pos: Vector3, impulse: Vector3, kind: BossDrop.Kind = BossDrop.Kind.BALL) -> Ball3D:
+	var scene: PackedScene = ball_scene if kind == BossDrop.Kind.BALL else BossDrop.scene_of(kind)
+	if not scene:
+		return null
 	_balls_made += 1
-	var new_ball: Ball3D = ball_scene.instantiate()
+	var new_ball: Ball3D = scene.instantiate()
 	new_ball.name = "Ball%d" % _balls_made
 	new_ball.position = pos
 	balls.append(new_ball)
@@ -648,16 +682,24 @@ func _on_boss_defeated(killer: PlayerClass3D, boss: Boss3D) -> void:
 	bosses.erase(boss)
 	perks.record_boss_kill(killer)
 	_update_phase()
-	_check_round_over()
+	check_round_over()
 
 
-## Server/offline: once no boss is left and every ball has been scored,
-## it's time to pick perks.
-func _check_round_over() -> void:
+## Server/offline: once no boss is left, every ball has been scored and
+## every skull's altar reward has been claimed, it's time to pick perks.
+func check_round_over() -> void:
 	if Net.in_session() and not Net.is_server:
 		return
-	if phase != Phase.INTERMISSION and bosses.is_empty() and balls.is_empty():
+	if phase != Phase.INTERMISSION and bosses.is_empty() and balls.is_empty() and not _rewards_waiting():
 		perks.begin_intermission()
+
+
+## Some altar still has a skull's reward charging or unclaimed.
+func _rewards_waiting() -> bool:
+	for child: Node in get_children():
+		if child is Altar3D and child.reward != Altar3D.Reward.NONE:
+			return true
+	return false
 
 
 func _on_intermission_started() -> void:

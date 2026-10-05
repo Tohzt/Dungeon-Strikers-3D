@@ -263,6 +263,90 @@ mods = Dictionary[StringName, float]({
 &"respawn_time": -0.4
 })
 
+[sub_resource type="Resource" id="Perk_relic_titans_grip"]
+script = ExtResource("1_perk")
+title = "Titan's Grip"
+description = "+50% damage and +30% knockback."
+category = 6
+mods = Dictionary[StringName, float]({
+&"damage": 0.5,
+&"knockback": 0.3
+})
+
+[sub_resource type="Resource" id="Perk_relic_undying"]
+script = ExtResource("1_perk")
+title = "Undying"
+description = "+60% max health and 20% less damage taken."
+category = 6
+mods = Dictionary[StringName, float]({
+&"damage_taken": -0.2,
+&"max_hp": 0.6
+})
+
+[sub_resource type="Resource" id="Perk_relic_warlord"]
+script = ExtResource("1_perk")
+title = "Warlord"
+description = "+30% damage, +30% max health and +10% move speed."
+category = 6
+mods = Dictionary[StringName, float]({
+&"damage": 0.3,
+&"max_hp": 0.3,
+&"move_speed": 0.1
+})
+
+[sub_resource type="Resource" id="Perk_relic_phantom_step"]
+script = ExtResource("1_perk")
+title = "Phantom Step"
+description = "+30% move speed, +40% max stamina and +50% stamina regeneration."
+category = 6
+mods = Dictionary[StringName, float]({
+&"max_stamina": 0.4,
+&"move_speed": 0.3,
+&"stamina_regen": 0.5
+})
+
+[sub_resource type="Resource" id="Perk_relic_bloodlust"]
+script = ExtResource("1_perk")
+title = "Bloodlust"
+description = "Heal 50% of your max health on a player kill, and +40% damage to players below 30% HP."
+category = 6
+mods = Dictionary[StringName, float]({
+&"damage_vs_wounded": 0.4,
+&"kill_heal": 0.5
+})
+
+[sub_resource type="Resource" id="Perk_relic_juggernaut"]
+script = ExtResource("1_perk")
+title = "Juggernaut"
+description = "25% less damage and 50% less knockback taken; blocking costs 40% less stamina."
+category = 6
+mods = Dictionary[StringName, float]({
+&"block_stamina": -0.4,
+&"damage_taken": -0.25,
+&"knockback_taken": -0.5
+})
+
+[sub_resource type="Resource" id="Perk_relic_reaper"]
+script = ExtResource("1_perk")
+title = "Reaper"
+description = "+20% damage, respawn 50% faster, and killing the kill leader earns your team a bounty shield."
+category = 6
+mods = Dictionary[StringName, float]({
+&"damage": 0.2,
+&"leader_bounty": 1.0,
+&"respawn_time": -0.5
+})
+
+[sub_resource type="Resource" id="Perk_relic_colossus_bane"]
+script = ExtResource("1_perk")
+title = "Colossus Bane"
+description = "+75% damage to bosses and +20% damage to everything."
+category = 6
+mods = Dictionary[StringName, float]({
+&"boss_damage": 0.75,
+&"damage": 0.2
+})
+
 [resource]
 script = ExtResource("2_catalog")
-perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_fuel_line"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_pickpocket"), SubResource("Perk_headhunter"), SubResource("Perk_quick_return")])
+perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_spring_legs"), SubResource("Perk_fuel_line"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_sure_hands"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_pickpocket"), SubResource("Perk_headhunter"), SubResource("Perk_quick_return"), SubResource("Perk_relic_titans_grip"), SubResource("Perk_relic_undying"), SubResource("Perk_relic_warlord"), SubResource("Perk_relic_phantom_step"), SubResource("Perk_relic_bloodlust"), SubResource("Perk_relic_juggernaut"), SubResource("Perk_relic_reaper"), SubResource("Perk_relic_colossus_bane")])

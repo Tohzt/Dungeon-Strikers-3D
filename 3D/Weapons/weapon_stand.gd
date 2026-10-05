@@ -128,14 +128,20 @@ func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
 	var scene: PackedScene = _take_stock()
 	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
 	if player and scene:
-		var weapon: Weapon3D = scene.instantiate()
-		weapon.name = weapon_name
-		Global.Game3D.add_weapon(weapon)
-		weapon.name = weapon_name  # Its _ready renames it after its Properties
-		weapon.set_rarity(_given_rarity)
-		weapon.global_transform = display_anchor.global_transform
-		weapon.hand_to(player, is_left)
+		_hand_weapon(scene, _given_rarity, player, is_left, weapon_name, display_anchor.global_transform)
 	_after_given()
+
+
+## Every machine: make a `scene` weapon named `weapon_name`, of rarity
+## `tier`, at `from`, and put it in `player`'s hand.
+func _hand_weapon(scene: PackedScene, tier: int, player: PlayerClass3D, is_left: bool, weapon_name: String, from: Transform3D) -> void:
+	var weapon: Weapon3D = scene.instantiate()
+	weapon.name = weapon_name
+	Global.Game3D.add_weapon(weapon)
+	weapon.name = weapon_name  # Its _ready renames it after its Properties
+	weapon.set_rarity(tier)
+	weapon.global_transform = from
+	weapon.hand_to(player, is_left)
 
 
 ## The weapon on display is being handed out: empty the stand for the

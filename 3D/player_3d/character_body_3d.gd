@@ -726,6 +726,18 @@ func _process(delta: float) -> void:
 	was_attack_right = attack_right
 	was_throw_left = throw_left
 	was_throw_right = throw_right
+	if Input_Handler.drop_weapon:
+		Input_Handler.drop_weapon = false
+		if not busy:
+			_drop_main_weapon()
+
+
+## Throw tapped on its own: let go of the main hand's weapon, or the off
+## hand's if that's all we hold.
+func _drop_main_weapon() -> void:
+	var weapon: Weapon3D = held_weapon_right if held_weapon_right else held_weapon_left
+	if weapon and not (weapon is ShieldClass3D and weapon.is_blocking):
+		weapon.drop()
 
 
 ## That hand's attack button. With a two-handed weapon the right hand's

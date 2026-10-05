@@ -71,6 +71,8 @@ ssh droplet "
 	# Builds uploaded by older versions of this script before Exports/ was excluded.
 	rm -rf $REMOTE/Exports $REMOTE/_Exports
 	chown -R dungeon:dungeon $REMOTE
+	# runuser keeps root's cwd (/root), which godot can't chdir back into.
+	cd $REMOTE
 	echo 'Importing assets...'
 	log=\$(mktemp)
 	code=0

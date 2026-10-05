@@ -10,6 +10,7 @@ enum Category {
 	COMEBACK,  ## Offered to the teams that were scored on
 	GENERAL,   ## Offered to everyone
 	HUNTER,    ## Offered to whoever got the most player kills in the round
+	RELIC,     ## Rare and strong: only from a skull's altar reward (Altar3D)
 }
 
 const CATEGORY_NAMES: Dictionary[Category, String] = {
@@ -19,6 +20,7 @@ const CATEGORY_NAMES: Dictionary[Category, String] = {
 	Category.COMEBACK: "Comeback",
 	Category.GENERAL: "General",
 	Category.HUNTER: "Hunter",
+	Category.RELIC: "Relic",
 }
 const CATEGORY_COLORS: Dictionary[Category, Color] = {
 	Category.OFFENSE: Color(0.9, 0.25, 0.2),
@@ -27,6 +29,7 @@ const CATEGORY_COLORS: Dictionary[Category, Color] = {
 	Category.COMEBACK: Color(0.65, 0.4, 0.95),
 	Category.GENERAL: Color(0.75, 0.75, 0.75),
 	Category.HUNTER: Color(0.85, 0.15, 0.45),
+	Category.RELIC: Color(1.0, 0.78, 0.25),
 }
 
 @export var title: String = ""

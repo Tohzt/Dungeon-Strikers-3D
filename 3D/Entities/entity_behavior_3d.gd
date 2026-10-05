@@ -149,8 +149,8 @@ func apply_knockback(direction: Vector3, force: float) -> void:
 	start_iframes()
 
 
-## Brief invulnerability after a hit, shown by fading the player's meshes.
-## Online, other machines call this on their copy to show the same fade.
+## Brief invulnerability after a hit, shown by flashing the player red.
+## Online, other machines call this on their copy to show the same flash.
 func start_iframes() -> void:
 	is_in_iframes = true
 	if Master is PlayerClass3D and Master.visual:

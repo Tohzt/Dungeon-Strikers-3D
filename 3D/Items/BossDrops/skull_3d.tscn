@@ -1,0 +1,27 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://3D/Items/BossDrops/skull_3d.gd" id="1_skull"]
+[ext_resource type="PackedScene" path="res://3D/Items/BossDrops/skull_model.tscn" id="2_model"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_skull"]
+friction = 0.8
+bounce = 0.25
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_skull"]
+radius = 0.45
+
+[node name="Skull_3D" type="RigidBody3D" groups=["Ball"]]
+collision_layer = 4
+collision_mask = 15
+mass = 0.6
+physics_material_override = SubResource("PhysicsMaterial_skull")
+continuous_cd = true
+contact_monitor = true
+max_contacts_reported = 5
+angular_damp = 1.5
+script = ExtResource("1_skull")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_skull")
+
+[node name="Model" parent="." instance=ExtResource("2_model")]

@@ -41,6 +41,11 @@ arming_time = 6.0
 respawn_delay = 2.0
 rarity_weights = Array[float]([10.0, 30.0, 40.0, 20.0])
 
+[sub_resource type="Resource" id="AltarTier_reward"]
+script = ExtResource("2_tier")
+weapons = Array[PackedScene]([ExtResource("5_bow"), ExtResource("10_staff"), ExtResource("11_greataxe"), ExtResource("9_hammer"), ExtResource("new_halberd"), ExtResource("new_mace"), ExtResource("new_spear"), ExtResource("new_greatsword")])
+rarity_weights = Array[float]([0.0, 0.0, 60.0, 40.0])
+
 [sub_resource type="BoxMesh" id="BoxMesh_p6jv2"]
 size = Vector3(3, 1.5, 1.5)
 
@@ -61,6 +66,7 @@ size = Vector3(3.6, 40, 2.1)
 script = ExtResource("1_altar")
 tiers = Array[ExtResource("2_tier")]([SubResource("AltarTier_1"), SubResource("AltarTier_2"), SubResource("AltarTier_3")])
 seconds_per_tier = 60.0
+reward_weapons = SubResource("AltarTier_reward")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1231958200]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)

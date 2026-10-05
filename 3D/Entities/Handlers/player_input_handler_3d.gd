@@ -15,6 +15,9 @@ var action_heavy_right: bool = false
 ## hand's weapon; held to charge, thrown on release.
 var throw_left: bool = false
 var throw_right: bool = false
+## Throw tapped without pressing either hand: drop the main hand's weapon
+## (the off hand's if the main is empty). Stays set until the player acts on it.
+var drop_weapon: bool = false
 var interact: bool = false
 ## Swap what's in each hand (R / Select); stays set until the player acts on it.
 var swap_hands: bool = false
@@ -49,6 +52,9 @@ var _right_click_was_pressed: bool = false
 ## Which hand the Attack button works, settled while neither button is held
 ## so a hand can't change mid-press (see PlayerClass3D.main_hand_is_left).
 var _main_is_left: bool = false
+## A hand button was pressed while Throw was held, so letting go of Throw
+## isn't a drop.
+var _throw_used: bool = false
 
 ## Set while this player uses the souls-like controls: movement turns with
 ## this camera, and the player faces where they walk or their lock-on target.
@@ -112,6 +118,8 @@ func release_all() -> void:
 	action_heavy_right = false
 	throw_left = false
 	throw_right = false
+	drop_weapon = false
+	_throw_used = false
 	move_dodge = false
 	dodge_dur = 0.0
 	dodge_request_msec = -1
@@ -150,6 +158,12 @@ func _handle_simple_controls() -> void:
 	var throw_mode: bool = Input.is_action_pressed(action("throw"))
 	# Throwing, Attack throws a lone shield too
 	var hands: Array[bool] = _buttons_to_hands(throw_mode)
+	if Input.is_action_just_pressed(action("throw")):
+		_throw_used = false
+	if throw_mode and (hands[0] or hands[1]):
+		_throw_used = true
+	if Input.is_action_just_released(action("throw")) and not _throw_used:
+		drop_weapon = true
 	_apply_simple_buttons(hands[0], hands[1], false, throw_mode)
 
 
