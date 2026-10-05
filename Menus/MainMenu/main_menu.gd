@@ -3,13 +3,9 @@ extends Control
 ## multiplayer lobby where each device joins by pressing a button on it, or
 ## host/join an online session by access code (through the Net autoload).
 ## Every player picks a character and a team (which sets their color) on
-## the way in. Joined players go into the Players autoload, which Game3D
-## spawns from.
+## the way in; the host also picks the format: teams, map and boss drop.
+## Joined players go into the Players autoload, which Game3D spawns from.
 
-const GAME_SCENE := "res://3D/Game/Game3D.tscn"
-## Offline two-team matches are played here instead. Online always uses
-## GAME_SCENE, since the server loads that one (Net.MATCH_SCENE).
-const DUNGEON_SCENE := "res://3D/Game/DungeonArena.tscn"
 const MIN_LOBBY_PLAYERS := 2
 const COPIED_FEEDBACK_TIME := 1.5
 ## How far a stick must be pushed sideways to change character in the lobby.
@@ -25,6 +21,10 @@ const STICK_STEP_THRESHOLD := 0.6
 @onready var lobby_bots: Button = %LobbyBots
 @onready var solo_teams: Button = %SoloTeams
 @onready var solo_bots: Button = %SoloBots
+@onready var solo_map: Button = %SoloMap
+@onready var solo_drop: Button = %SoloDrop
+@onready var lobby_map: Button = %LobbyMap
+@onready var lobby_drop: Button = %LobbyDrop
 @onready var solo_character: Button = %SoloCharacter
 @onready var solo_team: Button = %SoloTeam
 @onready var online: Control = %Online
@@ -41,6 +41,8 @@ const STICK_STEP_THRESHOLD := 0.6
 @onready var online_status: Label = %OnlineStatus
 @onready var online_start: Button = %OnlineStart
 @onready var online_teams: Button = %OnlineTeams
+@onready var online_map: Button = %OnlineMap
+@onready var online_drop: Button = %OnlineDrop
 @onready var online_character: Button = %OnlineCharacter
 @onready var online_team: Button = %OnlineTeam
 
@@ -81,6 +83,10 @@ func _ready() -> void:
 	lobby_teams.pressed.connect(_cycle_team_count)
 	online_teams.pressed.connect(_cycle_team_count)
 	solo_teams.pressed.connect(_cycle_team_count)
+	for button: Button in [solo_map, lobby_map, online_map]:
+		button.pressed.connect(_cycle_map)
+	for button: Button in [solo_drop, lobby_drop, online_drop]:
+		button.pressed.connect(_cycle_boss_drop)
 	lobby_bots.pressed.connect(_toggle_bots)
 	solo_bots.pressed.connect(_toggle_bots)
 	_setup_cycler(solo_character, _step_solo_character)
@@ -126,6 +132,8 @@ func _ready() -> void:
 func _show(screen: Control, focus: Control) -> void:
 	for s: Control in [home, single_player, lobby, online, host_setup, join_setup, online_lobby]:
 		s.visible = s == screen
+	# The lobbies are too tall to fit under the title
+	%Title.visible = screen != lobby and screen != online_lobby
 	_refresh_controller_button()
 	_refresh_lobby()
 	_refresh_online_lobby()
@@ -325,6 +333,36 @@ func _cycle_team_count() -> void:
 	_refresh_lobby()
 
 
+## Map button: the next level. One that can't host the current boss drop
+## or team count changes those to fit (see Players.set_map).
+func _cycle_map() -> void:
+	if online_lobby.visible:
+		Net.set_map(Players.next_map())
+		return
+	Players.set_map(Players.next_map())
+	solo_team_choice = posmod(solo_team_choice, Players.team_count)
+	_refresh_lobby()
+
+
+## Boss Drop button: what every boss drops. A ball needs goals, so picking
+## it moves the match to a map that has them.
+func _cycle_boss_drop() -> void:
+	if online_lobby.visible:
+		Net.set_boss_drop(Players.next_boss_drop())
+		return
+	Players.set_boss_drop(Players.next_boss_drop())
+	_refresh_lobby()
+
+
+## Map and Boss Drop button labels for the current format.
+func _map_text() -> String:
+	return "Map: " + MatchMap.name_of(Players.map)
+
+
+func _drop_text() -> String:
+	return "Boss Drop: " + MatchMap.drop_name(Players.boss_drop)
+
+
 ## Bots button: cycle the match size bots fill up to (Off, 1v1, 2v2, ...).
 func _toggle_bots() -> void:
 	Players.bot_fill_count = Players.next_bot_fill_count()
@@ -382,6 +420,10 @@ func _refresh_lobby() -> void:
 	var lobby_match: Array[int] = Players.teams_with_bots(seats, seated)
 	lobby_teams.text = "Teams: " + Players.format_name(lobby_match)
 	lobby_bots.text = _bots_text(lobby_match)
+	for button: Button in [solo_map, lobby_map]:
+		button.text = _map_text()
+	for button: Button in [solo_drop, lobby_drop]:
+		button.text = _drop_text()
 
 	var solo_match: Array[int] = Players.teams_with_bots(Players.bot_fill_count, [solo_team_choice])
 	solo_teams.text = "Teams: " + Players.format_name(solo_match)
@@ -491,8 +533,12 @@ func _refresh_online_lobby() -> void:
 			online_card_styles[i].bg_color = Color(1, 1, 1, 0.06)
 			online_card_labels[i].text = "Waiting for\nplayer..."
 	online_start.visible = Net.is_host
-	# Only the leader picks the format; it's sent with the match start
-	online_teams.visible = Net.is_host
+	# Only the leader picks the format (it's sent with the match start), but
+	# everyone sees it
+	for button: Button in [online_teams, online_map, online_drop]:
+		button.disabled = not Net.is_host
+	online_map.text = _map_text()
+	online_drop.text = _drop_text()
 	var teams: Array[int] = []
 	for id: int in Net.peers:
 		teams.append(Net.loadout_of(id)[0])
@@ -511,6 +557,22 @@ func _refresh_online_lobby() -> void:
 		online_status.text = "Send the code to your friends."
 	else:
 		online_status.text = "Waiting for the host to start."
+	_chain_online_focus()
+
+
+## The lobby buttons sit in two rows, but Character and Team use left/right
+## to cycle, so up/down walks every visible button in reading order.
+func _chain_online_focus() -> void:
+	var chain: Array[Control] = []
+	for button: Button in [online_character, online_team, online_teams, online_map, online_drop,
+			online_start, %OnlineLeave]:
+		if button.visible and not button.disabled:
+			chain.append(button)
+	for i in chain.size():
+		var prev: Control = chain[i - 1] if i > 0 else chain[i]
+		var next: Control = chain[i + 1] if i < chain.size() - 1 else chain[i]
+		chain[i].focus_neighbor_top = chain[i].get_path_to(prev)
+		chain[i].focus_neighbor_bottom = chain[i].get_path_to(next)
 
 
 func _step_online_character(step: int) -> void:
@@ -536,5 +598,4 @@ func _on_match_started() -> void:
 
 
 func _start_game() -> void:
-	var dungeon: bool = Players.team_count == 2 and not Net.in_session()
-	get_tree().change_scene_to_file(DUNGEON_SCENE if dungeon else GAME_SCENE)
+	get_tree().change_scene_to_file(MatchMap.scene_of(Players.map))

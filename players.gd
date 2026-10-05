@@ -13,7 +13,8 @@ extends Node
 ## team_count picks the match format: 2 teams play end to end on the 2P
 ## field, 4 teams get a goal on every side (4P field). New seats start out
 ## spread across the teams in order (see team_for_seat), and bots join
-## whichever team is smallest.
+## whichever team is smallest. The format also picks the level (map) and
+## what every boss drops (boss_drop); see MatchMap for which go together.
 
 signal slot_joined(slot: PlayerSlot)
 signal slot_left(slot: PlayerSlot)
@@ -40,6 +41,10 @@ var slots: Array[PlayerSlot] = []
 ## Teams in the next match. Online, the leader's choice is sent to everyone
 ## with the match start (see Net.start_match).
 var team_count: int = TEAM_COUNTS[0]
+## Level for the next match. Online, sent with the match start like team_count.
+var map: MatchMap.Map = MatchMap.MAPS[0]
+## What every boss drops in the next match.
+var boss_drop: BossDrop.Kind = MatchMap.DROPS[0]
 ## Offline: seat bots until the match has this many players (0 = no bots).
 ## Always a whole number of players per team; see bot_fill_options().
 var bot_fill_count: int = 0
@@ -222,11 +227,14 @@ func cycle_character(slot: PlayerSlot, step: int) -> void:
 
 
 ## Switch the match format. Players keep their team when it's still in
-## play; teams that aren't wrap around onto ones that are.
+## play; teams that aren't wrap around onto ones that are. A level with
+## too few sides gives way to one that has enough.
 func set_team_count(count: int) -> void:
 	if not TEAM_COUNTS.has(count):
 		return
 	team_count = count
+	if not MatchMap.fits(map, team_count, boss_drop):
+		map = MatchMap.first_fitting(team_count, boss_drop)
 	if not bot_fill_options().has(bot_fill_count):
 		bot_fill_count = bot_fill_options()[-1]
 	for slot: PlayerSlot in slots:
@@ -237,6 +245,44 @@ func set_team_count(count: int) -> void:
 ## The next format in TEAM_COUNTS after the current one (menu toggles).
 func next_team_count() -> int:
 	return TEAM_COUNTS[(TEAM_COUNTS.find(team_count) + 1) % TEAM_COUNTS.size()]
+
+
+## Switch level. Whatever it can't host gives way: too many teams are cut
+## down, and a drop it has no place for (a ball without goals) is swapped
+## for the first one it does.
+func set_map(new_map: MatchMap.Map) -> void:
+	map = new_map
+	var teams: int = mini(team_count, MatchMap.max_teams(map))
+	if not MatchMap.fits(map, teams, boss_drop):
+		for kind: BossDrop.Kind in MatchMap.DROPS:
+			if MatchMap.fits(map, teams, kind):
+				boss_drop = kind
+				break
+	set_team_count(teams)
+
+
+## Switch what bosses drop, moving to a level that can host it if need be
+## (a ball needs goals).
+func set_boss_drop(kind: BossDrop.Kind) -> void:
+	boss_drop = kind
+	if not MatchMap.fits(map, team_count, boss_drop):
+		map = MatchMap.first_fitting(team_count, boss_drop)
+
+
+## The whole format at once, as the online leader picked it (already
+## consistent, so nothing gives way).
+func set_match_format(count: int, new_map: MatchMap.Map, kind: BossDrop.Kind) -> void:
+	map = new_map
+	boss_drop = kind
+	set_team_count(count)
+
+
+func next_map() -> MatchMap.Map:
+	return MatchMap.MAPS[(MatchMap.MAPS.find(map) + 1) % MatchMap.MAPS.size()]
+
+
+func next_boss_drop() -> BossDrop.Kind:
+	return MatchMap.DROPS[(MatchMap.DROPS.find(boss_drop) + 1) % MatchMap.DROPS.size()]
 
 
 ## "2 (2v1)"-style label for the current format with players on `teams`.

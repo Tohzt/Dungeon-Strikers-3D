@@ -105,7 +105,10 @@ var match_over: bool = false
 var Player: PlayerClass3D:
 	get: return players[0] if not players.is_empty() else null
 
-func _enter_tree() -> void: Global.Game3D = self
+func _enter_tree() -> void:
+	Global.Game3D = self
+	# Before the level's bosses are ready, so they show the right drop
+	_set_boss_drops(self)
 
 func _ready() -> void:
 	if Players.team_count > max_team_count:
@@ -672,6 +675,14 @@ func reset_ball() -> void:
 
 # ===== BOSSES & ROUNDS =====
 
+## Every boss placed in the level drops what the lobby picked.
+func _set_boss_drops(node: Node) -> void:
+	for child: Node in node.get_children():
+		if child is Boss3D:
+			child.drop = Players.boss_drop
+		_set_boss_drops(child)
+
+
 func _track_boss(boss: Boss3D) -> void:
 	bosses.append(boss)
 	boss.defeated.connect(_on_boss_defeated.bind(boss))
@@ -727,6 +738,7 @@ func _spawn_boss(boss_name: String, max_hp: float) -> void:
 	var boss: Boss3D = boss_scene.instantiate()
 	boss.name = boss_name
 	boss.max_hp = max_hp
+	boss.drop = Players.boss_drop
 	boss.position = boss_spawn_point
 	add_child(boss)
 	_track_boss(boss)

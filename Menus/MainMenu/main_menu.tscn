@@ -33,6 +33,7 @@ layout_mode = 2
 theme_override_constants/separation = 40
 
 [node name="Title" type="Label" parent="Center/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 56
 text = "Dungeon Strikers"
@@ -111,6 +112,22 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
+[node name="SoloMap" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Map: Dungeon"
+
+[node name="SoloDrop" type="Button" parent="Center/Content/SinglePlayer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Boss Drop: Skull"
+
 [node name="SoloBots" type="Button" parent="Center/Content/SinglePlayer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
@@ -166,6 +183,22 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
+
+[node name="LobbyMap" type="Button" parent="Center/Content/Lobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Map: Dungeon"
+
+[node name="LobbyDrop" type="Button" parent="Center/Content/Lobby"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Boss Drop: Skull"
 
 [node name="LobbyBots" type="Button" parent="Center/Content/Lobby"]
 unique_name_in_owner = true
@@ -339,7 +372,7 @@ text = "Back"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 10
 
 [node name="CodePanel" type="PanelContainer" parent="Center/Content/OnlineLobby"]
 layout_mode = 2
@@ -385,41 +418,72 @@ theme_override_font_sizes/font_size = 20
 text = ""
 horizontal_alignment = 1
 
-[node name="OnlineCharacter" type="Button" parent="Center/Content/OnlineLobby"]
+[node name="PickRow" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="OnlineCharacter" type="Button" parent="Center/Content/OnlineLobby/PickRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
+custom_minimum_size = Vector2(240, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Character: Knight"
 
-[node name="OnlineTeam" type="Button" parent="Center/Content/OnlineLobby"]
+[node name="OnlineTeam" type="Button" parent="Center/Content/OnlineLobby/PickRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
+custom_minimum_size = Vector2(240, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Team: Blue"
 
-[node name="OnlineTeams" type="Button" parent="Center/Content/OnlineLobby"]
+[node name="FormatRow" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="OnlineTeams" type="Button" parent="Center/Content/OnlineLobby/FormatRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
+custom_minimum_size = Vector2(240, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
-[node name="OnlineStart" type="Button" parent="Center/Content/OnlineLobby"]
+[node name="OnlineMap" type="Button" parent="Center/Content/OnlineLobby/FormatRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 52)
+custom_minimum_size = Vector2(240, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Map: Dungeon"
+
+[node name="OnlineDrop" type="Button" parent="Center/Content/OnlineLobby/FormatRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Boss Drop: Skull"
+
+[node name="ActionRow" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="OnlineStart" type="Button" parent="Center/Content/OnlineLobby/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 52)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 24
 text = "Start (2+ players)"
 
-[node name="OnlineLeave" type="Button" parent="Center/Content/OnlineLobby"]
+[node name="OnlineLeave" type="Button" parent="Center/Content/OnlineLobby/ActionRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
+custom_minimum_size = Vector2(240, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20

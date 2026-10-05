@@ -30,7 +30,6 @@ const MAX_CODE_LENGTH := 8
 const MAX_PLAYERS := 4
 const JOIN_TIMEOUT := 8.0
 const MAIN_MENU := "res://Menus/MainMenu/main_menu.tscn"
-const MATCH_SCENE := "res://3D/Game/Game3D.tscn"
 
 ## The droplet. Override with `-- --address=<ip>` to test elsewhere.
 const SERVER_ADDRESS := "64.225.4.250"
@@ -42,7 +41,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 6
+const PROTOCOL_VERSION := 7
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -51,7 +50,7 @@ var is_host := false
 var peers: Array[int] = []
 ## What each player picked in the lobby: peer id -> [team, character]. Kept
 ## by the server and sent to everyone with the peer list, along with the
-## leader's Players.team_count.
+## leader's match format (Players.team_count, map and boss_drop).
 var loadouts: Dictionary = {}
 var in_match := false
 ## Every machine has the match scene loaded, so match nodes (players, ball,
@@ -65,8 +64,8 @@ var _request := ""
 ## Server only: machines that have finished loading the match scene.
 var _loaded: Array[int] = []
 var _all_loaded_sent := false
-## Server only: the match scene, loaded once at startup so Start is quick.
-var _match_scene: PackedScene
+## Server only: each map's scene, loaded once at startup so Start is quick.
+var _map_scenes: Dictionary[MatchMap.Map, PackedScene] = {}
 
 
 func _ready() -> void:
@@ -164,6 +163,18 @@ func set_team_count(count: int) -> void:
 		_request_team_count.rpc_id(SERVER_ID, count)
 
 
+## Leader only: the level to play on.
+func set_map(map: MatchMap.Map) -> void:
+	if is_host and not in_match:
+		_request_map.rpc_id(SERVER_ID, map)
+
+
+## Leader only: what the bosses drop.
+func set_boss_drop(kind: BossDrop.Kind) -> void:
+	if is_host and not in_match:
+		_request_boss_drop.rpc_id(SERVER_ID, kind)
+
+
 ## [team, character] picked by `peer_id`.
 func loadout_of(peer_id: int) -> Array:
 	return loadouts.get(peer_id, [0, 0])
@@ -230,7 +241,8 @@ func _start_server() -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 	is_server = true
-	_match_scene = load(MATCH_SCENE)
+	for map: MatchMap.Map in MatchMap.MAPS:
+		_map_scenes[map] = load(MatchMap.scene_of(map))
 	print("Server listening on UDP port %d." % PORT)
 
 
@@ -240,7 +252,7 @@ func _close_session() -> void:
 	access_code = ""
 	peers.clear()
 	loadouts.clear()
-	Players.set_team_count(Players.TEAM_COUNTS[0])
+	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0], MatchMap.DROPS[0])
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -252,8 +264,17 @@ func _broadcast_peers() -> void:
 	for id: int in peers:
 		# Skip anyone whose connection just dropped but isn't cleaned up yet.
 		if multiplayer.get_peers().has(id):
-			_sync_peers.rpc_id(id, peers, loadouts, Players.team_count)
+			_sync_peers.rpc_id(id, peers, loadouts, _format())
 	peers_changed.emit()
+
+
+## [team_count, map, boss_drop], as sent to everyone.
+func _format() -> Array:
+	return [Players.team_count, Players.map, Players.boss_drop]
+
+
+func _apply_format(format: Array) -> void:
+	Players.set_match_format(format[0], format[1], format[2])
 
 
 ## A new player starts on the smallest team, as the seat's usual character.
@@ -405,21 +426,44 @@ func _request_loadout(team: int, character: int) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_team_count(count: int) -> void:
-	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
-			and Players.TEAM_COUNTS.has(count):
+	if _from_leader_in_lobby() and Players.TEAM_COUNTS.has(count):
 		Players.set_team_count(count)
-		# Teams no longer in play wrap around onto ones that are
-		for loadout: Array in loadouts.values():
-			loadout[0] = posmod(loadout[0], count)
-		_broadcast_peers()
+		_format_changed()
+
+
+@rpc("any_peer", "reliable")
+func _request_map(map: MatchMap.Map) -> void:
+	if _from_leader_in_lobby() and MatchMap.MAPS.has(map):
+		Players.set_map(map)
+		_format_changed()
+
+
+@rpc("any_peer", "reliable")
+func _request_boss_drop(kind: BossDrop.Kind) -> void:
+	if _from_leader_in_lobby() and MatchMap.DROPS.has(kind):
+		Players.set_boss_drop(kind)
+		_format_changed()
+
+
+func _from_leader_in_lobby() -> bool:
+	return is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0]
+
+
+## Teams no longer in play (e.g. a map with fewer sides) wrap around onto
+## ones that are, then everyone hears the new format.
+func _format_changed() -> void:
+	for loadout: Array in loadouts.values():
+		loadout[0] = posmod(loadout[0], Players.team_count)
+	_broadcast_peers()
 
 
 @rpc("any_peer", "reliable")
 func _request_start() -> void:
 	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
 			and _teams_split():
-		print("Session %s started a match with %d players in %d teams." % [access_code, peers.size(), Players.team_count])
-		_start_match.rpc(Players.team_count)
+		print("Session %s started a match with %d players in %d teams on %s (%s)." % [access_code, peers.size(),
+			Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop)])
+		_start_match.rpc(_format())
 
 
 @rpc("any_peer", "reliable")
@@ -436,10 +480,10 @@ func _join_rejected(reason: String) -> void:
 
 
 @rpc("authority", "reliable")
-func _sync_peers(ids: Array, new_loadouts: Dictionary, team_count: int) -> void:
+func _sync_peers(ids: Array, new_loadouts: Dictionary, format: Array) -> void:
 	peers.assign(ids)
 	loadouts = new_loadouts
-	Players.set_team_count(team_count)
+	_apply_format(format)
 	is_host = peers[0] == multiplayer.get_unique_id()
 	var request := _request
 	_request = ""
@@ -451,11 +495,11 @@ func _sync_peers(ids: Array, new_loadouts: Dictionary, team_count: int) -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _start_match(team_count: int) -> void:
+func _start_match(format: Array) -> void:
 	in_match = true
-	Players.set_team_count(team_count)
+	_apply_format(format)
 	if is_server:
-		get_tree().change_scene_to_packed(_match_scene)
+		get_tree().change_scene_to_packed(_map_scenes[Players.map])
 	match_started.emit()
 
 
