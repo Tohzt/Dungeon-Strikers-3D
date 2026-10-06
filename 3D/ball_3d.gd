@@ -36,10 +36,8 @@ var _grab_cooldown: float = 0.0
 ## Server: extra reach allowed on a client's grab, since it saw the ball
 ## (and the server saw the player) a little in the past.
 const GRAB_REACH_SLACK := 1.0
-var _last_sent_transform: Transform3D
-var _last_sent_msec: int = 0
-## Clients: the server's recent updates, played back smoothly.
-var _net_motion: NetInterpolator = null
+## Online: the server sends where it is; clients play it back.
+var _motion := NetMotion.new()
 
 # Weapon effects (see WeaponBehavior3D.hit_ball). Online the server applies
 # them, like every push.
@@ -93,10 +91,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if _net_motion and not holder:
-		var sample: Array = _net_motion.sample(delta)
-		if not sample.is_empty():
-			global_transform = sample[0]
+	if not Net.decides() and not holder:
+		_motion.play(self, delta)
 	if mesh_instance and tint_by_speed:
 		var material: StandardMaterial3D = mesh_instance.get_surface_override_material(0)
 		if not material:
@@ -110,7 +106,7 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not _simulates():
+	if not Net.decides():
 		return  # The server's updates move and color it
 	_grab_cooldown = max(_grab_cooldown - delta, 0.0)
 	_update_curve(delta)
@@ -128,32 +124,18 @@ func _physics_process(delta: float) -> void:
 func setup_network() -> void:
 	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	freeze = not Net.is_server
-	if not Net.is_server:
-		_net_motion = NetInterpolator.new()
-
-
-## Whether this machine runs the ball's physics.
-func _simulates() -> bool:
-	return not Net.in_session() or Net.is_server
 
 
 func _send_state() -> void:
-	if not Net.is_server or not Net.match_synced or holder:
-		return
-	var now_msec: int = Time.get_ticks_msec()
-	if global_transform.is_equal_approx(_last_sent_transform) \
-			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC:
-		return  # Resting - nothing new to tell anyone
-	_last_sent_transform = global_transform
-	_last_sent_msec = now_msec
-	_net_state.rpc(NetInterpolator.now(), global_transform, color_cur)
+	if Net.is_server and Net.match_synced and not holder and _motion.should_send(global_transform):
+		_net_state.rpc(NetInterpolator.now(), global_transform, color_cur)
 
 
 @rpc("authority", "unreliable_ordered")
 func _net_state(time: float, xform: Transform3D, color: Color) -> void:
 	if holder:
 		return  # Pinned to the holder's hand locally
-	_net_motion.push(time, xform)
+	_motion.push(time, xform)
 	color_cur = color
 
 
@@ -161,7 +143,7 @@ func _net_state(time: float, xform: Transform3D, color: Color) -> void:
 func receive_impulse(impulse: Vector3) -> void:
 	if holder:
 		return
-	if _simulates():
+	if Net.decides():
 		apply_central_impulse(impulse)
 	else:
 		_request_push.rpc_id(Net.SERVER_ID, impulse)
@@ -178,7 +160,7 @@ func _request_push(impulse: Vector3) -> void:
 func touched_by(player: Node3D) -> void:
 	if not player is PlayerClass3D:
 		return
-	if _simulates():
+	if Net.decides():
 		_set_last_team(String(player.name))
 	elif Net.match_synced:
 		_request_touch.rpc_id(Net.SERVER_ID, String(player.name))
@@ -191,7 +173,7 @@ func _request_touch(player_name: String) -> void:
 
 
 func _set_last_team(player_name: String) -> void:
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D if Global.Game3D else null
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name) if Global.Game3D else null
 	if player and player.slot:
 		last_team = player.slot.team
 
@@ -225,8 +207,7 @@ func grab(player: PlayerClass3D) -> void:
 	holder = player
 	if player.slot:
 		last_team = player.slot.team
-	if _net_motion:
-		_net_motion.clear()  # Play back from the release, not before the grab
+	_motion.clear()  # Play back from the release, not before the grab
 	player.held_ball = self
 	_curve_left = 0.0
 	# Freeze the ball's physics and disable collision while it's carried
@@ -249,18 +230,18 @@ func release(impulse: Vector3) -> void:
 	holder = null
 	collision_layer = _free_collision_layer
 	collision_mask = _free_collision_mask
-	freeze = not _simulates()
-	if _simulates():
+	freeze = not Net.decides()
+	if Net.decides():
 		apply_impulse(impulse)
 	_grab_cooldown = GRAB_COOLDOWN
-	_last_sent_transform = Transform3D()
+	_motion.send_next()
 
 
 @rpc("any_peer", "reliable")
 func _request_grab() -> void:
 	if not Net.is_server or holder or _grab_cooldown > 0.0:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and player.can_grab_ball(self, PlayerClass3D.BALL_REACH + GRAB_REACH_SLACK):
 		_grabbed.rpc(player.name)
 
@@ -273,7 +254,7 @@ func _request_throw(impulse: Vector3) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _grabbed(player_name: String) -> void:
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player:
 		grab(player)
 
@@ -300,7 +281,7 @@ func _update_ball_color(speed: float) -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if not _simulates():
+	if not Net.decides():
 		return
 	if body is ShieldClass3D and body.is_blocking and body.wielder:
 		_catch_on(body)
@@ -334,7 +315,7 @@ func _on_body_entered(body: Node) -> void:
 func receive_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker: Node3D) -> void:
 	if holder:
 		return
-	if _simulates():
+	if Net.decides():
 		_apply_weapon_hit(velocity, exact, curve, ignite_time, _player_name(attacker))
 	else:
 		_request_weapon_hit.rpc_id(Net.SERVER_ID, velocity, exact, curve, ignite_time, _player_name(attacker))
@@ -360,7 +341,7 @@ func _apply_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_ti
 func redirect(dir: Vector3, min_speed: float) -> void:
 	if holder:
 		return
-	if _simulates():
+	if Net.decides():
 		_apply_redirect(dir, min_speed)
 	else:
 		_request_redirect.rpc_id(Net.SERVER_ID, dir, min_speed)
@@ -438,9 +419,7 @@ func _burn_on_hit(player: PlayerClass3D) -> void:
 
 
 func _igniter() -> PlayerClass3D:
-	if _igniter_name == "" or not Global.Game3D:
-		return null
-	return Global.Game3D.get_node_or_null(_igniter_name) as PlayerClass3D
+	return Global.Game3D.player_named(_igniter_name) if Global.Game3D else null
 
 
 func _player_name(node: Node3D) -> String:

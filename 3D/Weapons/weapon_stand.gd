@@ -116,7 +116,7 @@ func _next_weapon_name() -> String:
 func _request_take(is_left: bool) -> void:
 	if not Net.is_server or not _is_stocked():
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and _may_take(player) and player.can_hold_grip(_stock_grip(), is_left):
 		_given.rpc(player.name, is_left, _next_weapon_name())
 
@@ -126,7 +126,7 @@ func _request_take(is_left: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
 	var scene: PackedScene = _take_stock()
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player and scene:
 		_hand_weapon(scene, _given_rarity, player, is_left, weapon_name, display_anchor.global_transform)
 	_after_given()

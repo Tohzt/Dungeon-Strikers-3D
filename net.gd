@@ -82,6 +82,23 @@ func in_session() -> bool:
 	return not peers.is_empty()
 
 
+## Whether this machine decides how the match goes and runs the shared
+## world (the ball, bosses, minions, who scores, what gets dealt): the
+## local game offline, the server online.
+func decides() -> bool:
+	return not in_session() or is_server
+
+
+## Run `method` (a "call_local" RPC) on every machine: as an RPC online, or
+## just here offline. How the deciding machine (see decides()) tells
+## everyone what happened.
+func everywhere(method: Callable, ...args: Array) -> void:
+	if in_session():
+		method.get_object().callv(&"rpc", [method.get_method()] + args)
+	else:
+		method.callv(args)
+
+
 ## Our seat (0 = leader), which is also our player index in the match.
 func local_seat() -> int:
 	return peers.find(multiplayer.get_unique_id())

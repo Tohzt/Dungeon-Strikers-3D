@@ -3,7 +3,7 @@ class_name NetInterpolator extends RefCounted
 ## between them, so remote things move smoothly even though packets arrive
 ## unevenly. Snapshots are stamped with the sender's physics clock (see
 ## now()), so each interpolator must only be fed by one sender at a time;
-## clear() it when that changes.
+## clear() it when that changes. Nodes use it through NetMotion, which does.
 
 ## How far behind the newest update playback runs. Enough to absorb a
 ## late packet or two.

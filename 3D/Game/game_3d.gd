@@ -307,6 +307,16 @@ func player_of_peer(peer_id: int) -> PlayerClass3D:
 	return null
 
 
+## Server, inside an RPC a player sent: that player.
+func rpc_sender() -> PlayerClass3D:
+	return player_of_peer(multiplayer.get_remote_sender_id())
+
+
+## The player named `player_name` (as names are sent in RPCs), if any.
+func player_named(player_name: String) -> PlayerClass3D:
+	return get_node_or_null(player_name) as PlayerClass3D if player_name != "" else null
+
+
 ## An online player left mid-match: remove their player and HUD, dropping
 ## whatever they held. Every machine does this for itself.
 func _on_net_peers_changed() -> void:
@@ -356,10 +366,7 @@ func score_goal(team: int, scored_ball: Ball3D) -> void:
 	var new_score: int = scores.get(team, 0) + 1
 	# Behind on kills: take one back from the leader. Otherwise bank a shield.
 	var erased_team: int = _top_team_ahead_of(team)
-	if Net.in_session():
-		_goal_scored.rpc(team, new_score, scored_ball.name, erased_team)
-	else:
-		_goal_scored(team, new_score, scored_ball.name, erased_team)
+	Net.everywhere(_goal_scored, team, new_score, scored_ball.name, erased_team)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -402,10 +409,7 @@ func deliver_skull(team: int, skull: Ball3D) -> void:
 	if not balls.has(skull) or not altar:
 		return
 	var roll: PackedInt32Array = altar.roll_reward()
-	if Net.in_session():
-		_skull_delivered.rpc(team, skull.name, roll)
-	else:
-		_skull_delivered(team, skull.name, roll)
+	Net.everywhere(_skull_delivered, team, skull.name, roll)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -428,7 +432,7 @@ func _skull_delivered(team: int, skull_name: String, roll: PackedInt32Array) -> 
 ## opponent who gets the kill ("" = nobody). The server (or offline game)
 ## decides the result and tells everyone.
 func report_death(victim: PlayerClass3D, killer_name: String) -> void:
-	if not Net.in_session() or Net.is_server:
+	if Net.decides():
 		_resolve_death(victim.name, killer_name)
 	elif Net.match_synced:
 		_request_death.rpc_id(Net.SERVER_ID, killer_name)
@@ -438,14 +442,14 @@ func report_death(victim: PlayerClass3D, killer_name: String) -> void:
 func _request_death(killer_name: String) -> void:
 	if not Net.is_server:
 		return
-	var victim: PlayerClass3D = player_of_peer(multiplayer.get_remote_sender_id())
+	var victim: PlayerClass3D = rpc_sender()
 	if victim:
 		_resolve_death(victim.name, killer_name)
 
 
 func _resolve_death(victim_name: String, killer_name: String) -> void:
-	var victim: PlayerClass3D = get_node_or_null(victim_name) as PlayerClass3D
-	var killer: PlayerClass3D = get_node_or_null(killer_name) as PlayerClass3D if killer_name != "" else null
+	var victim: PlayerClass3D = player_named(victim_name)
+	var killer: PlayerClass3D = player_named(killer_name)
 	if not victim:
 		return
 	# No credit for team kills or once the match is decided
@@ -459,16 +463,13 @@ func _resolve_death(victim_name: String, killer_name: String) -> void:
 		# Headhunter: killing the leader banks a shield
 		bounty = killer.perk_stat(&"leader_bounty") > 1.0 and _leading_team() == _team_of(victim)
 	var sent_killer: String = String(killer.name) if killer else ""
-	if Net.in_session():
-		_player_died.rpc(victim_name, sent_killer, new_kills, bounty)
-	else:
-		_player_died(victim_name, sent_killer, new_kills, bounty)
+	Net.everywhere(_player_died, victim_name, sent_killer, new_kills, bounty)
 
 
 @rpc("authority", "call_local", "reliable")
 func _player_died(victim_name: String, killer_name: String, new_kills: int, bounty: bool) -> void:
-	var victim: PlayerClass3D = get_node_or_null(victim_name) as PlayerClass3D
-	var killer: PlayerClass3D = get_node_or_null(killer_name) as PlayerClass3D if killer_name != "" else null
+	var victim: PlayerClass3D = player_named(victim_name)
+	var killer: PlayerClass3D = player_named(killer_name)
 	if not victim:
 		return
 	victim.die()
@@ -506,7 +507,7 @@ func try_use_shield(player: PlayerClass3D) -> bool:
 		return false
 	# Spent here at once, so a second hit before the server replies can't reuse it
 	shields[team] -= 1
-	if not Net.in_session() or Net.is_server:
+	if Net.decides():
 		_shield_used(team, shields[team], player.name)
 	elif Net.match_synced:
 		_request_use_shield.rpc_id(Net.SERVER_ID)
@@ -517,7 +518,7 @@ func try_use_shield(player: PlayerClass3D) -> bool:
 func _request_use_shield() -> void:
 	if not Net.is_server:
 		return
-	var player: PlayerClass3D = player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = rpc_sender()
 	if player:
 		var team: int = _team_of(player)
 		_shield_used.rpc(team, max(shields.get(team, 0) - 1, 0), player.name)
@@ -526,7 +527,7 @@ func _request_use_shield() -> void:
 @rpc("authority", "call_local", "reliable")
 func _shield_used(team: int, left: int, player_name: String) -> void:
 	_set_shields(team, left)
-	var player: PlayerClass3D = get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = player_named(player_name)
 	if player:
 		scoreboard.announce("%s's bounty shield broke!" % _player_label(player), _team_color(team))
 
@@ -625,7 +626,7 @@ func _add_ball(new_ball: Ball3D, impulse: Vector3) -> void:
 	add_child(new_ball)
 	if Net.in_session():
 		new_ball.setup_network()
-	if not Net.in_session() or Net.is_server:
+	if Net.decides():
 		new_ball.apply_central_impulse(impulse)
 
 
@@ -644,10 +645,7 @@ func return_ball(ball: Ball3D) -> void:
 	ball.last_team = -1
 	# Called from the net's physics callback, so move it once the step is done
 	_move_ball_to_middle.call_deferred(ball)
-	if Net.in_session():
-		_ball_returned.rpc()
-	else:
-		_ball_returned()
+	Net.everywhere(_ball_returned)
 
 
 func _move_ball_to_middle(ball: Ball3D) -> void:
@@ -699,7 +697,7 @@ func _on_boss_defeated(killer: PlayerClass3D, boss: Boss3D) -> void:
 ## Server/offline: once no boss is left, every ball has been scored and
 ## every skull's altar reward has been claimed, it's time to pick perks.
 func check_round_over() -> void:
-	if Net.in_session() and not Net.is_server:
+	if not Net.decides():
 		return
 	if phase != Phase.INTERMISSION and bosses.is_empty() and balls.is_empty() and not _rewards_waiting():
 		perks.begin_intermission()
@@ -720,17 +718,14 @@ func _on_intermission_started() -> void:
 ## Everyone has picked: bring on the next boss.
 func _on_intermission_finished() -> void:
 	boss_round += 1
-	if Net.in_session() and not Net.is_server:
+	if not Net.decides():
 		return
 	_bosses_made += 1
 	var boss_name: String = "Boss_%d" % _bosses_made
 	var probe: Boss3D = boss_scene.instantiate()
 	var hp: float = probe.max_hp * pow(1.0 + boss_hp_growth, boss_round - 1)
 	probe.free()
-	if Net.in_session():
-		_spawn_boss.rpc(boss_name, hp)
-	else:
-		_spawn_boss(boss_name, hp)
+	Net.everywhere(_spawn_boss, boss_name, hp)
 
 
 @rpc("authority", "call_local", "reliable")

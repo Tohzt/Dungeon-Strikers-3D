@@ -52,16 +52,13 @@ func _ready() -> void:
 func record_boss_kill(killer: PlayerClass3D) -> void:
 	for player: PlayerClass3D in _players():
 		_boss_rewards[player.name] = Perk.Category.MOBILITY
-	if not killer or (Net.in_session() and not Net.is_server):
+	if not killer or not Net.decides():
 		return
 	var categories: Array[Perk.Category] = []
 	categories.resize(OFFER_SIZE)
 	categories.fill(Perk.Category.OFFENSE)
 	var hand: PackedInt32Array = _deal_hand(categories)
-	if Net.in_session():
-		_grant_hand.rpc(killer.name, hand)
-	else:
-		_grant_hand(killer.name, hand)
+	Net.everywhere(_grant_hand, killer.name, hand)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -79,7 +76,7 @@ func _grant_hand(player_name: String, hand: PackedInt32Array) -> void:
 ## own). A chest deals from every category but Relic; a skull's altar
 ## (`relic`) deals Relic cards only.
 func grant_bonus_hand(player: PlayerClass3D, size: int, relic: bool = false) -> void:
-	if Net.in_session() and not Net.is_server:
+	if not Net.decides():
 		return
 	var hand := PackedInt32Array()
 	var choices: Array[int] = []
@@ -89,10 +86,7 @@ func grant_bonus_hand(player: PlayerClass3D, size: int, relic: bool = false) -> 
 	choices.shuffle()
 	for i in mini(size, choices.size()):
 		hand.append(choices[i])
-	if Net.in_session():
-		_grant_bonus_hand.rpc(player.name, hand)
-	else:
-		_grant_bonus_hand(player.name, hand)
+	Net.everywhere(_grant_bonus_hand, player.name, hand)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -134,7 +128,7 @@ func record_kill(killer: PlayerClass3D) -> void:
 
 ## Server/offline: deal everyone their cards and open the altars.
 func begin_intermission() -> void:
-	if in_intermission or (Net.in_session() and not Net.is_server):
+	if in_intermission or not Net.decides():
 		return
 	var dealt: Dictionary = {}
 	for player: PlayerClass3D in _players():
@@ -142,10 +136,7 @@ func begin_intermission() -> void:
 	_boss_rewards.clear()
 	_goal_rewards.clear()
 	_round_kills.clear()
-	if Net.in_session():
-		_start_intermission.rpc(dealt)
-	else:
-		_start_intermission(dealt)
+	Net.everywhere(_start_intermission, dealt)
 
 
 ## One card per source: the boss result, the goal result, and a hunter
@@ -255,7 +246,7 @@ func open_for(player: PlayerClass3D) -> void:
 func _request_open() -> void:
 	if not Net.is_server:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and can_open(player):
 		_begin_pick.rpc(player.name)
 
@@ -290,7 +281,7 @@ func _on_picker_chosen(player: PlayerClass3D, card: int) -> void:
 func _request_pick(card: int) -> void:
 	if not Net.is_server:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and picking.has(player.name) and card >= 0 and card < offers[player.name][0].size():
 		_apply_pick.rpc(player.name, offers[player.name][0][card])
 

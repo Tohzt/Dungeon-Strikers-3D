@@ -60,18 +60,14 @@ var _squash: float = 1.0
 var _squash_vel: float = 0.0
 var _wobble_time: float = 0.0
 
-## Clients: the server's recent updates, played back smoothly.
-var _net_motion: NetInterpolator = null
-var _last_sent_transform: Transform3D
-var _last_sent_msec: int = 0
+## Online: the server sends where it is; clients play it back.
+var _motion := NetMotion.new()
 
 
 func _ready() -> void:
 	add_to_group("Minion")
 	hp = max_hp
 	_wobble_time = randf() * TAU  # So a pair doesn't wobble in sync
-	if Net.in_session() and not Net.is_server:
-		_net_motion = NetInterpolator.new()
 
 
 ## Fly out of the boss at `launch_velocity` (by whoever simulates it).
@@ -81,7 +77,7 @@ func launch(launch_velocity: Vector3) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not _simulates() or is_dead:
+	if not Net.decides() or is_dead:
 		return
 	_state_time += delta
 	for key: Node in _bump_cooldowns.keys():
@@ -117,10 +113,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	if _net_motion:
-		var sample: Array = _net_motion.sample(delta)
-		if not sample.is_empty():
-			global_transform = sample[0]
+	if not Net.decides():
+		_motion.play(self, delta)
 		_state_time += delta
 	_update_squash(delta)
 	_update_color(delta)
@@ -183,7 +177,7 @@ func _bump_players() -> void:
 func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, _attacker: Node3D = null) -> bool:
 	if is_dead:
 		return false
-	if not _simulates():
+	if not Net.decides():
 		if Net.match_synced:
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
 		return true
@@ -201,13 +195,13 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, _att
 
 ## Loose physics pushes (see Combat.push) knock it around a little.
 func receive_impulse(impulse: Vector3) -> void:
-	if _simulates():
+	if Net.decides():
 		_knockback += _flat(impulse) * 0.5
 
 
 ## Pop, everywhere (server/offline decides).
 func die() -> void:
-	if not _simulates():
+	if not Net.decides():
 		return
 	if Net.in_session() and Net.match_synced:
 		_net_die.rpc()
@@ -228,10 +222,6 @@ func _pop() -> void:
 
 
 # ===== HELPERS =====
-
-func _simulates() -> bool:
-	return not Net.in_session() or Net.is_server
-
 
 func _flat(v: Vector3) -> Vector3:
 	return Vector3(v.x, 0.0, v.z)
@@ -289,21 +279,13 @@ func _update_color(delta: float) -> void:
 # ===== NETWORK =====
 
 func _send_state() -> void:
-	if not Net.in_session() or not Net.is_server or not Net.match_synced:
-		return
-	var now_msec: int = Time.get_ticks_msec()
-	if global_transform.is_equal_approx(_last_sent_transform) \
-			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC:
-		return
-	_last_sent_transform = global_transform
-	_last_sent_msec = now_msec
-	_net_state.rpc(NetInterpolator.now(), global_transform)
+	if Net.in_session() and Net.is_server and Net.match_synced and _motion.should_send(global_transform):
+		_net_state.rpc(NetInterpolator.now(), global_transform)
 
 
 @rpc("authority", "unreliable_ordered")
 func _net_state(time: float, xform: Transform3D) -> void:
-	if _net_motion:
-		_net_motion.push(time, xform)
+	_motion.push(time, xform)
 
 
 @rpc("authority", "reliable")

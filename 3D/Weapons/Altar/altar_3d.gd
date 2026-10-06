@@ -318,17 +318,14 @@ func _after_given() -> void:
 
 ## Server/offline: pick a weapon from the current tier and stock it everywhere.
 func _restock() -> void:
-	if Net.in_session() and not Net.is_server:
+	if not Net.decides():
 		return
 	var current: AltarTier = _current_tier()
 	if not current or current.weapons.is_empty():
 		return
 	var pick: int = randi() % current.weapons.size()
 	var pick_rarity: int = WeaponRarity.roll(current.rarity_weights)
-	if Net.in_session():
-		_stock.rpc(tier, pick, pick_rarity)
-	else:
-		_stock(tier, pick, pick_rarity)
+	Net.everywhere(_stock, tier, pick, pick_rarity)
 
 
 ## Server -> everyone: the next weapon is tiers[tier_index].weapons[pick],
@@ -347,15 +344,12 @@ func _stock(tier_index: int, pick: int, pick_rarity: int) -> void:
 ## Raise the altar's tier (e.g. its team scored) and stock a weapon from the
 ## new tier, replacing the oldest. Server/offline only.
 func upgrade(levels: int = 1) -> void:
-	if Net.in_session() and not Net.is_server:
+	if not Net.decides():
 		return
 	var new_tier: int = clampi(tier + levels, 0, tiers.size() - 1)
 	if new_tier == tier:
 		return
-	if Net.in_session():
-		_set_tier.rpc(new_tier)
-	else:
-		_set_tier(new_tier)
+	Net.everywhere(_set_tier, new_tier)
 	_restock()
 
 
@@ -449,7 +443,7 @@ func _take_reward(player: PlayerClass3D) -> void:
 func _request_reward(is_left: bool) -> void:
 	if not Net.is_server or not _reward_ready():
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and _may_take(player) and (reward == Reward.PERK or player.can_hold_grip(_reward_grip(), is_left)):
 		_reward_given.rpc(player.name, is_left, _next_weapon_name())
 
@@ -458,7 +452,7 @@ func _request_reward(is_left: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _reward_given(player_name: String, is_left: bool, weapon_name: String) -> void:
 	var game: Game3D_Class = Global.Game3D
-	var player: PlayerClass3D = game.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = game.player_named(player_name)
 	var kind: Reward = reward
 	var scene: PackedScene = _reward_scene
 	var from: Transform3D = _reward_pivot.global_transform if _reward_pivot else display_anchor.global_transform

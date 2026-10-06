@@ -146,13 +146,9 @@ const DEFAULT_THROW_SPIN_SPEED: float = 8.0
 ## Client: don't ask the server again every frame we're touching the weapon.
 const REQUEST_RETRY_MSEC := 250
 var _next_request_msec: int = 0
-var _last_sent_transform: Transform3D
-var _last_sent_frame: int = -1
-var _last_sent_msec: int = 0
-## Replicas: the owner's recent poses, played back smoothly. Not while
-## held: every machine poses a held weapon from its wielder's hand.
-var _net_motion: NetInterpolator = null
-var _net_motion_sender: int = 0
+## Online: whoever simulates it sends where it is, the rest play it back.
+## Not while held: every machine poses a held weapon from its wielder's hand.
+var _motion := NetMotion.new()
 
 
 func _ready() -> void:
@@ -263,7 +259,7 @@ func _point_along(direction: Vector3) -> void:
 
 func _set_props() -> void:
 	if !Properties:
-		print("No Propertied found")
+		push_error("%s has no WeaponProperties3D; removing it." % scene_file_path)
 		queue_free()
 		return
 
@@ -271,11 +267,6 @@ func _set_props() -> void:
 	if Properties.weapon_name.is_empty():
 		Properties.weapon_name = "Weapon3D"
 	self.name = Properties.weapon_name
-
-	# Setup collision if available
-	if Collision:
-		# Collision shape should be set up in the scene
-		pass
 
 	_update_collisions("on-ground")
 
@@ -729,10 +720,8 @@ func _set_net_owner(peer_id: int) -> void:
 	set_multiplayer_authority(peer_id)
 	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	freeze = not is_multiplayer_authority()
-	_last_sent_transform = Transform3D()
-	if not _net_motion:
-		_net_motion = NetInterpolator.new(0.0 if Net.is_server else NetInterpolator.DELAY)
-	_net_motion.clear()
+	_motion.send_next()
+	_motion.clear()
 
 
 ## Whoever simulated this weapon left: the server takes it back, out of
@@ -748,21 +737,10 @@ func forget_departed_owner() -> void:
 	_set_net_owner(Net.SERVER_ID)
 
 
-## Once per physics tick at most, and only when it moved. Not while held
-## (see _net_motion).
+## Not while held (see _motion).
 func _send_pose() -> void:
-	if not Net.match_synced or not is_multiplayer_authority() or wielder:
-		return
-	var frame: int = Engine.get_physics_frames()
-	var xform: Transform3D = global_transform
-	var now_msec: int = Time.get_ticks_msec()
-	if frame == _last_sent_frame or (xform.is_equal_approx(_last_sent_transform) \
-			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC):
-		return
-	_last_sent_frame = frame
-	_last_sent_transform = xform
-	_last_sent_msec = now_msec
-	_net_pose.rpc(NetInterpolator.now(), xform)
+	if Net.match_synced and is_multiplayer_authority() and not wielder and _motion.should_send(global_transform):
+		_net_pose.rpc(NetInterpolator.now(), global_transform)
 
 
 func _is_from_owner() -> bool:
@@ -771,28 +749,20 @@ func _is_from_owner() -> bool:
 
 @rpc("any_peer", "unreliable_ordered")
 func _net_pose(time: float, xform: Transform3D) -> void:
-	if not _is_from_owner() or not _net_motion:
-		return
-	# Snapshots stamped by another machine's clock can't be blended with these
-	var sender: int = multiplayer.get_remote_sender_id()
-	if sender != _net_motion_sender:
-		_net_motion.clear()
-		_net_motion_sender = sender
-	_net_motion.push(time, xform)
+	if _is_from_owner():
+		_motion.push(time, xform, PackedFloat32Array(), multiplayer.get_remote_sender_id())
 
 
 ## Replicas, once per rendered frame: move to where the owner had this a
 ## moment ago.
 func follow_net_pose(delta: float) -> void:
-	if simulates() or not _net_motion:
+	if simulates():
 		return
 	if wielder:
 		# Poses from before it was picked up are stale by the time it's dropped
-		_net_motion.clear()
+		_motion.clear()
 		return
-	var sample: Array = _net_motion.sample(delta)
-	if not sample.is_empty():
-		global_transform = sample[0]
+	_motion.play(self, delta)
 
 
 @rpc("any_peer", "reliable")
@@ -829,7 +799,7 @@ func request_equip(player: PlayerClass3D, is_left: bool) -> void:
 func _request_equip(is_left: bool) -> void:
 	if not Net.is_server or wielder or not can_pickup:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and player.can_hold(self, is_left):
 		_equipped.rpc(player.name, is_left)
 
@@ -840,7 +810,7 @@ func _request_equip(is_left: bool) -> void:
 func _equipped(player_name: String, is_left: bool) -> void:
 	if multiplayer.get_remote_sender_id() != Net.SERVER_ID:
 		return
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player:
 		hand_to(player, is_left)
 

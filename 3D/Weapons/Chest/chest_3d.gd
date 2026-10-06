@@ -70,7 +70,7 @@ func _is_stocked() -> bool:
 func _request_open() -> void:
 	if not Net.is_server or is_open:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player:
 		_roll_contents(player)
 
@@ -84,10 +84,7 @@ func _roll_contents(player: PlayerClass3D) -> void:
 		or loot_weapons.is_empty()
 	var pick: int = -1 if is_perk else randi() % loot_weapons.size()
 	var tier: int = WeaponRarity.roll(loot_rarity_weights)
-	if Net.in_session():
-		_opened.rpc(player.name, pick, tier)
-	else:
-		_opened(player.name, pick, tier)
+	Net.everywhere(_opened, player.name, pick, tier)
 	if is_perk and Global.Game3D:
 		Global.Game3D.perks.grant_bonus_hand(player, perk_choices)
 
@@ -99,7 +96,7 @@ func _opened(player_name: String, pick: int, tier: int) -> void:
 	var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(lid, "rotation_degrees:x", LID_OPEN_DEGREES, LID_OPEN_TIME)
 	tween.parallel().tween_property(glow, "light_energy", 0.0, 1.5)
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D if Global.Game3D else null
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name) if Global.Game3D else null
 	if pick >= 0 and pick < loot_weapons.size():
 		rarity = tier
 		weapon_scene = loot_weapons[pick]

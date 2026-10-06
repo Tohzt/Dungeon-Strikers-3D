@@ -18,7 +18,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	super(delta)
-	if _simulates():
+	if Net.decides():
 		_check_delivery()
 
 

@@ -77,7 +77,7 @@ func _request_take(player: PlayerClass3D) -> void:
 func _ask_server() -> void:
 	if not Net.is_server:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and is_ready():
 		_taken.rpc(player.name)
 	else:
@@ -91,7 +91,7 @@ func _taken(player_name: String) -> void:
 	_requested = false
 	respawn_left = respawn_time
 	_model().visible = false
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player and not player.is_remote:
 		_give(player)
 

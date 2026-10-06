@@ -32,7 +32,7 @@ func _ready() -> void:
 
 
 func _on_net_body_entered(body: Node3D) -> void:
-	if not body is Ball3D or (Net.in_session() and not Net.is_server):
+	if not body is Ball3D or not Net.decides():
 		return
 	var team: int = scoring_team
 	if team == LAST_TOUCH:

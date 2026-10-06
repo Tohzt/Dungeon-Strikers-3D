@@ -177,10 +177,8 @@ var _squash: float = 1.0
 var _squash_vel: float = 0.0
 var _wobble_time: float = 0.0
 
-## Clients: the server's recent updates, played back smoothly.
-var _net_motion: NetInterpolator = null
-var _last_sent_transform: Transform3D
-var _last_sent_msec: int = 0
+## Online: the server sends where it is; clients play it back.
+var _motion := NetMotion.new()
 
 
 func _ready() -> void:
@@ -196,12 +194,10 @@ func _ready() -> void:
 	_spit_cooldown = spit_cooldown * 0.6
 	hp = max_hp
 	_dress_core()
-	if Net.in_session() and not Net.is_server:
-		_net_motion = NetInterpolator.new()
 
 
 func _physics_process(delta: float) -> void:
-	if not _simulates():
+	if not Net.decides():
 		return
 	if not is_awake or is_defeated:
 		_apply_gravity(delta)
@@ -243,10 +239,8 @@ func _process(delta: float) -> void:
 		if start_delay <= 0.0:
 			is_awake = true
 			awakened.emit()
-	if _net_motion:
-		var sample: Array = _net_motion.sample(delta)
-		if not sample.is_empty():
-			global_transform = sample[0]
+	if not Net.decides():
+		_motion.play(self, delta)
 		_state_time += delta  # Clients don't run the states, but the visuals time them
 	elif state == State.DEAD:
 		_state_time += delta  # Physics has stopped, but the fade-out times itself
@@ -518,10 +512,7 @@ func _spit() -> void:
 		_minions_made += 1
 		names.append("%s_Minion%d" % [name, _minions_made])
 		launches.append(dir * spit_speed * randf_range(0.7, 1.2) + Vector3.UP * spit_lift)
-	if Net.in_session():
-		_net_spit.rpc(names, launches)
-	else:
-		_net_spit(names, launches)
+	Net.everywhere(_net_spit, names, launches)
 
 
 ## Spawn the spat-out minions, on every machine, beside the boss in the
@@ -535,7 +526,7 @@ func _net_spit(names: PackedStringArray, launches: PackedVector3Array) -> void:
 		minion.name = names[i]
 		minion.position = mouth
 		get_parent().add_child(minion)
-		if _simulates():
+		if Net.decides():
 			minion.launch(launches[i])
 		_minions.append(minion)
 
@@ -568,7 +559,7 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 	if is_defeated:
 		return false
 	wake()
-	if not _simulates():
+	if not Net.decides():
 		if Net.match_synced:
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
 		return true
@@ -582,10 +573,7 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 	_set_hp(hp - damage)
 	if hp <= 0.0:
 		var killer: String = String(attacker.name) if attacker is PlayerClass3D else ""
-		if Net.in_session():
-			_net_defeated.rpc(killer)
-		else:
-			_defeat(killer)
+		Net.everywhere(_net_defeated, killer)
 	return true
 
 
@@ -621,9 +609,7 @@ func _defeat(killer_name: String) -> void:
 		core.visible = false
 		var dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 		Global.Game3D.spawn_ball(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse, drop)
-	var killer: PlayerClass3D = null
-	if Global.Game3D and killer_name != "":
-		killer = Global.Game3D.get_node_or_null(killer_name) as PlayerClass3D
+	var killer: PlayerClass3D = Global.Game3D.player_named(killer_name) if Global.Game3D else null
 	defeated.emit(killer)
 	await get_tree().create_timer(DEATH_TIME).timeout
 	queue_free()
@@ -632,7 +618,7 @@ func _defeat(killer_name: String) -> void:
 ## Hit by a punch, sword or thrown weapon (see Combat.push). It's heavy, so
 ## it only slides a little.
 func receive_impulse(impulse: Vector3) -> void:
-	if not _simulates():
+	if not Net.decides():
 		_request_push.rpc_id(Net.SERVER_ID, impulse)
 		return
 	_shove = (_shove + _flat(impulse) * SHOVE_RESISTANCE).limit_length(SHOVE_MAX)
@@ -649,10 +635,6 @@ func _slide_shove() -> void:
 
 
 # ===== HELPERS =====
-
-func _simulates() -> bool:
-	return not Net.in_session() or Net.is_server
-
 
 func _gravity() -> float:
 	return get_gravity().length() * gravity_scale
@@ -829,20 +811,13 @@ func _update_telegraph() -> void:
 # ===== NETWORK =====
 
 func _send_state() -> void:
-	if not Net.in_session() or not Net.is_server or not Net.match_synced:
-		return
-	var now_msec: int = Time.get_ticks_msec()
-	if global_transform.is_equal_approx(_last_sent_transform) \
-			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC:
-		return
-	_last_sent_transform = global_transform
-	_last_sent_msec = now_msec
-	_net_state.rpc(NetInterpolator.now(), global_transform, _stomp_target, _ground_y)
+	if Net.in_session() and Net.is_server and Net.match_synced and _motion.should_send(global_transform):
+		_net_state.rpc(NetInterpolator.now(), global_transform, _stomp_target, _ground_y)
 
 
 @rpc("authority", "unreliable_ordered")
 func _net_state(time: float, xform: Transform3D, stomp_target: Vector3, ground_y: float) -> void:
-	_net_motion.push(time, xform)
+	_motion.push(time, xform)
 	_stomp_target = stomp_target
 	_ground_y = ground_y
 
@@ -870,7 +845,7 @@ func _net_defeated(killer_name: String) -> void:
 @rpc("any_peer", "reliable")
 func _request_hit(damage: float, knockback_velocity: Vector3) -> void:
 	if Net.is_server:
-		var attacker: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+		var attacker: PlayerClass3D = Global.Game3D.rpc_sender()
 		receive_hit(Vector3.ZERO, damage, knockback_velocity, attacker)
 
 
