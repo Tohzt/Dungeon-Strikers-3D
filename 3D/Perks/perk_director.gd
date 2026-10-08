@@ -218,12 +218,12 @@ func team_has_offer(team: int) -> bool:
 	return false
 
 
-## Offline: a bot takes a random card from its oldest hand.
+## Offline or on the server: a bot takes a random card from its oldest hand.
 func auto_pick(player: PlayerClass3D) -> void:
-	if Net.in_session() or not can_open(player):
+	if not Net.decides() or not can_open(player):
 		return
 	var hand: PackedInt32Array = offers[player.name][0]
-	_apply_pick(player.name, hand[randi() % hand.size()])
+	Net.everywhere(_apply_pick, player.name, hand[randi() % hand.size()])
 
 
 ## Show `player` their oldest hand (at their altar). Nobody else's game

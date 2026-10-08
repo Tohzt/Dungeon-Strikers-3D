@@ -1,11 +1,11 @@
 class_name BossDrop extends RefCounted
 ## What a boss leaves behind when it's beaten (see Boss3D.drop). Each kind
-## is a carryable Ball3D (or subclass) that Game3D spawns into play.
+## is a Ball3D (or subclass) that Game3D spawns into play.
 
 enum Kind {
 	NONE,   ## Drops nothing
 	BALL,   ## The soccer ball: score it in a goal (see Goal3D)
-	SKULL,  ## Carry it home to your altar for a reward (see Skull3D)
+	SKULL,  ## Knock it home to your altar for a reward (see Skull3D)
 }
 
 ## The scene each kind spawns. BALL uses Game3D.ball_scene instead, so a

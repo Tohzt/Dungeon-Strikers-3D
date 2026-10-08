@@ -1,10 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://c6pn0hh7losfc"]
+[gd_scene format=3 uid="uid://c6pn0hh7losfc"]
 
 [ext_resource type="Script" uid="uid://s0nth7q6mjuh" path="res://3D/player_3d/character_body_3d.gd" id="1_qu530"]
 [ext_resource type="PackedScene" uid="uid://2fm376vpf8mu" path="res://3D/Entities/entity.tscn" id="2_78ftg"]
 [ext_resource type="Script" uid="uid://dgmwletqffblm" path="res://Entities/Resources/player_resource.gd" id="2_q82k8"]
 [ext_resource type="PackedScene" uid="uid://c86ptcgtunn2l" path="res://3D/Entities/Handlers/h_input.tscn" id="3_8y4cm"]
-[ext_resource type="Script" path="res://3D/player_3d/player_visual_3d.gd" id="4_visual"]
+[ext_resource type="Script" uid="uid://cly2q87t0piug" path="res://3D/player_3d/player_visual_3d.gd" id="4_visual"]
 [ext_resource type="PackedScene" uid="uid://dlrojdsdxvaxl" path="res://Assets/Characters/Adventurers/Knight.glb" id="5_knight"]
 
 [sub_resource type="Resource" id="Resource_x74e5"]
@@ -14,26 +14,16 @@ metadata/_custom_type_script = "uid://dgmwletqffblm"
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_xvsmf"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sft31"]
-transparency = 1
-albedo_color = Color(1, 0, 0, 0.6745098)
-
-[sub_resource type="SphereMesh" id="SphereMesh_78ftg"]
-material = SubResource("StandardMaterial3D_sft31")
-radius = 0.1
-height = 0.2
-
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ring"]
 shading_mode = 0
 albedo_color = Color(0, 0.080804534, 0.9999855, 1)
 
 [sub_resource type="TorusMesh" id="TorusMesh_ring"]
-inner_radius = 0.5
 outer_radius = 0.65
 rings = 32
 ring_segments = 6
 
-[node name="Player" type="CharacterBody3D" node_paths=PackedStringArray("Input_Handler") groups=["Player"]]
+[node name="Player" type="CharacterBody3D" unique_id=425619701 node_paths=PackedStringArray("Input_Handler") groups=["Player"]]
 collision_layer = 2
 collision_mask = 5
 platform_floor_layers = 1
@@ -41,31 +31,25 @@ script = ExtResource("1_qu530")
 Properties = SubResource("Resource_x74e5")
 Input_Handler = NodePath("Input")
 
-[node name="Entity" parent="." instance=ExtResource("2_78ftg")]
+[node name="Entity" parent="." unique_id=1242016646 instance=ExtResource("2_78ftg")]
 
-[node name="Input" parent="." instance=ExtResource("3_8y4cm")]
+[node name="Input" parent="." unique_id=629076585 instance=ExtResource("3_8y4cm")]
 
-[node name="Body" type="CollisionShape3D" parent="."]
+[node name="Body" type="CollisionShape3D" parent="." unique_id=1659739773]
 shape = SubResource("CapsuleShape3D_xvsmf")
 
-[node name="Visual" type="Node3D" parent="."]
+[node name="Visual" type="Node3D" parent="." unique_id=1940912218]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
 script = ExtResource("4_visual")
 
-[node name="Character" parent="Visual" instance=ExtResource("5_knight")]
+[node name="Character" parent="Visual" unique_id=1187955809 instance=ExtResource("5_knight")]
 transform = Transform3D(0.85, 0, 0, 0, 0.85, 0, 0, 0, 0.85, 0, 0, 0)
 
-[node name="TeamRing" type="MeshInstance3D" parent="Visual"]
+[node name="TeamRing" type="MeshInstance3D" parent="Visual" unique_id=1357465645]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
 material_override = SubResource("StandardMaterial3D_ring")
 cast_shadow = 0
 mesh = SubResource("TorusMesh_ring")
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=268596902]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 3)
-
-[node name="Hold" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.0125749)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Hold" groups=["DEBUG"]]
-mesh = SubResource("SphereMesh_78ftg")

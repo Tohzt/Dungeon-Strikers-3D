@@ -110,6 +110,7 @@ script = ExtResource("1_ddysq")
 player_scene = ExtResource("2_0jqmx")
 spawn_distance = 30.0
 max_team_count = 2
+ambience = &"cave"
 
 [node name="Tools" type="Node" parent="." unique_id=7709918]
 script = ExtResource("3_ae7db")

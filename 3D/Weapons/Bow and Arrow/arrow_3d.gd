@@ -21,6 +21,11 @@ class_name Arrow3D extends RigidBody3D
 @export var ball_redirect_speed: float = 0.0
 ## Safety net: an arrow that somehow never hits anything is removed after this.
 @export var max_lifetime: float = 5.0
+## What hitting a wall or the floor sounds like (an Sfx.SOUNDS id).
+@export var wall_sound: StringName = &"arrow_wall"
+## What hitting anything else sounds like, on top of its own hit sound.
+## Empty = only the hit sound.
+@export var body_sound: StringName = &""
 
 ## Walls and floor. The HitArea can't be relied on for these: areas don't
 ## always report static bodies (Jolt skips them by default), and a fast arrow
@@ -30,6 +35,13 @@ const WORLD_MASK := 0b1
 
 ## False for online copies of someone else's shot, which only show it.
 var deals_damage: bool = true
+
+## The shot that breaks its weapon bursts where it lands, wall or body, in
+## the weapon's break burst (see CrossbowClass3D). 0 = an ordinary shot.
+var burst_radius: float = 0.0
+var burst_damage: float = 0.0
+var burst_knockback: float = 0.0
+var burst_color: Color = Color.WHITE
 
 @onready var hit_area: Area3D = $HitArea
 
@@ -77,6 +89,8 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 	if _hit_world():
+		Sfx.play(wall_sound, global_position)
+		_burst(null)
 		queue_free()
 		return
 	if linear_velocity.length_squared() < 0.01:
@@ -96,6 +110,28 @@ func _hit_world() -> bool:
 	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 
+## Make this shot burst where it lands.
+func set_burst(radius: float, burst_dmg: float, burst_shove: float, color: Color) -> void:
+	burst_radius = radius
+	burst_damage = burst_dmg
+	burst_knockback = burst_shove
+	burst_color = color
+
+
+## Burst, if this shot does, sparing `struck` (just hit by the shot itself).
+## Everyone sees it; only a real shot hurts.
+func _burst(struck: Node) -> void:
+	if burst_radius <= 0.0 or not is_inside_tree():
+		return
+	if deals_damage:
+		var exclude: Array[RID] = [get_rid()]
+		if struck is CollisionObject3D:
+			exclude.append(struck.get_rid())
+		Weapon3D.burst(get_world_3d(), global_position, burst_radius, burst_damage, burst_knockback, shooter, exclude)
+	Sfx.play(&"weapon_break", global_position)
+	WeaponShatter3D.spawn(get_parent(), global_position, burst_color, burst_radius)
+
+
 func _align_to_velocity(velocity: Vector3) -> void:
 	var dir: Vector3 = velocity.normalized()
 	rotation.y = atan2(dir.x, dir.z)
@@ -105,6 +141,8 @@ func _align_to_velocity(velocity: Vector3) -> void:
 func _on_body_entered(body: Node) -> void:
 	if not is_flying or body in _excluded_bodies: return
 	is_flying = false
+	if body_sound != &"":
+		Sfx.play(body_sound, global_position)
 
 	var travel_dir: Vector3 = Vector3.FORWARD
 	if linear_velocity.length_squared() > 0.01:
@@ -118,5 +156,6 @@ func _on_body_entered(body: Node) -> void:
 			body.touched_by(shooter)
 		else:
 			Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
+	_burst(body)
 
 	queue_free()

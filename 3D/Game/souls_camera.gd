@@ -66,6 +66,10 @@ func _ready() -> void:
 	rotation.y = yaw
 	spring.rotation.x = pitch
 	global_position = _pivot_point()
+	var marker := LockOnMarker3D.new()
+	marker.name = "LockOnMarker"
+	marker.player = player
+	add_child(marker)
 
 
 func _exit_tree() -> void:

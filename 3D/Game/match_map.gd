@@ -6,25 +6,31 @@ class_name MatchMap extends RefCounted
 enum Map {
 	ARENA,    ## The open soccer field: goals and altars for up to 4 teams
 	DUNGEON,  ## Two mirrored bases around a central arena; altars, no goals
+	RACE,     ## Up to 4 teams race through a dungeon to an altar (RaceGame3D)
 }
 
 ## In the order the lobby's Map button cycles through them.
-const MAPS: Array[Map] = [Map.DUNGEON, Map.ARENA]
+const MAPS: Array[Map] = [Map.DUNGEON, Map.ARENA, Map.RACE]
 const SCENES: Dictionary[Map, String] = {
 	Map.ARENA: "res://3D/Game/Game3D.tscn",
 	Map.DUNGEON: "res://3D/Game/DungeonArena.tscn",
+	Map.RACE: "res://3D/Game/RaceDungeon.tscn",
 }
 const NAMES: Dictionary[Map, String] = {
 	Map.ARENA: "Arena",
 	Map.DUNGEON: "Dungeon",
+	Map.RACE: "Race",
 }
 ## Most teams each level is laid out for (matches Game3D.max_team_count).
 const MAX_TEAMS: Dictionary[Map, int] = {
 	Map.ARENA: 4,
 	Map.DUNGEON: 2,
+	Map.RACE: 4,
 }
 ## Levels with goals to score a ball in.
 const HAS_GOALS: Array[Map] = [Map.ARENA]
+## Levels whose bosses drop nothing (they unlock doors), so any drop setting fits.
+const NO_DROPS: Array[Map] = [Map.RACE]
 
 ## Drops the host can pick, in the order the lobby's Boss button cycles.
 ## Each will get its own boss later; for now the one boss drops any of them.
@@ -54,7 +60,8 @@ static func max_teams(map: Map) -> int:
 
 ## Whether `map` can host a match of `team_count` teams where bosses drop `drop`.
 static func fits(map: Map, team_count: int, drop: BossDrop.Kind) -> bool:
-	return team_count <= MAX_TEAMS[map] and (drop != BossDrop.Kind.BALL or HAS_GOALS.has(map))
+	return team_count <= MAX_TEAMS[map] \
+		and (drop != BossDrop.Kind.BALL or HAS_GOALS.has(map) or NO_DROPS.has(map))
 
 
 ## The first map (in MAPS order) that fits, or ARENA if none does.

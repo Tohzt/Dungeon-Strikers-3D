@@ -202,8 +202,8 @@ func _buttons_to_hands(shield_too: bool) -> Array[bool]:
 ## Bots press them through here too.
 func _apply_simple_buttons(left: bool, right: bool, guard: bool, throw_mode: bool) -> void:
 	var player := Master as PlayerClass3D
-	var shield_left: bool = player != null and player.held_weapon_left is ShieldClass3D and not player.held_ball
-	var shield_right: bool = player != null and player.held_weapon_right is ShieldClass3D and not player.held_ball
+	var shield_left: bool = player != null and player.held_weapon_left is ShieldClass3D
+	var shield_right: bool = player != null and player.held_weapon_right is ShieldClass3D
 	action_left = left and not throw_mode and not shield_left and (action_left or not _left_click_was_pressed)
 	action_right = right and not throw_mode and not shield_right and (action_right or not _right_click_was_pressed)
 	throw_left = throw_mode and left and (throw_left or not _left_click_was_pressed)

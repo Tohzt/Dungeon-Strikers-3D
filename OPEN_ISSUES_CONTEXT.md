@@ -21,11 +21,6 @@ that stalls a match also blocks every other player from hosting.
   *Fix idea:* an intermission timer that auto-picks a random card for
   anyone still holding cards (bots already do this via `auto_pick`, which
   is offline-only today).
-- **The match can't end if a team leaves.** When every player on one team
-  disconnects, `Game3D._on_net_peers_changed` removes them but nothing
-  ends the match; the remaining team has nobody to kill, so it can never
-  reach `kills_to_win`. *Fix idea:* if fewer than two teams have players
-  left, declare the remaining team the winner.
 - **The server stays locked after a match.** `Net.in_match` only resets in
   `Net._close_session`, which runs when the *last* player leaves. A player
   sitting on the win screen blocks every new host. *Fix idea:* after
@@ -67,8 +62,7 @@ what it's sent, so a modified client could cheat:
 - `Boss3D._request_hit` accepts any damage (one-shot the boss for its perk
   hand);
 - `Game3D._request_use_shield` doesn't check the team has a shield left;
-- `Weapon3D._request_equip` has no distance check (`Ball3D._request_grab`
-  does, with `GRAB_REACH_SLACK`).
+- `Weapon3D._request_equip` has no distance check.
 
 Related race: shields are spent by the victim's machine before the server
 agrees, so two teammates on different machines can both be saved by one
@@ -90,18 +84,34 @@ map, give them unique names after `_ready`, or drop the rename.
 
 ## 6. Animation gaps (from the character-models work)
 
-- **No ball carry pose.** While holding the ball the arms rest, and a bonk
-  plays the punch clip (`PlayerVisual3D._arm_clip`). The ball sits at the
-  player's `Hold` node.
 - **Left-hand throws look weak.** `General/Throw` only moves the right arm,
   so the left hand throws with half of the dual-wield chop
   (`PlayerVisual3D.OFFHAND_THROW_CLIP`). Mirroring the throw clip offline
   (Blender) would fix it; Godot can't mirror animations at runtime.
-- **Ball throws always animate the right arm.** `PlayerClass3D.throw_ball`
-  calls `right_arm.play_throw_release()` whichever button threw it. Likely
-  resolved together with a carry pose (both arms holding the ball).
 
-## 7. Unfinished features (from the old TODO list)
+## 7. Shelved: carrying the ball
+
+Picking up, carrying and throwing the ball (and skull) was removed on
+2026-10-07, to come back as part of a future game mode. The last commit
+with it is `a0959a5` ("fixings"). It covered:
+- `Ball3D`: `holder`, grab/release and their server RPCs (with a grab
+  cooldown and reach slack), and burning whoever held a lit ball.
+- `PlayerClass3D`: `held_ball`, interact to grab, tap/hold or Throw to
+  throw, a bonk swing while carrying, slower walking and no sprinting with
+  it, fumbling it on a hard hit, and `receive_burn`; plus the `Hold` node
+  in `player_3d.tscn` where it was carried.
+- Bots that carried drops home and shot at goals; the skull delivered by
+  walking it onto the altar.
+- Perks "Sure Hands" (`ball_grip`) and "Pickpocket" (`ball_strip`).
+- Still to do when it returns: a carry pose (the arms just rested), and a
+  throw animation on the hand that threw it (always the right arm).
+
+Now the ball and skull are only knocked around: by swings, punches, thrown
+weapons and the boss. A skull counts as home once it's knocked onto the
+altar of the team that last played it. Bots knock it along the level's
+navigation (`BotInputHandler3D._go_hit_ball`).
+
+## 8. Unfinished features (from the old TODO list)
 
 - **Damage numbers.** `Global.display_damage_3d()` and
   `3D/HUD/display_damage_3d.tscn` exist, but nothing calls them. Hook into
@@ -115,7 +125,7 @@ map, give them unique names after `_ready`, or drop the rename.
   so it's clear whose throw is in the air (thrown weapons already ignore
   the thrower: see `Weapon3D.thrower`).
 
-## 8. Playtesting still needed
+## 9. Playtesting still needed
 
 - Swing feel and time-to-kill since the animated-attack rework (players
   have 250 HP, a sword hit is 40, `kills_to_win` is 5).

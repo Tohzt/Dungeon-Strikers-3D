@@ -68,6 +68,8 @@ func is_ready() -> bool:
 func _request_take(player: PlayerClass3D) -> void:
 	if not Net.in_session():
 		_taken(player.name)
+	elif Net.is_server:
+		_taken.rpc(player.name)  # A bot
 	else:
 		_requested = true
 		_ask_server.rpc_id(Net.SERVER_ID)

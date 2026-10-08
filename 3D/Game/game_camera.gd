@@ -46,6 +46,12 @@ var can_zoom: bool = true
 @export_range(0.0, 30.0) var top_down_extra_pitch: float = 25.0  # Degrees added to the usual downward tilt
 @export var top_down_ease: float = 3.0  # How quickly the tilt follows
 
+@export_group("Audio")
+## Sounds are heard from this far back from the middle of the view (along
+## the camera's line of sight) rather than from the camera itself, which is
+## much further off than the souls camera and would make everything quiet.
+@export var listener_distance: float = 6.0
+
 var initial_transform: Transform3D
 ## The camera's current rotation: its starting one, tilted by top_down_blend.
 var view_basis: Basis
@@ -55,6 +61,8 @@ var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
 var zoom_fov: float
 ## Jumped to the players yet (so the match doesn't open on an empty room).
 var _placed: bool = false
+## Hears for this camera while it's the one in use (see _update_listener).
+var _listener: AudioListener3D
 
 func _ready() -> void:
 	# The headless server has no screen, and none of its players read local input.
@@ -65,6 +73,9 @@ func _ready() -> void:
 	zoom_fov = initial_fov
 	view_basis = initial_transform.basis
 	#initial_fov = fov
+	_listener = AudioListener3D.new()
+	_listener.top_level = true
+	add_child(_listener)
 	
 	var Game: Game3D_Class = Global.Game3D
 	if Game.has_signal("set_camera_active"):
@@ -200,6 +211,7 @@ func _goal_points_near(sources: Array[Vector3]) -> Array[Vector3]:
 
 
 func _process(delta: float) -> void:
+	_update_listener()
 	if not _placed:
 		_place_on_targets()
 	if !is_active:
@@ -296,6 +308,24 @@ func _process(delta: float) -> void:
 	fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 	# Smoothly move camera position (panning only, no rotation)
 	global_position = global_position.lerp(_ideal_position(look_target), delta * follow_speed)
+
+
+## While this camera is in use, hear from listener_distance short of where
+## its line of sight meets the floor, facing the same way (so left/right
+## still match the screen). Otherwise (souls camera) let that camera hear.
+func _update_listener() -> void:
+	if not is_current():
+		if _listener.is_current():
+			_listener.clear_current()
+		return
+	var forward: Vector3 = -global_transform.basis.z
+	var to_floor: float = 0.0  # Looking level or up: hear from the camera
+	if forward.y < -0.001:
+		to_floor = -global_position.y / forward.y
+	var reach: float = max(to_floor - listener_distance, 0.0)
+	_listener.global_transform = Transform3D(global_transform.basis, global_position + forward * reach)
+	if not _listener.is_current():
+		_listener.make_current()
 
 
 ## `point` moved hud_margin toward the bottom of the screen (along the ground).

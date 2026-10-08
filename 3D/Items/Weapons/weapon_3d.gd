@@ -44,6 +44,10 @@ enum Grip {
 ## origin and the blade runs along its +Y, like the KayKit props, so most
 ## weapons need none.
 @export var hold_offset: Transform3D = Transform3D.IDENTITY
+@export_group("Sound")
+## What its swing sounds like (an Sfx.SOUNDS id). Played by PlayerVisual3D
+## as the swing strikes, so every machine hears it.
+@export var swing_sound: StringName = &"swing_sword"
 @export_group("Specials")
 ## Weapons of the same family (e.g. "blade" for sword and scimitar) pair up
 ## like two of the same weapon. Empty = it only pairs with itself.
@@ -93,6 +97,9 @@ var rarity: int = WeaponRarity.Tier.COMMON
 var max_durability: int = 1
 var durability: int = 1
 var is_broken: bool = false
+## Scales its break burst (radius, damage, shove). A shooter whose last shot
+## carried the full burst away shatters in a lesser one (see CrossbowClass3D).
+var break_burst_scale: float = 1.0
 var _worn_this_action: bool = false
 var _glow: StandardMaterial3D = null
 var _worn_glow: StandardMaterial3D = null
@@ -315,6 +322,7 @@ func _update_hits(delta: float) -> void:
 			var was_in_wall: bool = _blade_in_wall
 			_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
 			if swing_time_left > 0.0 and _blade_in_wall and not was_in_wall:
+				Sfx.play_everywhere(&"hit_wall", Collision.global_position)
 				_swing_contact(true)
 	elif is_thrown and linear_velocity.length() > THROWN_HIT_MIN_SPEED:
 		_hit_overlapping(thrower, THROWN_DAMAGE_MULTIPLIER, true)
@@ -364,7 +372,10 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			knockback *= clamp(_blade_velocity.length() / _swing_reference_speed, SWING_POWER_MIN, SWING_POWER_MAX)
 			contact = true
 			solid = solid or Combat.is_solid(body)
+		if body is Weapon3D:
+			Sfx.play_everywhere(&"hit_wall", body.global_position)  # Blade on blade
 		if body is Ball3D and Behavior:
+			Sfx.play_everywhere(&"hit_ball", body.global_position)
 			# Each weapon plays the ball its own way (see WeaponBehavior3D.hit_ball)
 			var travel := Vector3.ZERO if thrown else Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
 			Behavior.hit_ball(body, dir, travel, knockback, attacker)
@@ -478,6 +489,15 @@ func on_hand_posed() -> void:
 	follow_hand()
 
 
+## The Sfx.SOUNDS id for drawing it, by its size.
+func equip_sound() -> StringName:
+	if grip == Grip.TWO_HANDED and not rides_left_hand:
+		return &"equip_long"
+	if grip == Grip.EITHER_HAND:
+		return &"equip_small"
+	return &"equip_medium"
+
+
 ## Whether the arm holding this should hold `hold_clip`'s pose right now.
 func is_holding_pose() -> bool:
 	return hold_clip != &""
@@ -558,6 +578,7 @@ func _let_go_thrown(spin_direction: float) -> void:
 	held_hand = null
 	is_held = false
 	_release_from_hand()
+	Sfx.play(&"throw", global_position)
 	is_thrown = true
 	can_pickup = false
 	can_pickup_cd = can_pickup_dur_in_sec
@@ -644,11 +665,13 @@ func _break() -> void:
 		return
 	is_broken = true
 	var breaker: Node3D = wielder if wielder else thrower
-	var radius: float = Properties.break_burst_radius if Properties else 2.5
-	if simulates():
-		_shatter_burst(breaker, radius)
-	var shard_color: Color = WeaponRarity.COLORS[rarity] if rarity != WeaponRarity.Tier.COMMON else SHATTER_COLOR
-	WeaponShatter3D.spawn(get_parent(), global_position, Color(shard_color, 1.0), radius)
+	var radius: float = (Properties.break_burst_radius if Properties else 2.5) * break_burst_scale
+	if simulates() and is_inside_tree() and Properties:
+		var exclude: Array[RID] = [get_rid()]
+		burst(get_world_3d(), global_position, radius, Properties.break_burst_damage * break_burst_scale,
+			Properties.break_burst_knockback * break_burst_scale, breaker, exclude)
+	Sfx.play(&"weapon_break", global_position)
+	WeaponShatter3D.spawn(get_parent(), global_position, shatter_color(), radius)
 	if wielder:
 		unequip()
 	swing_time_left = 0.0
@@ -660,22 +683,26 @@ func _break() -> void:
 	tween.tween_callback(queue_free)
 
 
-## Hurt and shove everything in the break burst but `breaker` (whoever held
-## or threw it) and their team, who get the credit.
-func _shatter_burst(breaker: Node3D, radius: float) -> void:
-	if not is_inside_tree() or not Properties:
-		return
+## The color its shards fly in: its rarity's, or plain steel for a common.
+func shatter_color() -> Color:
+	var color: Color = WeaponRarity.COLORS[rarity] if rarity != WeaponRarity.Tier.COMMON else SHATTER_COLOR
+	return Color(color, 1.0)
+
+
+## A break burst at `origin`: hurt and shove everything within `radius` but
+## `breaker` (whoever held, threw or shot it), their team and their gear, who
+## get the credit. Also how the shot that breaks a shooter bursts where it
+## lands (see Arrow3D).
+static func burst(world: World3D, origin: Vector3, radius: float, damage: float, knockback: float,
+		breaker: Node3D, exclude: Array[RID]) -> void:
 	var sphere := SphereShape3D.new()
 	sphere.radius = radius
-	var exclude: Array[RID] = [get_rid()]
 	if breaker is CollisionObject3D:
 		exclude.append(breaker.get_rid())
-	var origin: Vector3 = global_position
-	for body: Node3D in Combat.overlaps(get_world_3d(), sphere, Transform3D(Basis(), origin), exclude):
+	for body: Node3D in Combat.overlaps(world, sphere, Transform3D(Basis(), origin), exclude):
 		if _on_team_of(body, breaker) or (body is Weapon3D and breaker and body.wielder == breaker):
 			continue
-		Combat.strike(body, body.global_position - origin, Properties.break_burst_damage,
-			Properties.break_burst_knockback, HIT_POP, -1.0, breaker)
+		Combat.strike(body, body.global_position - origin, damage, knockback, HIT_POP, -1.0, breaker)
 
 
 static func _on_team_of(body: Node3D, breaker: Node3D) -> bool:
@@ -790,6 +817,8 @@ func _request_push(impulse: Vector3) -> void:
 func request_equip(player: PlayerClass3D, is_left: bool) -> void:
 	if not Net.in_session():
 		player.equip_weapon(self, is_left)
+	elif Net.is_server:
+		_decide_equip(player, is_left)  # A bot
 	elif Time.get_ticks_msec() >= _next_request_msec:
 		_next_request_msec = Time.get_ticks_msec() + REQUEST_RETRY_MSEC
 		_request_equip.rpc_id(Net.SERVER_ID, is_left)
@@ -797,10 +826,13 @@ func request_equip(player: PlayerClass3D, is_left: bool) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_equip(is_left: bool) -> void:
-	if not Net.is_server or wielder or not can_pickup:
-		return
-	var player: PlayerClass3D = Global.Game3D.rpc_sender()
-	if player and player.can_hold(self, is_left):
+	if Net.is_server:
+		_decide_equip(Global.Game3D.rpc_sender(), is_left)
+
+
+## Server: hand this to `player` if it's still free.
+func _decide_equip(player: PlayerClass3D, is_left: bool) -> void:
+	if not wielder and can_pickup and player and player.can_hold(self, is_left):
 		_equipped.rpc(player.name, is_left)
 
 

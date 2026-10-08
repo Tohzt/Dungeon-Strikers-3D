@@ -9,6 +9,12 @@ class_name CrossbowClass3D extends WeaponClass3D
 @export var arrow_speed: float = 40.0
 @export var muzzle_forward_offset: float = 0.6
 @export var muzzle_height_offset: float = 0.0
+## What a shot sounds like (an Sfx.SOUNDS id).
+@export var fire_sound: StringName = &"bow_release"
+
+## The shot that breaks it carries its full break burst, bursting where it
+## lands; the weapon itself then shatters in this much of one.
+const SPENT_BREAK_BURST_SCALE := 0.4
 
 
 func attack(aim_direction: Vector3) -> void:
@@ -34,12 +40,17 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
 		arrow.damage *= FINAL_DAMAGE_MULTIPLIER
 		arrow.knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		arrow.scale = Vector3.ONE * 1.6
+		if Properties:
+			arrow.set_burst(Properties.break_burst_radius, Properties.break_burst_damage,
+				Properties.break_burst_knockback, shatter_color())
+			break_burst_scale = SPENT_BREAK_BURST_SCALE
 	wielder.get_parent().add_child(arrow)
 	arrow.global_position = muzzle
 	arrow.exclude_body(wielder)
 	arrow.shooter = wielder
 	arrow.exclude_body(self)
 	arrow.fire(aim_direction, arrow_speed)
+	Sfx.play(fire_sound, muzzle)
 
 
 @rpc("any_peer", "reliable")

@@ -358,6 +358,7 @@ func _set_tier(new_tier: int) -> void:
 	tier = new_tier
 	_update_tier_pips()
 	_pip_pop = PIP_POP_TIME
+	Sfx.play(&"altar_tier", global_position)
 
 
 func _tick_tier_timer(delta: float) -> void:
@@ -394,6 +395,7 @@ func roll_reward() -> PackedInt32Array:
 ## roll_reward). An unclaimed earlier reward is replaced.
 func start_reward(roll: PackedInt32Array) -> void:
 	_clear_reward()
+	Sfx.play(&"altar_reward", global_position)
 	reward = roll[0] as Reward
 	_reward_left = roll[3]
 	_reward_pivot = Node3D.new()
@@ -435,16 +437,23 @@ func _take_reward(player: PlayerClass3D) -> void:
 	var is_left: bool = reward == Reward.WEAPON and player.free_hand_for(_reward_grip())
 	if not Net.in_session():
 		_reward_given(player.name, is_left, _next_weapon_name())
+	elif Net.is_server:
+		_decide_reward(player, is_left)  # A bot
 	else:
 		_request_reward.rpc_id(Net.SERVER_ID, is_left)
 
 
 @rpc("any_peer", "reliable")
 func _request_reward(is_left: bool) -> void:
-	if not Net.is_server or not _reward_ready():
+	if Net.is_server:
+		_decide_reward(Global.Game3D.rpc_sender(), is_left)
+
+
+## Server: give `player` the reward if it's still there for them.
+func _decide_reward(player: PlayerClass3D, is_left: bool) -> void:
+	if not _reward_ready() or not player or not _may_take(player):
 		return
-	var player: PlayerClass3D = Global.Game3D.rpc_sender()
-	if player and _may_take(player) and (reward == Reward.PERK or player.can_hold_grip(_reward_grip(), is_left)):
+	if reward == Reward.PERK or player.can_hold_grip(_reward_grip(), is_left):
 		_reward_given.rpc(player.name, is_left, _next_weapon_name())
 
 

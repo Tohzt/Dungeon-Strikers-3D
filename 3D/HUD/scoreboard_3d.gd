@@ -1,7 +1,6 @@
 class_name Scoreboard3D extends CanvasLayer
 ## Team kill counts at the top-middle of the screen, each in its team's
-## color, with any banked bounty shields under them and the kills needed to
-## win below. Also announces kills, goals and the winner.
+## color, with the kills needed to win below. Also announces kills, goals and the winner.
 
 ## How long an announcement stays up before fading.
 const ANNOUNCE_TIME := 2.5
@@ -10,7 +9,6 @@ const ANNOUNCE_FADE := 0.4
 @onready var row: HBoxContainer = $Row
 
 var _kill_labels: Dictionary[int, Label] = {}
-var _shield_labels: Dictionary[int, Label] = {}
 var _caption: Label
 var _announcement: Label
 var _winner: Label
@@ -42,30 +40,24 @@ func setup(teams: Array[int], kills_to_win: int) -> void:
 	for child: Node in row.get_children():
 		child.queue_free()
 	_kill_labels.clear()
-	_shield_labels.clear()
 	for i in teams.size():
 		if i > 0:
 			row.add_child(_make_label("-", Color.WHITE, 48))
 		var team: int = teams[i]
 		var color: Color = Players.TEAM_COLORS[team % Players.TEAM_COLORS.size()]
-		var column := VBoxContainer.new()
-		column.alignment = BoxContainer.ALIGNMENT_BEGIN
 		_kill_labels[team] = _make_label("0", color, 48)
-		_shield_labels[team] = _make_label("", color, 16)
-		column.add_child(_kill_labels[team])
-		column.add_child(_shield_labels[team])
-		row.add_child(column)
+		row.add_child(_kill_labels[team])
 	_caption.text = "First to %d kills" % kills_to_win
+
+
+## Replace the line under the scores (normally "First to N kills").
+func set_caption(text: String) -> void:
+	_caption.text = text
 
 
 func set_kills(team: int, kills: int) -> void:
 	if _kill_labels.has(team):
 		_kill_labels[team].text = str(kills)
-
-
-func set_shields(team: int, shields: int) -> void:
-	if _shield_labels.has(team):
-		_shield_labels[team].text = "SHIELD" if shields == 1 else ("SHIELD x%d" % shields if shields > 1 else "")
 
 
 ## Show `text` under the scores for a moment (replacing any earlier one).

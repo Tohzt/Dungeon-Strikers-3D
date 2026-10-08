@@ -8,7 +8,7 @@ enum Tier { COMMON, UNCOMMON, RARE, LEGENDARY }
 const NAMES: Array[String] = ["Common", "Uncommon", "Rare", "Legendary"]
 ## Uses before breaking (hits landed, blocks, shots), before the weapon's
 ## own WeaponProperties3D.durability_scale.
-const DURABILITY: Array[int] = [5, 9, 14, 24]
+const DURABILITY: Array[int] = [10, 18, 28, 48]
 const COLORS: Array[Color] = [
 	Color(1, 1, 1, 0),  # No glow
 	Color(0.2, 0.9, 0.3, 0.3),

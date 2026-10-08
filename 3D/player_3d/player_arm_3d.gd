@@ -234,7 +234,7 @@ func update_windup(delta: float, pressed: bool, press_time: float, has_throwable
 # ===== ANIMATION =====
 
 ## (PlayerClass3D.ArmAction, phase) for this arm, busiest first.
-func action(holding_ball: bool) -> Vector2:
+func action() -> Vector2:
 	if rebound > 0.0:
 		# Back the way it came, from where it hit to cocked
 		var r: float = rebound / REBOUND_DURATION
@@ -249,7 +249,7 @@ func action(holding_ball: bool) -> Vector2:
 		return Vector2(PlayerClass3D.ArmAction.THROW, 3.0 - 2.0 * release_time / THROW_RELEASE_DURATION)
 	if windup > WINDUP_SHOWN:
 		return Vector2(PlayerClass3D.ArmAction.THROW, windup)
-	if weapon and weapon.is_holding_pose() and not holding_ball:
+	if weapon and weapon.is_holding_pose():
 		return Vector2(PlayerClass3D.ArmAction.HOLD, 0.0)
 	return Vector2(PlayerClass3D.ArmAction.REST, 0.0)
 

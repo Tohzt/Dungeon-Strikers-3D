@@ -29,6 +29,8 @@ impact_impulse = 5.0
 knockback = 6.0
 ball_redirect_speed = 14.0
 max_lifetime = 3.0
+wall_sound = &"spell_impact"
+body_sound = &"spell_impact"
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
 cast_shadow = 0

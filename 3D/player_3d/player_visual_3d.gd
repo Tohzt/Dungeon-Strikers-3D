@@ -40,6 +40,8 @@ const BACKSTEP_CLIP := &"MovementAdvanced/Dodge_Backward"
 const STAGGER_CLIP := &"General/Hit_B"
 const HIT_CLIP := &"General/Hit_A"
 const SPAWN_CLIP := &"General/Spawn_Ground"
+## Knocked out (see Game3D.knockouts): fall down and lie there.
+const DOWN_CLIP := &"General/Death_A"
 
 ## Ground speeds (m/s) the locomotion blend puts each clip at. Above
 ## RUN_SPEED (sprint, boost) the run cycle speeds up instead.
@@ -166,6 +168,25 @@ var _torso_want_left: Array = []
 var _torso_want_right: Array = []
 ## Clips already warned about (missing from CLIP_KEYS), so it's once each.
 var _warned_clips: Dictionary[StringName, bool] = {}
+## Each arm's swing phase last frame (0 when not swinging), to hear it
+## strike (see _update_swing_sound).
+var _swing_phase_left: float = 0.0
+var _swing_phase_right: float = 0.0
+## A swing whooshes as its phase passes this, into the strike.
+const SWING_SOUND_PHASE := 1.05
+## Seconds between footsteps: half the walk or run clip's cycle (two steps
+## each), blended by speed like the clips are, and quicker as a sprint
+## speeds the run up.
+static var _walk_step_time: float = _half_cycle(WALK_CLIP)
+static var _run_step_time: float = _half_cycle(RUN_CLIP)
+## Slower than this is standing still.
+const STEP_MIN_SPEED := 0.5
+## Falling at least this fast (m/s) lands with a thud.
+const LAND_FALL_SPEED := 4.0
+## Seconds left until the next footstep.
+var _step_left: float = 0.0
+## How fast the body was falling, while it's in the air.
+var _fall_speed: float = 0.0
 
 
 ## Called by the player once its Properties are set up.
@@ -214,6 +235,7 @@ func _build_tree() -> void:
 	states.add_node(&"Backstep", _clip(BACKSTEP_CLIP, PlayerClass3D.BACKSTEP_DURATION))
 	states.add_node(&"Stagger", _clip(STAGGER_CLIP, PlayerClass3D.STAGGER_DURATION))
 	states.add_node(&"Spawn", _clip(SPAWN_CLIP))
+	states.add_node(&"Down", _clip(DOWN_CLIP))  # Holds its last frame, lying down
 	states.add_transition(&"Start", &"Move", _transition(0.0, true))
 	var one_shots: Array[StringName] = [&"Roll", &"Backstep", &"Stagger", &"Spawn"]
 	for from: StringName in one_shots:
@@ -225,6 +247,10 @@ func _build_tree() -> void:
 		for to: StringName in one_shots:
 			if to != from:
 				states.add_transition(from, to, _transition(STATE_XFADE))
+	# Down from anything; only getting back up (Spawn) leaves it
+	for from: StringName in [&"Move", &"Roll", &"Backstep", &"Stagger"]:
+		states.add_transition(from, &"Down", _transition(STATE_XFADE))
+	states.add_transition(&"Down", &"Spawn", _transition(STATE_XFADE))
 
 	var hit := AnimationNodeOneShot.new()
 	hit.fadein_time = 0.05
@@ -327,15 +353,22 @@ func _process(delta: float) -> void:
 	tree.set(&"parameters/base/Move/speed/scale", clampf(speed / RUN_SPEED, 1.0, MAX_RUN_TIME_SCALE))
 
 	var pose: int = player.anim_pose
-	if pose != _last_pose:
+	if pose != _last_pose and not player.is_dead():  # Knocked out bodies stay down
 		match pose:
-			PlayerClass3D.Pose.ROLL: _go(&"Roll")
-			PlayerClass3D.Pose.BACKSTEP: _go(&"Backstep")
+			PlayerClass3D.Pose.ROLL:
+				_go(&"Roll")
+				Sfx.play(&"roll", player.global_position)
+			PlayerClass3D.Pose.BACKSTEP:
+				_go(&"Backstep")
+				Sfx.play(&"roll", player.global_position)
 			PlayerClass3D.Pose.STAGGER: _go(&"Stagger")
 		_last_pose = pose
 
 	_update_arm(true, delta)
 	_update_arm(false, delta)
+	_update_swing_sound(true)
+	_update_swing_sound(false)
+	_update_footsteps(speed, delta)
 	_update_torso(delta)
 	_update_sweep(delta)
 	_update_iframe_flash(delta)
@@ -343,6 +376,60 @@ func _process(delta: float) -> void:
 	# spinning through a spin combo
 	body.rotation.x = player.body_tilt + _sweep_pitch
 	body.rotation.y = _sweep_yaw + player.arm_anim[6]
+
+
+## Whoosh as an arm's swing passes into its strike: its weapon's swing
+## sound, or a punch's. Read off arm_anim, so every machine hears it. A
+## ranged weapon's shot has its own sound (see CrossbowClass3D.fire_sound),
+## unless a combo beat swings it like a club.
+func _update_swing_sound(is_left: bool) -> void:
+	var arm: PackedFloat32Array = player.arm_anim
+	var swinging: bool = roundi(arm[0 if is_left else 2]) == PlayerClass3D.ArmAction.SWING
+	var phase: float = arm[1 if is_left else 3] if swinging else 0.0
+	var last: float = _swing_phase_left if is_left else _swing_phase_right
+	if is_left:
+		_swing_phase_left = phase
+	else:
+		_swing_phase_right = phase
+	if last >= SWING_SOUND_PHASE or phase < SWING_SOUND_PHASE:
+		return
+	var weapon: Weapon3D = player.held_weapon_left if is_left else player.held_weapon_right
+	var sound: StringName = &"swing_fist"
+	if weapon:
+		var combo_beat: bool = arm[4 if is_left else 5] >= 0.0
+		if not weapon.plays_swipe_animation and not combo_beat:
+			return
+		sound = weapon.swing_sound
+	Sfx.play(sound, player.global_position)
+
+
+## A footstep every stride while walking or running on the ground (in
+## chain mail while armored), and a thud on landing from a fall. Read off
+## the synced velocity, so every machine hears everyone.
+func _update_footsteps(speed: float, delta: float) -> void:
+	var falling: float = -player.velocity.y
+	if falling > 1.0:
+		_fall_speed = maxf(_fall_speed, falling)
+		return  # In the air
+	if _fall_speed >= LAND_FALL_SPEED:
+		Sfx.play(&"land", player.global_position)
+		_step_left = _run_step_time * 0.5
+	_fall_speed = 0.0
+	if speed < STEP_MIN_SPEED or player.anim_pose != PlayerClass3D.Pose.NONE or player.is_dead():
+		_step_left = 0.0  # The first step comes as soon as it moves off
+		return
+	_step_left -= delta * clampf(speed / RUN_SPEED, 1.0, MAX_RUN_TIME_SCALE)
+	if _step_left > 0.0:
+		return
+	var run: float = clampf(remap(speed, WALK_SPEED, RUN_SPEED, 0.0, 1.0), 0.0, 1.0)
+	_step_left = maxf(_step_left + lerpf(_walk_step_time, _run_step_time, run), 0.0)
+	Sfx.play(&"footstep_armored" if player.armored else &"footstep", player.global_position)
+
+
+## Half of `clip`'s length: one step of a two-step cycle.
+static func _half_cycle(clip: StringName) -> float:
+	var parts: PackedStringArray = String(clip).split("/")
+	return LIBRARIES[StringName(parts[0])].get_animation(StringName(parts[1])).length * 0.5
 
 
 ## Blend the arm into (or out of) its action's clip, at the action's phase.
@@ -415,9 +502,9 @@ func _sweep_at(sweep: Vector3, is_left: bool, phase: float) -> Array:
 func _update_sweep(delta: float) -> void:
 	var want: Array = _sweep_want_right if not _sweep_want_right.is_empty() else _sweep_want_left
 	if want.is_empty():
-		var ease: float = minf(SWEEP_RETURN_SPEED * delta, 1.0)
-		_sweep_yaw = lerpf(_sweep_yaw, 0.0, ease)
-		_sweep_pitch = lerpf(_sweep_pitch, 0.0, ease)
+		var _ease: float = minf(SWEEP_RETURN_SPEED * delta, 1.0)
+		_sweep_yaw = lerpf(_sweep_yaw, 0.0, _ease)
+		_sweep_pitch = lerpf(_sweep_pitch, 0.0, _ease)
 	else:
 		_sweep_yaw = want[0]
 		_sweep_pitch = want[1]
@@ -449,7 +536,7 @@ func _arm_clip(action: int, is_left: bool, combo_clip: StringName = &"") -> Stri
 	var weapon: Weapon3D = player.held_weapon_left if is_left else player.held_weapon_right
 	match action:
 		PlayerClass3D.ArmAction.SWING:
-			if not weapon or player.held_ball:
+			if not weapon:
 				return PUNCH_CLIP
 			if combo_clip != &"":
 				return combo_clip
@@ -503,6 +590,8 @@ func hand(is_left: bool) -> Node3D:
 ## The skeleton has just been posed: move the hands, and what they hold, to
 ## the new pose at once, so nothing trails a frame behind the arm.
 func _on_skeleton_updated() -> void:
+	if not is_inside_tree():
+		return  # The scene is being torn down (e.g. a match restarting)
 	_hand_left.global_transform = skeleton.global_transform * skeleton.get_bone_global_pose(_hand_bone_left)
 	_hand_right.global_transform = skeleton.global_transform * skeleton.get_bone_global_pose(_hand_bone_right)
 	if not player:
@@ -523,6 +612,12 @@ func _go(state: StringName) -> void:
 func play_spawn() -> void:
 	if _playback:
 		_go(&"Spawn")
+
+
+## Knocked out: collapse and stay down until play_spawn().
+func play_down() -> void:
+	if _playback:
+		_go(&"Down")
 
 
 ## Flinch from a hit. Rolling, staggered or spawning bodies already have

@@ -91,6 +91,7 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	if body is Ball3D:
 		body.touched_by(attacker)
+		Sfx.play_everywhere(&"hit_ball", body.global_position)
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
 

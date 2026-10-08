@@ -17,6 +17,7 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 2.0
 script = ExtResource("1_script")
+swing_sound = &"swing_axe"
 alt_attack = ExtResource("alt")
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")

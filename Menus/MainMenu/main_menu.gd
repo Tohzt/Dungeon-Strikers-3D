@@ -10,6 +10,9 @@ const MIN_LOBBY_PLAYERS := 2
 const COPIED_FEEDBACK_TIME := 1.5
 ## How far a stick must be pushed sideways to change character in the lobby.
 const STICK_STEP_THRESHOLD := 0.6
+## Lobby cards for empty seats: dark recesses in the wooden frame.
+const EMPTY_CARD_COLOR := Color(0.12, 0.06, 0.04, 0.55)
+const EMPTY_CARD_BORDER := Color(0.2, 0.09, 0.05, 1)
 
 @onready var home: Control = %Home
 @onready var single_player: Control = %SinglePlayer
@@ -41,6 +44,7 @@ const STICK_STEP_THRESHOLD := 0.6
 @onready var online_status: Label = %OnlineStatus
 @onready var online_start: Button = %OnlineStart
 @onready var online_teams: Button = %OnlineTeams
+@onready var online_bots: Button = %OnlineBots
 @onready var online_map: Button = %OnlineMap
 @onready var online_drop: Button = %OnlineDrop
 @onready var online_character: Button = %OnlineCharacter
@@ -93,6 +97,7 @@ func _ready() -> void:
 	_setup_cycler(solo_team, _step_solo_team)
 	_setup_cycler(online_character, _step_online_character)
 	_setup_cycler(online_team, _step_online_team)
+	_setup_cycler(online_bots, _step_online_bots)
 	%LobbyBack.pressed.connect(_back_to_home)
 
 	%HostButton.pressed.connect(_open_host_setup)
@@ -208,7 +213,7 @@ func _team_text(team: int) -> String:
 func _tint_team_button(button: Button, team: int) -> void:
 	var color: Color = Players.team_color(team)
 	for state: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
-		button.add_theme_color_override(state, color.lightened(0.35))
+		button.add_theme_color_override(state, color.lightened(0.6))
 
 
 func _start_single_player_controller() -> void:
@@ -374,7 +379,9 @@ func _build_cards(container: HBoxContainer, styles: Array[StyleBoxFlat], labels:
 		var card := PanelContainer.new()
 		card.custom_minimum_size = Vector2(200, 150)
 		var style := StyleBoxFlat.new()
-		style.set_corner_radius_all(8)
+		style.set_corner_radius_all(4)
+		style.set_border_width_all(3)
+		style.border_color = EMPTY_CARD_BORDER
 		style.set_content_margin_all(12)
 		card.add_theme_stylebox_override("panel", style)
 
@@ -400,7 +407,7 @@ func _refresh_lobby() -> void:
 			card_labels[i].text = "P%d\n%s\n\n<  %s  >\nTeam %s" % [i + 1, Players.device_name(slot.device),
 				Players.character_name(slot.character), Players.team_name(slot.team)]
 		else:
-			card_styles[i].bg_color = Color(1, 1, 1, 0.06)
+			card_styles[i].bg_color = EMPTY_CARD_COLOR
 			var bot: bool = i < Players.bot_fill_count
 			card_labels[i].text = ("Bot\n" if bot else "") + "Press A or Enter\nto join"
 	var bots: bool = Players.bot_fill_count > 0
@@ -519,6 +526,7 @@ func _refresh_online_lobby() -> void:
 	code_label.text = Net.access_code
 	var my_id: int = multiplayer.get_unique_id()
 	for i in online_card_labels.size():
+		var bot: int = i - Net.peers.size()
 		if i < Net.peers.size():
 			var id: int = Net.peers[i]
 			var loadout: Array = Net.loadout_of(id)
@@ -529,29 +537,33 @@ func _refresh_online_lobby() -> void:
 					else Players.device_name(online_device))
 			text += "\n\n%s\nTeam %s" % [Players.character_name(loadout[1]), Players.team_name(loadout[0])]
 			online_card_labels[i].text = text
+		elif bot < Net.bots.size():
+			var loadout: Array = Net.bots[bot]
+			online_card_styles[i].bg_color = Players.team_color(loadout[0]).darkened(0.35)
+			online_card_labels[i].text = "P%d\nBot\n\n%s\nTeam %s" % [i + 1, Players.character_name(loadout[1]),
+				Players.team_name(loadout[0])]
 		else:
-			online_card_styles[i].bg_color = Color(1, 1, 1, 0.06)
+			online_card_styles[i].bg_color = EMPTY_CARD_COLOR
 			online_card_labels[i].text = "Waiting for\nplayer..."
 	online_start.visible = Net.is_host
 	# Only the leader picks the format (it's sent with the match start), but
 	# everyone sees it
-	for button: Button in [online_teams, online_map, online_drop]:
+	for button: Button in [online_teams, online_bots, online_map, online_drop]:
 		button.disabled = not Net.is_host
 	online_map.text = _map_text()
 	online_drop.text = _drop_text()
-	var teams: Array[int] = []
-	for id: int in Net.peers:
-		teams.append(Net.loadout_of(id)[0])
+	online_bots.text = "Bots:  <  %d  >" % Net.bots.size()
+	var teams: Array[int] = Net.seat_teams()
 	var split: bool = Players.team_split(teams) != ""
 	online_teams.text = "Teams: " + Players.format_name(teams)
-	online_start.disabled = Net.peers.size() < MIN_LOBBY_PLAYERS or online_device == Players.NO_DEVICE or not split
+	online_start.disabled = Net.seat_count() < MIN_LOBBY_PLAYERS or online_device == Players.NO_DEVICE or not split
 	var mine: Array = Net.local_loadout()
 	online_character.text = _character_text(mine[1])
 	online_team.text = _team_text(mine[0])
 	_tint_team_button(online_team, mine[0])
 	if online_device == Players.NO_DEVICE:
 		online_status.text = "Press A or Enter on the device you'll play with."
-	elif Net.peers.size() >= MIN_LOBBY_PLAYERS and not split:
+	elif Net.seat_count() >= MIN_LOBBY_PLAYERS and not split:
 		online_status.text = "Everyone's on one team. Someone needs to switch."
 	elif Net.is_host:
 		online_status.text = "Send the code to your friends."
@@ -564,7 +576,7 @@ func _refresh_online_lobby() -> void:
 ## to cycle, so up/down walks every visible button in reading order.
 func _chain_online_focus() -> void:
 	var chain: Array[Control] = []
-	for button: Button in [online_character, online_team, online_teams, online_map, online_drop,
+	for button: Button in [online_character, online_team, online_teams, online_bots, online_map, online_drop,
 			online_start, %OnlineLeave]:
 		if button.visible and not button.disabled:
 			chain.append(button)
@@ -583,6 +595,15 @@ func _step_online_character(step: int) -> void:
 func _step_online_team(step: int) -> void:
 	var mine: Array = Net.local_loadout()
 	Net.set_loadout(mine[0] + step, mine[1])
+
+
+## Leader's Bots picker: add a bot (to the smallest team) or remove the
+## last one added. The server runs them in the match.
+func _step_online_bots(step: int) -> void:
+	if step > 0:
+		Net.add_bot()
+	else:
+		Net.remove_bot()
 
 
 ## Each machine seats only its own player, in its session seat, as the

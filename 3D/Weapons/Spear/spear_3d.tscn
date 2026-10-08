@@ -17,6 +17,7 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 1.8
 script = ExtResource("script")
+swing_sound = &"swing_spear"
 alt_attack = ExtResource("alt")
 grip = 3
 swing_clip = &"CombatMelee/Melee_2H_Attack_Stab"

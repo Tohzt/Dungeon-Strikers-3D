@@ -1,31 +1,41 @@
 class_name HUD3D extends CanvasLayer
 @export var player: PlayerClass3D
 
-@onready var health_bar:  TextureProgressBar = $HealthBar
-@onready var stamina_bar: TextureProgressBar = $StaminaBar
+@onready var panel:       PanelContainer = $Panel
+@onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
+@onready var stamina_bar: ProgressBar    = $Panel/Row/Bars/StaminaBar
 ## The blue bar: the player's boost meter (see PlayerClass3D.boost).
-@onready var boost_bar:   TextureProgressBar = $ManaBar
-@onready var player_icon: TextureRect        = $PlayerIcon
+@onready var boost_bar:   ProgressBar    = $Panel/Row/Bars/ManaBar
+@onready var player_icon: TextureRect    = $Panel/Row/PlayerIcon
 
-## Screen space the HUD art occupies, including its margin from the edge.
-const PANEL_SIZE := Vector2(304, 112)
+## Gap between the HUD panel and the screen edges.
+const MARGIN := 16
 
 var signals_connected: bool = false
+## "Knocked out: 7s" under the bars while the player is down (knockout modes).
+var _down_label: Label
 
 
 ## Binds this HUD to a player and moves it to that player's corner:
-## P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right.
+## P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right. Anchored, so
+## it stays in the corner whatever shape the window is.
 func setup(p: PlayerClass3D, slot: PlayerSlot) -> void:
 	player = p
-	var screen := Vector2(
-		ProjectSettings.get_setting("display/window/size/viewport_width"),
-		ProjectSettings.get_setting("display/window/size/viewport_height"))
-	offset = Vector2(
-		screen.x - PANEL_SIZE.x if slot.index % 2 == 1 else 0.0,
-		screen.y - PANEL_SIZE.y if slot.index >= 2 else 0.0)
+	var corners: Array[Control.LayoutPreset] = [Control.PRESET_TOP_LEFT, Control.PRESET_TOP_RIGHT,
+		Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]
+	panel.set_anchors_and_offsets_preset(corners[slot.index % corners.size()], Control.PRESET_MODE_MINSIZE, MARGIN)
 	player_icon.modulate = slot.color
+	if not _down_label:
+		_down_label = Label.new()
+		_down_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+		_down_label.hide()
+		$Panel/Row/Bars.add_child(_down_label)
 
 func _process(_delta: float) -> void:
+	if _down_label and player:
+		_down_label.visible = player.is_knocked_out
+		if player.is_knocked_out:
+			_down_label.text = "Knocked out: %ds" % ceili(player.dead_time)
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)

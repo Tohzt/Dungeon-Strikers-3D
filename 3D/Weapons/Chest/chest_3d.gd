@@ -55,10 +55,10 @@ func request_take(player: PlayerClass3D) -> bool:
 		return super(player)
 	if not reach.overlaps_body(player):
 		return false
-	if Net.in_session():
-		_request_open.rpc_id(Net.SERVER_ID)
-	else:
+	if Net.decides():
 		_roll_contents(player)
+	else:
+		_request_open.rpc_id(Net.SERVER_ID)
 	return true
 
 
@@ -93,6 +93,7 @@ func _roll_contents(player: PlayerClass3D) -> void:
 @rpc("authority", "call_local", "reliable")
 func _opened(player_name: String, pick: int, tier: int) -> void:
 	is_open = true
+	Sfx.play(&"chest_open", global_position)
 	var tween: Tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(lid, "rotation_degrees:x", LID_OPEN_DEGREES, LID_OPEN_TIME)
 	tween.parallel().tween_property(glow, "light_energy", 0.0, 1.5)

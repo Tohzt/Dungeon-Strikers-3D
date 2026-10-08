@@ -5,8 +5,6 @@ class_name PlayerClass3D extends CharacterBody3D
 
 @onready var Entity: EntityBehavior3D = $Entity
 @onready var visual: PlayerVisual3D = $Visual
-## Where the ball is carried.
-@onready var hold_point: Node3D = $Hold
 
 @export var Properties: PlayerResource
 @export var Input_Handler: PlayerInputHandler3D
@@ -65,8 +63,6 @@ var held_weapon_left: Weapon3D:
 var held_weapon_right: Weapon3D:
 	get: return right_arm.weapon
 	set(value): right_arm.weapon = value
-## Carried in both hands, so it can only be picked up with nothing else held.
-var held_ball: Ball3D = null
 ## The dual-wield special or alt attack under way, if any.
 var _combo := PlayerCombo3D.new(self)
 ## Just got hit: frozen for a moment (see Combat.HITSTOP).
@@ -80,16 +76,12 @@ const HOLD_THRESHOLD := 0.35
 const THROW_CHARGE_MAX_DURATION := 1.0
 const THROW_FORCE_MIN_RATIO := 0.5
 const THROW_FORCE_MAX_RATIO := 1.5
-## Wind-up: while a hand holding something throwable (weapon or ball) is
-## pressed, the arm winds back for the throw progressively instead of
+## Wind-up: while a hand holding a weapon is pressed, the arm winds back for the throw progressively instead of
 ## sitting static. Ramps up over the same press-and-hold window that charges
 ## throw force, so a fully wound-up arm means a fully-charged throw is coming.
 const WINDUP_RAMP_DURATION := HOLD_THRESHOLD + THROW_CHARGE_MAX_DURATION
 ## Releases of the Advanced controls' tap-or-hold buttons.
 enum Release { NONE, TAP, HOLD }
-
-const THROW_FORCE = 10.0
-const UPWARD_FORCE = 3.0
 
 const ROTATION_SPEED = 10.0
 
@@ -100,8 +92,7 @@ const CHOP_DOWNSTROKE := 0.5
 # Boost: a meter filled by running through boost orbs (BoostOrb3D) around
 # the arena. Holding the boost button while moving burns it to accelerate
 # up to BOOST_SPEED (well past a sprint), and letting go eases back down, so
-# it carries some momentum. It costs no stamina, works carrying the ball,
-# and the speed bowls over anyone you run into (see _bump_other_players).
+# it carries some momentum. It costs no stamina, and the speed bowls over anyone you run into (see _bump_other_players).
 # The meter is the owner's; it isn't synced (the lean it causes is).
 signal boost_changed(new_boost: float, max_boost: float)
 const BOOST_MAX := 100.0
@@ -140,17 +131,8 @@ var knockback: Vector3 = Vector3.ZERO
 # Bumping into other players: both get shoved apart, harder the faster you
 # were closing in (so a sprinting player bowls a walking one over).
 const BODY_RADIUS := 0.5
-## How far from the player's center the ball can be to pick it up.
-const BALL_REACH := 2.0
 ## How close a loose weapon has to be to pick it up (interact).
 const WEAPON_REACH := 2.0
-## Carrying the ball costs something: no sprinting, and a slower walk.
-const BALL_CARRY_SPEED := 0.8
-## A hit dealing at least this much damage knocks the ball loose (a punch
-## is 10). The ball_grip perk stat raises it.
-const BALL_FUMBLE_DAMAGE := 8.0
-## How hard a fumbled ball pops out, along the hit.
-const BALL_FUMBLE_IMPULSE := 4.0
 const BUMP_BASE := 3.0
 const BUMP_CLOSING_TRANSFER := 0.9  # Share of closing speed passed on as shove
 const BUMP_SELF_RATIO := 0.5  # Bumper recoils with this fraction of the shove
@@ -245,14 +227,18 @@ var body_tilt: float = 0.0
 
 # Kills: the last opponent to hit us gets the kill if we die within
 # KILL_CREDIT_TIME of it, even if something else (a boss stomp) finishes
-# us off. Dying takes us out of play for Game3D.respawn_delay seconds.
+# us off. Dying takes us out of play for a while (Game3D.revive_delay): we
+# respawn at our team's spawn, or with Game3D.knockouts, lie where we fell
+# and get back up there.
 const KILL_CREDIT_TIME := 4.0
-## A bounty shield that soaks a killing blow leaves this share of max HP.
-const SHIELD_SAVE_HP_RATIO := 0.25
 var _last_attacker_name: String = ""
 var _last_attacker_msec: int = -1
 ## Seconds left before respawning; 0 = alive.
 var dead_time: float = 0.0
+## How many times we've died this match (knockouts take longer each time).
+var deaths: int = 0
+## Knocked out rather than gone: still in the level, lying where we fell.
+var is_knocked_out: bool = false
 var _alive_collision_layer: int = 0
 ## Wearing armor from an ArmorPickup3D: takes less damage and shows the
 ## character's helmet/hat and cape, until they next die (synced online).
@@ -317,7 +303,11 @@ func set_remote() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if is_remote or is_dead():
+	if is_remote:
+		return
+	if is_dead():
+		if is_knocked_out:
+			_fall_while_down(delta)
 		return
 	if hitstop > 0.0:
 		hitstop -= delta
@@ -341,7 +331,7 @@ func _physics_process(delta: float) -> void:
 
 	if Input_Handler.interact:
 		Input_Handler.interact = false
-		if not _grab_nearest_ball() and not _pick_up_nearest_weapon():
+		if not _pick_up_nearest_weapon():
 			_take_from_nearest_stand()
 	if Input_Handler.swap_hands:
 		Input_Handler.swap_hands = false
@@ -349,14 +339,12 @@ func _physics_process(delta: float) -> void:
 
 	# Walking velocity (sprinting speeds up only the horizontal part)
 	var speed: float = Entity.SPEED * perk_stat(&"move_speed")
-	if held_ball:
-		speed *= BALL_CARRY_SPEED
 	var walk: Vector3 = direction * speed
 	if is_sprinting:
 		walk.x *= SPRINT_SPEED_MULTIPLIER
 		walk.z *= SPRINT_SPEED_MULTIPLIER
 	if boost_blend > 0.0:
-		var boost_speed: float = BOOST_SPEED * perk_stat(&"boost_speed") * (BALL_CARRY_SPEED if held_ball else 1.0)
+		var boost_speed: float = BOOST_SPEED * perk_stat(&"boost_speed")
 		walk = walk.lerp(direction * max(boost_speed, walk.length()), boost_blend)
 	# Being shoved takes some control away until the shove dies down
 	var control: float = clamp(1.0 - knockback.length() / KNOCKBACK_CONTROL_LOSS, KNOCKBACK_MIN_CONTROL, 1.0)
@@ -398,11 +386,6 @@ func _physics_process(delta: float) -> void:
 	_update_punches()
 	_update_arm_anim()
 
-	if held_ball:
-		update_held_ball_position()
-		held_ball.linear_velocity = Vector3.ZERO
-		held_ball.angular_velocity = Vector3.ZERO
-
 	if net_sync:
 		net_pose = [NetInterpolator.now(), global_transform, arm_anim]
 
@@ -410,6 +393,8 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	if is_dead():
 		_update_death(delta)
+		if is_remote and is_knocked_out:
+			_process_remote(delta)  # Lying where we fell, but still falling there
 		return
 	if is_remote:
 		_process_remote(delta)
@@ -427,9 +412,8 @@ func _process(delta: float) -> void:
 	for arm: PlayerArm3D in arms:
 		_handle_guard(arm, _guard_pressed(arm) and not busy)
 
-	# Each hand on its own: while carrying the ball either button throws it
-	# (see _handle_ball_arm); a hand holding a weapon swings or throws it
-	# (see _handle_weapon_arm). Every button is read before any acts, since
+	# Each hand on its own: a hand holding a weapon swings or throws it, an
+	# empty one punches (see _handle_weapon_arm). Every button is read before any acts, since
 	# acting (e.g. throwing a two-handed weapon) changes what they mean.
 	for arm: PlayerArm3D in arms:
 		arm.attack.held = _attack_pressed(arm)
@@ -449,13 +433,12 @@ func _process(delta: float) -> void:
 
 
 ## Remote copy, every rendered frame: move to where the owner was a moment
-## ago, then carry along the ball. Held weapons ride the hands (see
+## ago. Held weapons ride the hands (see
 ## PlayerVisual3D), which play the owner's arm_anim.
 func _process_remote(delta: float) -> void:
 	var extras: PackedFloat32Array = _motion.play(self, delta)
 	if extras.size() == ARM_ANIM_SIZE:
 		arm_anim = extras
-	update_held_ball_position()
 
 
 # ===== HANDS & HOLDING =====
@@ -468,11 +451,9 @@ func _other_arm(arm: PlayerArm3D) -> PlayerArm3D:
 	return right_arm if arm == left_arm else left_arm
 
 
-## A hand is occupied if it holds a weapon, or both hands carry the ball or
-## a two-handed weapon.
+## A hand is occupied if it holds a weapon, or both hands hold a two-handed
+## one.
 func is_hand_occupied(is_left: bool) -> bool:
-	if held_ball:
-		return true
 	if is_left and _holds_two_handed():
 		return true
 	return arm_of(is_left).weapon != null
@@ -484,7 +465,7 @@ func is_hand_occupied(is_left: bool) -> bool:
 ## controls' tap-to-bash); otherwise Off-hand keeps it, to block. Off-hand
 ## works the other hand.
 func main_hand_is_left(shield_too: bool = false) -> bool:
-	if held_weapon_right != null or held_weapon_left == null or held_ball:
+	if held_weapon_right != null or held_weapon_left == null:
 		return false
 	return shield_too or not held_weapon_left is ShieldClass3D
 
@@ -494,7 +475,7 @@ func main_hand_is_left(shield_too: bool = false) -> bool:
 func can_combo() -> bool:
 	var left: Weapon3D = held_weapon_left
 	var right: Weapon3D = held_weapon_right
-	return left != null and right != null and not held_ball \
+	return left != null and right != null \
 		and not left is ShieldClass3D and not right is ShieldClass3D
 
 
@@ -533,27 +514,6 @@ func free_hand_for(grip: Weapon3D.Grip) -> Variant:
 	if can_hold_grip(grip, true):
 		return true
 	return null
-
-
-## Whether this player could pick up `ball` right now: both hands empty and
-## the ball within `reach`.
-func can_grab_ball(ball: Ball3D, reach: float = BALL_REACH) -> bool:
-	return not ball.holder and not is_hand_occupied(false) and not is_hand_occupied(true) \
-		and global_position.distance_to(ball.global_position) <= reach
-
-
-## Returns whether we're picking up (or, online, have asked for) a ball.
-func _grab_nearest_ball() -> bool:
-	if not Global.Game3D:
-		return false
-	var nearest: Ball3D = null
-	for ball: Ball3D in Global.Game3D.balls:
-		if ball.is_inside_tree() and can_grab_ball(ball) and (not nearest \
-				or global_position.distance_to(ball.global_position) < global_position.distance_to(nearest.global_position)):
-			nearest = ball
-	if nearest:
-		nearest.request_grab(self)
-	return nearest != null
 
 
 ## Whether `weapon` is lying loose and we have a free hand that can hold it
@@ -595,6 +555,7 @@ func _take_from_nearest_stand() -> bool:
 func equip_weapon(weapon: Weapon3D, is_left: bool) -> void:
 	arm_of(is_left).weapon = weapon
 	weapon.equip(self, _hand_holding(weapon, is_left))
+	Sfx.play(weapon.equip_sound(), global_position)
 
 
 ## The hand bone that carries `weapon` when it's that hand's weapon.
@@ -605,7 +566,7 @@ func _hand_holding(weapon: Weapon3D, is_left: bool) -> Node3D:
 ## Move each hand's weapon to the other hand, if both arms are free and each
 ## weapon may go in the other hand (see Weapon3D.Grip).
 func swap_hands() -> void:
-	if held_ball or is_busy() or is_swinging() or not (held_weapon_left or held_weapon_right):
+	if is_busy() or is_swinging() or not (held_weapon_left or held_weapon_right):
 		return
 	if (held_weapon_left and not grip_allows(held_weapon_left.grip, false)) \
 			or (held_weapon_right and not grip_allows(held_weapon_right.grip, true)):
@@ -631,12 +592,6 @@ func _swap_hands() -> void:
 func _net_swap_hands() -> void:
 	if multiplayer.get_remote_sender_id() == get_multiplayer_authority():
 		_swap_hands()
-
-
-## Carries the ball out in front, at the hold point.
-func update_held_ball_position() -> void:
-	if not held_ball: return
-	held_ball.global_position = hold_point.global_position
 
 
 # ===== BUTTONS =====
@@ -683,25 +638,7 @@ func _handle_attack_button(arm: PlayerArm3D) -> void:
 			return  # Pressed while blocking - nothing to release
 		button.armed = false
 
-	if held_ball:
-		_handle_ball_arm(arm)
-	else:
-		_handle_weapon_arm(arm)
-
-
-## Carrying the ball: a swing bonks it. Simple controls bonk on press (the
-## Throw button throws); advanced ones bonk on a tap and throw on a hold.
-func _handle_ball_arm(arm: PlayerArm3D) -> void:
-	if Input_Handler.uses_simple_controls():
-		if arm.attack.just_pressed() and not arm.is_swinging():
-			arm.begin_swing(PlayerArm3D.SWIPE_DURATION)
-		return
-	match _tap_or_hold(arm.attack):
-		Release.HOLD:
-			throw_ball(_throw_force_ratio(_pay_throw_charge(arm.attack.held_for() - HOLD_THRESHOLD)))
-		Release.TAP:
-			if not arm.is_swinging():
-				arm.begin_swing(PlayerArm3D.SWIPE_DURATION)
+	_handle_weapon_arm(arm)
 
 
 ## An empty hand's button is the off hand's: with a weapon in the other hand
@@ -741,8 +678,8 @@ func _tap_or_hold(button: PlayerArm3D.Press) -> Release:
 
 ## Simple controls' throw for one hand (Throw held + that hand's attack
 ## button): winds up while held (harder the longer, up to
-## THROW_CHARGE_MAX_DURATION) and throws what that hand holds - the ball, or
-## its weapon - on release. A quick tap is a light toss. A raised shield
+## THROW_CHARGE_MAX_DURATION) and throws that hand's weapon on release. A
+## quick tap is a light toss. A raised shield
 ## can't be thrown.
 func _handle_throw_button(arm: PlayerArm3D) -> void:
 	var button: PlayerArm3D.Press = arm.throw
@@ -754,13 +691,9 @@ func _handle_throw_button(arm: PlayerArm3D) -> void:
 		return
 	button.armed = false
 	var weapon: Weapon3D = arm.weapon
-	if not held_ball and (not weapon or (weapon is ShieldClass3D and weapon.is_blocking)):
+	if not weapon or (weapon is ShieldClass3D and weapon.is_blocking):
 		return
-	var charge: float = _pay_throw_charge(button.held_for())
-	if held_ball:
-		throw_ball(_throw_force_ratio(charge))
-	else:
-		_throw_weapon(arm, charge)
+	_throw_weapon(arm, _pay_throw_charge(button.held_for()))
 
 
 ## Throw tapped on its own: let go of the main hand's weapon, or the off
@@ -849,7 +782,7 @@ func swing_contact(weapon: Weapon3D, solid: bool) -> void:
 	arm_of(weapon == held_weapon_left).start_contact(solid)
 
 
-## Either arm is mid-swing (weapon, fist or ball bonk), drawing one back, or
+## Either arm is mid-swing (weapon or fist), drawing one back, or
 ## playing out a special.
 func is_swinging() -> bool:
 	return left_arm.is_swinging() or right_arm.is_swinging() or _combo.is_running()
@@ -954,28 +887,6 @@ func _get_aim_direction() -> Vector3:
 	return Vector3(sin(rotation.y), 0, cos(rotation.y))
 
 
-func throw_ball(force_multiplier: float = 1.0) -> void:
-	if not held_ball: return
-
-	# Calculate forward direction based on player's rotation
-	var forward_direction: Vector3 = Vector3(
-		sin(rotation.y),
-		0,
-		cos(rotation.y)
-	).normalized()
-
-	var throw_direction: Vector3 = (forward_direction + Vector3.UP * (UPWARD_FORCE / THROW_FORCE)).normalized()
-	# Online the ball stays in hand until the server lets it go
-	held_ball.request_throw(self, throw_direction * THROW_FORCE * force_multiplier * perk_stat(&"throw_power"))
-	right_arm.play_throw_release()
-
-
-## Let go of the ball without throwing it (e.g. when the ball is reset).
-func drop_ball() -> void:
-	if held_ball:
-		held_ball.release(Vector3.ZERO)
-
-
 ## Winds each arm back while its throw is being charged: Throw + its button
 ## with simple controls, its button held with advanced ones (a two-handed
 ## weapon's left button is its alt attack, so that has no throw to wind up).
@@ -985,7 +896,7 @@ func _update_weapon_windups(delta: float) -> void:
 		var button: PlayerArm3D.Press = arm.throw if simple else arm.attack
 		var pressed: bool = (_throw_pressed(arm) if simple else _attack_pressed(arm)) and button.armed
 		var ramp: float = THROW_CHARGE_MAX_DURATION if simple else WINDUP_RAMP_DURATION
-		arm.update_windup(delta, pressed, button.press_time, arm.weapon != null or held_ball != null, ramp)
+		arm.update_windup(delta, pressed, button.press_time, arm.weapon != null, ramp)
 
 
 # ===== KNOCKBACK, BUMPING & FISTS =====
@@ -1136,22 +1047,15 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		hitstop = Combat.HITSTOP
 		if exhausted:
 			_stagger()
-		var strip: float = attacker.perk_stat(&"ball_strip") if attacker is PlayerClass3D else 1.0
-		if held_ball and damage * strip >= BALL_FUMBLE_DAMAGE * perk_stat(&"ball_grip"):
-			held_ball.request_throw(self, (dir + Vector3.UP * 0.5) * BALL_FUMBLE_IMPULSE)
 	if Entity.hp <= 0:
 		_on_lethal_hit()
 	return true
 
 
-## Out of HP (on the owner). A bounty shield saves us from a hit that would
-## give an opponent the kill; otherwise we die and Game3D is told who, if
-## anyone, gets the kill.
+## Out of HP (on the owner): we die and Game3D is told who, if anyone,
+## gets the kill.
 func _on_lethal_hit() -> void:
 	var killer_name: String = _credited_killer()
-	if killer_name != "" and Global.Game3D and Global.Game3D.try_use_shield(self):
-		Entity.hp = Entity.hp_max * SHIELD_SAVE_HP_RATIO
-		return
 	die()
 	if Global.Game3D:
 		Global.Game3D.report_death(self, killer_name)
@@ -1175,8 +1079,11 @@ func die() -> void:
 	if is_dead():
 		return
 	armored = false  # Comes back without it
-	var delay: float = Global.Game3D.respawn_delay if Global.Game3D else 0.0
-	delay *= perk_stat(&"respawn_time")
+	deaths += 1
+	var delay: float = Global.Game3D.revive_delay(self, deaths) if Global.Game3D else 0.0
+	if Global.Game3D and Global.Game3D.knockouts and delay > 0.0:
+		_knock_out(delay)
+		return
 	if _is_local():
 		# Our weapons stay where we fell, for anyone to take
 		for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
@@ -1202,8 +1109,56 @@ func _update_death(delta: float) -> void:
 		return
 	collision_layer = _alive_collision_layer
 	visible = true
+	if is_knocked_out:
+		is_knocked_out = false
+		if _is_local():
+			_revive_in_place()
 	visual.play_spawn()
 	Entity.start_iframes()  # A moment of spawn protection
+
+
+## Knocked out for `delay` seconds: we drop where we stand and stay there,
+## weapons still in hand, where enemies can't hit us and others walk
+## through us. Like die(), on every machine.
+func _knock_out(delay: float) -> void:
+	is_knocked_out = true
+	dead_time = delay
+	_last_attacker_name = ""
+	_last_attacker_msec = -1
+	_cancel_attacks()
+	for arm: PlayerArm3D in arms:
+		arm.attack.armed = false
+	knockback = Vector3.ZERO
+	lunge = Vector3.ZERO
+	roll_time = 0.0
+	roll_iframes = 0.0
+	stagger_time = 0.0
+	is_boosting = false
+	boost_blend = 0.0
+	_alive_collision_layer = collision_layer
+	collision_layer = 0
+	visual.play_down()
+
+
+## Owner, while knocked out: just fall to the floor (a stomp may have
+## knocked us into the air) and keep everyone else posted.
+func _fall_while_down(delta: float) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if not is_on_floor():
+		velocity += get_gravity() * delta
+	move_and_slide()
+	if net_sync:
+		net_pose = [NetInterpolator.now(), global_transform, arm_anim]
+
+
+## Owner: back up after a knockout, fully restored, right where we lay.
+func _revive_in_place() -> void:
+	var lying_at: Vector3 = global_position
+	velocity = Vector3.ZERO
+	boost = BOOST_START
+	Entity.reset(true)  # Full stats (it also moves us to Entity.spawn_pos...)
+	global_position = lying_at  # ...so put us back
 
 
 ## Game3D says whether our team leads in kills: wear the crown if so.
@@ -1236,11 +1191,9 @@ func on_kill() -> void:
 
 
 ## Back to where this player started, fully restored. Anything still held
-## comes along; the ball is let go. Online only the owner calls this; the
+## comes along. Online only the owner calls this; the
 ## new position and HP reach everyone through the usual sync.
 func respawn() -> void:
-	if held_ball:
-		held_ball.request_throw(self, Vector3.ZERO)
 	knockback = Vector3.ZERO
 	velocity = Vector3.ZERO
 	lunge = Vector3.ZERO
@@ -1254,31 +1207,6 @@ func respawn() -> void:
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if weapon:
 			weapon.follow_hand()
-
-
-## Burned (e.g. holding a burning ball): damage with no flinch, iframes or
-## shove, so a tick of it doesn't stun-lock. Routed like receive_hit.
-func receive_burn(damage: float, attacker: Node3D = null) -> void:
-	if is_dead():
-		return
-	if not _is_local():
-		if Net.match_synced:
-			var attacker_name: String = String(attacker.name) if attacker is PlayerClass3D else ""
-			_net_receive_burn.rpc_id(get_multiplayer_authority(), damage, attacker_name)
-		return
-	if attacker is PlayerClass3D and attacker != self:
-		_last_attacker_name = attacker.name
-		_last_attacker_msec = Time.get_ticks_msec()
-	Entity.hp -= damage * perk_stat(&"damage_taken") * (ARMOR_DAMAGE_TAKEN if armored else 1.0)
-	if Entity.hp <= 0:
-		_on_lethal_hit()
-
-
-@rpc("any_peer", "reliable")
-func _net_receive_burn(damage: float, attacker_name: String) -> void:
-	if is_multiplayer_authority():
-		var attacker: PlayerClass3D = Global.Game3D.player_named(attacker_name) if Global.Game3D else null
-		receive_burn(damage, attacker)
 
 
 ## A shove with no damage (e.g. a fast ball), routed like receive_hit.
@@ -1373,6 +1301,7 @@ func _update_roll(delta: float) -> void:
 ## leaves no iframes, so a flurry keeps draining the guard.
 func _receive_blocked_hit(damage: float, knockback_velocity: Vector3, shield: ShieldClass3D) -> void:
 	add_knockback(Vector3(knockback_velocity.x, 0, knockback_velocity.z) * BLOCK_KNOCKBACK_RATIO)
+	Sfx.play_everywhere(&"block", shield.global_position)
 	shield.wear()  # Each block is a use
 	if Entity.is_in_iframes:
 		return
@@ -1411,8 +1340,8 @@ func _update_body_pose() -> void:
 
 ## Work out arm_anim from each arm's timers.
 func _update_arm_anim() -> void:
-	var left: Vector2 = left_arm.action(held_ball != null)
-	var right: Vector2 = right_arm.action(held_ball != null)
+	var left: Vector2 = left_arm.action()
+	var right: Vector2 = right_arm.action()
 	arm_anim = PackedFloat32Array([left.x, left.y, right.x, right.y,
 			left_arm.clip_index(), right_arm.clip_index(), _combo.spin_angle()])
 
@@ -1460,7 +1389,7 @@ func _update_sprint(direction: Vector3, delta: float) -> void:
 	if sprint_exhausted and Entity.stamina >= Entity.stamina_max * SPRINT_RECOVER_RATIO:
 		sprint_exhausted = false
 	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted and not is_boosting \
-		and not held_ball and not is_busy() and not is_perk_locked()
+		and not is_busy() and not is_perk_locked()
 	if is_sprinting:
 		Entity.drain_stamina(SPRINT_STAMINA_PER_SEC * delta)
 		if Entity.stamina <= 0.0:
@@ -1508,6 +1437,7 @@ func _share_iframes(was_in_iframes: bool) -> void:
 	if was_in_iframes or not Entity.is_in_iframes:
 		return
 	visual.play_hit()
+	Sfx.play(&"hit_player", global_position)
 	if Net.match_synced:
 		_net_iframes.rpc()
 
@@ -1530,6 +1460,7 @@ func _net_iframes() -> void:
 	if multiplayer.get_remote_sender_id() == get_multiplayer_authority():
 		Entity.start_iframes()
 		visual.play_hit()
+		Sfx.play(&"hit_player", global_position)
 
 
 ## The raised shield that stops an attack travelling along `attack_dir`, if any.

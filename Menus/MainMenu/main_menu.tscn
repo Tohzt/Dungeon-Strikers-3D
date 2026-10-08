@@ -18,7 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.07, 0.07, 0.09, 1)
+color = Color(0.075, 0.05, 0.045, 1)
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -30,65 +30,72 @@ grow_vertical = 2
 
 [node name="Content" type="VBoxContainer" parent="Center"]
 layout_mode = 2
-theme_override_constants/separation = 40
+theme_override_constants/separation = 20
 
 [node name="Title" type="Label" parent="Center/Content"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_constants/outline_size = 14
+theme_override_colors/font_outline_color = Color(0.16, 0.07, 0.04, 1)
+theme_override_colors/font_color = Color(0.96, 0.78, 0.42, 1)
 theme_override_font_sizes/font_size = 56
 text = "Dungeon Strikers"
 horizontal_alignment = 1
 
-[node name="Home" type="VBoxContainer" parent="Center/Content"]
+[node name="Frame" type="PanelContainer" parent="Center/Content"]
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="Home" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="SinglePlayerButton" type="Button" parent="Center/Content/Home"]
+[node name="SinglePlayerButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Single Player"
 
-[node name="LocalMultiplayerButton" type="Button" parent="Center/Content/Home"]
+[node name="LocalMultiplayerButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Local Multiplayer"
 
-[node name="OnlineButton" type="Button" parent="Center/Content/Home"]
+[node name="OnlineButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Online"
 
-[node name="QuitButton" type="Button" parent="Center/Content/Home"]
+[node name="QuitButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Quit"
 
-[node name="SinglePlayer" type="VBoxContainer" parent="Center/Content"]
+[node name="SinglePlayer" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="Prompt" type="Label" parent="Center/Content/SinglePlayer"]
+[node name="Options" type="GridContainer" parent="Center/Content/Frame/SinglePlayer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "Choose your device"
-horizontal_alignment = 1
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+columns = 2
 
-[node name="SoloCharacter" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="SoloCharacter" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
@@ -96,7 +103,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Character: Knight"
 
-[node name="SoloTeam" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="SoloTeam" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
@@ -104,7 +111,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Team: Blue"
 
-[node name="SoloTeams" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="SoloTeams" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
@@ -112,23 +119,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
-[node name="SoloMap" type="Button" parent="Center/Content/SinglePlayer"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Map: Dungeon"
-
-[node name="SoloDrop" type="Button" parent="Center/Content/SinglePlayer"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Boss Drop: Skull"
-
-[node name="SoloBots" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="SoloBots" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
@@ -136,34 +127,62 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Bots: Off"
 
-[node name="KeyboardMouse" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="SoloMap" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Map: Dungeon"
+
+[node name="SoloDrop" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Boss Drop: Skull"
+
+[node name="Prompt" type="Label" parent="Center/Content/Frame/SinglePlayer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Choose your device"
+horizontal_alignment = 1
+
+[node name="Devices" type="HBoxContainer" parent="Center/Content/Frame/SinglePlayer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="KeyboardMouse" type="Button" parent="Center/Content/Frame/SinglePlayer/Devices"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Keyboard & Mouse"
 
-[node name="Controller" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="Controller" type="Button" parent="Center/Content/Frame/SinglePlayer/Devices"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(320, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Controller"
 
-[node name="SinglePlayerBack" type="Button" parent="Center/Content/SinglePlayer"]
+[node name="SinglePlayerBack" type="Button" parent="Center/Content/Frame/SinglePlayer"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
+custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="Lobby" type="VBoxContainer" parent="Center/Content"]
+[node name="Lobby" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="LobbyHint" type="Label" parent="Center/Content/Lobby"]
+[node name="LobbyHint" type="Label" parent="Center/Content/Frame/Lobby"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Join: A / Start on a controller, or Enter / Space on the keyboard.
@@ -171,12 +190,19 @@ Character: D-pad / stick left-right, or A / D.   Team: LB / RB, or Q / E.
 Leave: B / Esc."
 horizontal_alignment = 1
 
-[node name="Cards" type="HBoxContainer" parent="Center/Content/Lobby"]
+[node name="Cards" type="HBoxContainer" parent="Center/Content/Frame/Lobby"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="LobbyTeams" type="Button" parent="Center/Content/Lobby"]
+[node name="LobbyOptions" type="GridContainer" parent="Center/Content/Frame/Lobby"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+columns = 2
+
+[node name="LobbyTeams" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
@@ -184,23 +210,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
-[node name="LobbyMap" type="Button" parent="Center/Content/Lobby"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Map: Dungeon"
-
-[node name="LobbyDrop" type="Button" parent="Center/Content/Lobby"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Boss Drop: Skull"
-
-[node name="LobbyBots" type="Button" parent="Center/Content/Lobby"]
+[node name="LobbyBots" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
@@ -208,7 +218,28 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Bots: Off"
 
-[node name="Start" type="Button" parent="Center/Content/Lobby"]
+[node name="LobbyMap" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Map: Dungeon"
+
+[node name="LobbyDrop" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Boss Drop: Skull"
+
+[node name="LobbyActions" type="HBoxContainer" parent="Center/Content/Frame/Lobby"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="Start" type="Button" parent="Center/Content/Frame/Lobby/LobbyActions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 52)
 layout_mode = 2
@@ -216,15 +247,15 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 24
 text = "Start (2+ players)"
 
-[node name="LobbyBack" type="Button" parent="Center/Content/Lobby"]
+[node name="LobbyBack" type="Button" parent="Center/Content/Frame/Lobby/LobbyActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
+custom_minimum_size = Vector2(320, 52)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="Online" type="VBoxContainer" parent="Center/Content"]
+[node name="Online" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(320, 0)
@@ -232,28 +263,28 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="HostButton" type="Button" parent="Center/Content/Online"]
+[node name="HostButton" type="Button" parent="Center/Content/Frame/Online"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Host Game"
 
-[node name="JoinButton" type="Button" parent="Center/Content/Online"]
+[node name="JoinButton" type="Button" parent="Center/Content/Frame/Online"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Join Game"
 
-[node name="OnlineBack" type="Button" parent="Center/Content/Online"]
+[node name="OnlineBack" type="Button" parent="Center/Content/Frame/Online"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="HostSetup" type="VBoxContainer" parent="Center/Content"]
+[node name="HostSetup" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(400, 0)
@@ -261,18 +292,18 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="Prompt" type="Label" parent="Center/Content/HostSetup"]
+[node name="Prompt" type="Label" parent="Center/Content/Frame/HostSetup"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 autowrap_mode = 3
 text = "Pick an access code, or leave it blank for a random one"
 horizontal_alignment = 1
 
-[node name="CodeRow" type="HBoxContainer" parent="Center/Content/HostSetup"]
+[node name="CodeRow" type="HBoxContainer" parent="Center/Content/Frame/HostSetup"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="HostCodeInput" type="LineEdit" parent="Center/Content/HostSetup/CodeRow"]
+[node name="HostCodeInput" type="LineEdit" parent="Center/Content/Frame/HostSetup/CodeRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -282,21 +313,21 @@ placeholder_text = "Random"
 alignment = 1
 max_length = 8
 
-[node name="RandomCode" type="Button" parent="Center/Content/HostSetup/CodeRow"]
+[node name="RandomCode" type="Button" parent="Center/Content/Frame/HostSetup/CodeRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Random"
 
-[node name="HostConfirm" type="Button" parent="Center/Content/HostSetup"]
+[node name="HostConfirm" type="Button" parent="Center/Content/Frame/HostSetup"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Host"
 
-[node name="HostStatus" type="Label" parent="Center/Content/HostSetup"]
+[node name="HostStatus" type="Label" parent="Center/Content/Frame/HostSetup"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
@@ -304,14 +335,14 @@ theme_override_font_sizes/font_size = 18
 text = ""
 horizontal_alignment = 1
 
-[node name="HostBack" type="Button" parent="Center/Content/HostSetup"]
+[node name="HostBack" type="Button" parent="Center/Content/Frame/HostSetup"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="JoinSetup" type="VBoxContainer" parent="Center/Content"]
+[node name="JoinSetup" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(400, 0)
@@ -319,17 +350,17 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="Prompt" type="Label" parent="Center/Content/JoinSetup"]
+[node name="Prompt" type="Label" parent="Center/Content/Frame/JoinSetup"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "Enter the access code from your host"
 horizontal_alignment = 1
 
-[node name="CodeRow" type="HBoxContainer" parent="Center/Content/JoinSetup"]
+[node name="CodeRow" type="HBoxContainer" parent="Center/Content/Frame/JoinSetup"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="JoinCodeInput" type="LineEdit" parent="Center/Content/JoinSetup/CodeRow"]
+[node name="JoinCodeInput" type="LineEdit" parent="Center/Content/Frame/JoinSetup/CodeRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -339,21 +370,21 @@ placeholder_text = "Access code"
 alignment = 1
 max_length = 8
 
-[node name="PasteCode" type="Button" parent="Center/Content/JoinSetup/CodeRow"]
+[node name="PasteCode" type="Button" parent="Center/Content/Frame/JoinSetup/CodeRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Paste"
 
-[node name="JoinConfirm" type="Button" parent="Center/Content/JoinSetup"]
+[node name="JoinConfirm" type="Button" parent="Center/Content/Frame/JoinSetup"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Join"
 
-[node name="JoinStatus" type="Label" parent="Center/Content/JoinSetup"]
+[node name="JoinStatus" type="Label" parent="Center/Content/Frame/JoinSetup"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
@@ -361,44 +392,45 @@ theme_override_font_sizes/font_size = 18
 text = ""
 horizontal_alignment = 1
 
-[node name="JoinBack" type="Button" parent="Center/Content/JoinSetup"]
+[node name="JoinBack" type="Button" parent="Center/Content/Frame/JoinSetup"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="OnlineLobby" type="VBoxContainer" parent="Center/Content"]
+[node name="OnlineLobby" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="CodePanel" type="PanelContainer" parent="Center/Content/OnlineLobby"]
+[node name="CodePanel" type="PanelContainer" parent="Center/Content/Frame/OnlineLobby"]
 layout_mode = 2
+theme_type_variation = &"PlankPanel"
 size_flags_horizontal = 4
 
-[node name="Row" type="HBoxContainer" parent="Center/Content/OnlineLobby/CodePanel"]
+[node name="Row" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby/CodePanel"]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Code" type="VBoxContainer" parent="Center/Content/OnlineLobby/CodePanel/Row"]
+[node name="Code" type="VBoxContainer" parent="Center/Content/Frame/OnlineLobby/CodePanel/Row"]
 layout_mode = 2
 
-[node name="Caption" type="Label" parent="Center/Content/OnlineLobby/CodePanel/Row/Code"]
+[node name="Caption" type="Label" parent="Center/Content/Frame/OnlineLobby/CodePanel/Row/Code"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "ACCESS CODE"
 horizontal_alignment = 1
 
-[node name="CodeLabel" type="Label" parent="Center/Content/OnlineLobby/CodePanel/Row/Code"]
+[node name="CodeLabel" type="Label" parent="Center/Content/Frame/OnlineLobby/CodePanel/Row/Code"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "------"
 horizontal_alignment = 1
 
-[node name="CopyCode" type="Button" parent="Center/Content/OnlineLobby/CodePanel/Row"]
+[node name="CopyCode" type="Button" parent="Center/Content/Frame/OnlineLobby/CodePanel/Row"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 52)
 layout_mode = 2
@@ -406,24 +438,24 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 24
 text = "Copy"
 
-[node name="OnlineCards" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+[node name="OnlineCards" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="OnlineStatus" type="Label" parent="Center/Content/OnlineLobby"]
+[node name="OnlineStatus" type="Label" parent="Center/Content/Frame/OnlineLobby"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = ""
 horizontal_alignment = 1
 
-[node name="PickRow" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+[node name="PickRow" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="OnlineCharacter" type="Button" parent="Center/Content/OnlineLobby/PickRow"]
+[node name="OnlineCharacter" type="Button" parent="Center/Content/Frame/OnlineLobby/PickRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 44)
 layout_mode = 2
@@ -431,7 +463,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Character: Knight"
 
-[node name="OnlineTeam" type="Button" parent="Center/Content/OnlineLobby/PickRow"]
+[node name="OnlineTeam" type="Button" parent="Center/Content/Frame/OnlineLobby/PickRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 44)
 layout_mode = 2
@@ -439,41 +471,49 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Team: Blue"
 
-[node name="FormatRow" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+[node name="FormatRow" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="OnlineTeams" type="Button" parent="Center/Content/OnlineLobby/FormatRow"]
+[node name="OnlineTeams" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
+custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
-[node name="OnlineMap" type="Button" parent="Center/Content/OnlineLobby/FormatRow"]
+[node name="OnlineBots" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
+custom_minimum_size = Vector2(200, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Bots:  <  0  >"
+
+[node name="OnlineMap" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Map: Dungeon"
 
-[node name="OnlineDrop" type="Button" parent="Center/Content/OnlineLobby/FormatRow"]
+[node name="OnlineDrop" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
+custom_minimum_size = Vector2(200, 44)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Boss Drop: Skull"
 
-[node name="ActionRow" type="HBoxContainer" parent="Center/Content/OnlineLobby"]
+[node name="ActionRow" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="OnlineStart" type="Button" parent="Center/Content/OnlineLobby/ActionRow"]
+[node name="OnlineStart" type="Button" parent="Center/Content/Frame/OnlineLobby/ActionRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 52)
 layout_mode = 2
@@ -481,7 +521,7 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 24
 text = "Start (2+ players)"
 
-[node name="OnlineLeave" type="Button" parent="Center/Content/OnlineLobby/ActionRow"]
+[node name="OnlineLeave" type="Button" parent="Center/Content/Frame/OnlineLobby/ActionRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 44)
 layout_mode = 2

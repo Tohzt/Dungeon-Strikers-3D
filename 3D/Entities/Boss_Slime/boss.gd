@@ -270,7 +270,8 @@ func _on_state_entered(new_state: State) -> void:
 		State.IDLE:
 			_squash_vel -= 5.0  # Splat on landing
 		State.RECOVER:
-			_squash_vel -= 12.0
+			_squash_vel -= 12.0  # Landed a stomp
+			Sfx.play(&"boss_stomp", global_position)
 		State.STAGGERED:
 			_squash_vel -= 10.0
 		State.DEAD:
@@ -520,6 +521,7 @@ func _spit() -> void:
 @rpc("authority", "call_local", "reliable")
 func _net_spit(names: PackedStringArray, launches: PackedVector3Array) -> void:
 	_squash_vel -= 8.0  # Deflates as they fly out
+	Sfx.play(&"boss_spit", global_position)
 	var mouth: Vector3 = global_position + Vector3.UP * HEIGHT
 	for i in names.size():
 		var minion: SlimeMinion3D = minion_scene.instantiate()
@@ -563,6 +565,7 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 		if Net.match_synced:
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
 		return true
+	Sfx.play_everywhere(&"hit_slime", global_position)
 	receive_impulse(knockback_velocity * HIT_SHOVE_RATIO)
 	if state == State.STAGGERED:
 		damage *= staggered_damage_multiplier
@@ -694,7 +697,7 @@ func _free_ball() -> Ball3D:
 	var best: Ball3D = null
 	var best_dist: float = INF
 	for ball: Ball3D in Global.Game3D.balls:
-		if not is_instance_valid(ball) or not ball.is_inside_tree() or ball.holder:
+		if not is_instance_valid(ball) or not ball.is_inside_tree():
 			continue
 		var dist: float = global_position.distance_to(ball.global_position)
 		if dist < best_dist:

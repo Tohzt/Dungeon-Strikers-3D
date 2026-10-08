@@ -102,6 +102,8 @@ func request_take(player: PlayerClass3D) -> bool:
 	var is_left: bool = player.free_hand_for(_stock_grip())
 	if not Net.in_session():
 		_given(player.name, is_left, _next_weapon_name())
+	elif Net.is_server:
+		_decide_take(player, is_left)  # A bot
 	else:
 		_request_take.rpc_id(Net.SERVER_ID, is_left)
 	return true
@@ -114,10 +116,13 @@ func _next_weapon_name() -> String:
 
 @rpc("any_peer", "reliable")
 func _request_take(is_left: bool) -> void:
-	if not Net.is_server or not _is_stocked():
-		return
-	var player: PlayerClass3D = Global.Game3D.rpc_sender()
-	if player and _may_take(player) and player.can_hold_grip(_stock_grip(), is_left):
+	if Net.is_server:
+		_decide_take(Global.Game3D.rpc_sender(), is_left)
+
+
+## Server: give `player` the weapon if there's still one for them.
+func _decide_take(player: PlayerClass3D, is_left: bool) -> void:
+	if _is_stocked() and player and _may_take(player) and player.can_hold_grip(_stock_grip(), is_left):
 		_given.rpc(player.name, is_left, _next_weapon_name())
 
 

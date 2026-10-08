@@ -277,10 +277,10 @@ func _make_card(player: PlayerClass3D, perk: Perk, ui_scale: float) -> PanelCont
 	var padding: float = CARD_PADDING * ui_scale
 	var wrap_width: float = CARD_SIZE.x * ui_scale - padding * 2.0
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.07, 0.1, 0.95)
+	style.bg_color = Color(0.16, 0.09, 0.06, 0.96)
 	style.border_color = perk.category_color()
 	style.set_border_width_all(maxi(1, int(3 * ui_scale)))
-	style.set_corner_radius_all(int(12 * ui_scale))
+	style.set_corner_radius_all(int(6 * ui_scale))
 	style.set_content_margin_all(padding)
 	card.add_theme_stylebox_override("panel", style)
 

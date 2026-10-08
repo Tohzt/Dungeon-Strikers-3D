@@ -1,7 +1,7 @@
 # Dungeon Strikers 3D
 
 A team PvPvE arena brawler made in Godot 4.7. Teams fight a boss, scramble
-for what it drops (a skull to carry home to their altar, or a ball to score
+for what it drops (a skull to knock home to their altar, or a ball to score
 in a goal), pick perks at their altar between rounds, and race to a set
 number of player kills. Up to four players play locally (with bots to fill
 seats) or online.

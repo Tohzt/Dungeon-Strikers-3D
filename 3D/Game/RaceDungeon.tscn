@@ -1,0 +1,67 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://3D/Game/Race/race_game_3d.gd" id="1_race"]
+[ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="2_player"]
+[ext_resource type="Script" path="res://3D/Game/Race/race_level_3d.gd" id="3_level"]
+[ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://3D/HUD/hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://3D/HUD/scoreboard.tscn" id="5_score"]
+[ext_resource type="PackedScene" path="res://Menus/PauseMenu/pause_menu.tscn" id="6_pause"]
+[ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="7_cam"]
+[ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="8_bossbar"]
+[ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="9_picker"]
+[ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="10_perks"]
+
+[sub_resource type="Environment" id="Environment_race"]
+background_mode = 1
+background_color = Color(0.015, 0.015, 0.025, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.42, 0.45, 0.6, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+ssao_enabled = true
+glow_enabled = true
+glow_bloom = 0.05
+
+[node name="RaceDungeon" type="Node3D"]
+script = ExtResource("1_race")
+player_scene = ExtResource("2_player")
+spawn_spacing = 2.5
+ambience = &"cave"
+max_team_count = 4
+intermissions = false
+kills_win = false
+respawn_delay = 5.0
+knockouts = true
+knockout_delay_growth = 3.0
+
+[node name="Level" type="Node3D" parent="."]
+script = ExtResource("3_level")
+
+[node name="HUD" parent="." instance=ExtResource("4_hud")]
+
+[node name="Scoreboard" parent="." instance=ExtResource("5_score")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("6_pause")]
+
+[node name="Camera3D" parent="." instance=ExtResource("7_cam")]
+transform = Transform3D(1, 0, 0, 0, 0.4067366, 0.9135455, 0, -0.9135455, 0.4067366, 0, 30, 13.35686)
+group_max_fov = 82.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_race")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.81915206, -0.50643796, 0.26927787, 0, 0.4694716, 0.88294756, -0.57357645, -0.72326833, 0.38456863, 0, 0, 0)
+light_color = Color(0.75, 0.8, 1, 1)
+light_energy = 0.55
+shadow_enabled = true
+
+[node name="Weapons" type="Node" parent="."]
+
+[node name="BossHealthBar" parent="." instance=ExtResource("8_bossbar")]
+
+[node name="PerkPicker" parent="." instance=ExtResource("9_picker")]
+
+[node name="Perks" type="Node" parent="." node_paths=PackedStringArray("picker")]
+script = ExtResource("10_perks")
+picker = NodePath("../PerkPicker")

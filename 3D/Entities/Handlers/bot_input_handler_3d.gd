@@ -2,11 +2,12 @@ class_name BotInputHandler3D extends PlayerInputHandler3D
 ## A computer player: instead of reading a device, it decides what to do
 ## and sets the same fields a person's input would (move_dir, look_dir,
 ## the Attack/Throw/Guard buttons, interact), so the player plays it exactly
-## like anyone else. Offline only; Game3D swaps it in for slots with is_bot.
+## like anyone else. Game3D swaps it in for slots with is_bot; online the
+## server runs every bot.
 ##
-## Each think picks a goal - get a weapon, fight, play the ball toward the
-## other team's goal (or carry a skull home to our altar), pick a perk -
-## and every frame steers toward it.
+## Each think picks a goal - get a weapon, fight, knock the ball toward the
+## other team's goal (or a skull home to our altar), pick a perk - and
+## every frame steers toward it.
 
 ## Seconds between decisions (a little random, so bots don't move in lockstep).
 const THINK_TIME := 0.15
@@ -20,10 +21,6 @@ const RANGED_RANGE := 10.0
 const THREAT_RANGE := 4.0
 ## How far the bot will go for a loose weapon or a stand.
 const WEAPON_SEARCH_RANGE := 30.0
-## Throw the carried ball once the goal is this close.
-const SHOT_RANGE := 16.0
-## How long the Throw button is held, charging the shot.
-const SHOT_CHARGE := 0.6
 ## Pause between swings: [min, max] seconds.
 const ATTACK_GAP := Vector2(0.35, 0.8)
 ## Sprint to things further than this.
@@ -50,7 +47,6 @@ var _move_target: Variant = null
 var _attack_target: Node3D = null
 var _want_attack: bool = false
 var _want_guard: bool = false
-var _want_shot: bool = false
 var _want_interact: bool = false
 
 var _attack_gap_left: float = 0.0
@@ -59,7 +55,6 @@ var _attack_press_left: float = 0.0
 ## dual-wielding alternates).
 var _attack_hand_left: bool = false
 var _last_attack_left: bool = true
-var _shot_hold: float = 0.0
 var _interact_gap_left: float = 0.0
 var _perk_wait: float = 0.0
 var _intermission_time: float = 0.0
@@ -96,7 +91,6 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	_attack_target = null
 	_want_attack = false
 	_want_guard = false
-	_want_shot = false
 	_want_interact = false
 
 	if game.phase == Game3D_Class.Phase.INTERMISSION:
@@ -106,16 +100,13 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	# A boss kill's perk: bots take it on the spot rather than walk back for it
 	if game.perks.can_open(player):
 		_take_perk_soon(player, game)
-	if player.held_ball:
-		_think_carry(player, game)
-		return
 
 	var enemy: PlayerClass3D = _nearest_enemy(player, game)
 	var enemy_dist: float = _flat_dist(player, enemy) if enemy else INF
 	var armed: bool = player.held_weapon_left != null or player.held_weapon_right != null
 
 	# Someone's on top of us: deal with them first
-	if enemy and enemy_dist < THREAT_RANGE and (armed or not _loose_ball(game)):
+	if enemy and enemy_dist < THREAT_RANGE:
 		_fight(player, enemy)
 		return
 
@@ -124,14 +115,20 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if _go_get_boost(player, enemy_dist):
 		return
 
-	var ball: Ball3D = _loose_ball(game)
-	if ball and not armed:
-		_go_grab_ball(player, ball)
-		return
 	if not armed and _go_get_weapon(player, game):
 		return
+	var ball: Ball3D = _nearest_ball(game)
 	if ball:
 		_go_hit_ball(player, ball)
+		return
+	# The mode has a route (a race): stick to it, only fighting players who
+	# get in the way (above)
+	var goal: Node3D = game.bot_goal(player)
+	if goal is Boss3D:
+		_fight(player, goal)
+		return
+	if goal:
+		_move_target = goal.global_position
 		return
 	if not game.bosses.is_empty():
 		var boss: Boss3D = _nearest_boss(player, game)
@@ -161,23 +158,6 @@ func _take_perk_soon(player: PlayerClass3D, game: Game3D_Class) -> void:
 		game.perks.auto_pick(player)
 
 
-## Carrying the ball: run at the goal and shoot once in range. A skull is
-## walked all the way onto our altar.
-func _think_carry(player: PlayerClass3D, game: Game3D_Class) -> void:
-	if player.held_ball is Skull3D:
-		var altar: Altar3D = game.altar_of_team(player.slot.team if player.slot else 0)
-		if altar:
-			_move_target = altar.global_position
-		return
-	var goal: Goal3D = _goal_to_attack(player)
-	if not goal:
-		return
-	var aim: Vector3 = goal.net.global_position
-	_move_target = aim
-	_attack_target = goal.net
-	_want_shot = _flat_dist_to(player, aim) < SHOT_RANGE
-
-
 func _fight(player: PlayerClass3D, target: Node3D) -> void:
 	_attack_target = target
 	var reach: float = BOSS_RANGE if target is Boss3D else MELEE_RANGE
@@ -197,13 +177,10 @@ func _fight(player: PlayerClass3D, target: Node3D) -> void:
 		dodge_request_msec = Time.get_ticks_msec()
 
 
-func _go_grab_ball(player: PlayerClass3D, ball: Ball3D) -> void:
-	_move_target = ball.global_position
-	_want_interact = player.can_grab_ball(ball)
-
-
-## Armed: get behind the ball (seen from the goal) and swing it goalwards.
-## A skull gets knocked toward our altar instead.
+## Get behind the ball (seen from the goal) and swing or punch it goalwards.
+## A skull gets knocked toward our altar instead. "Goalwards" follows the
+## level's navigation from the ball, so in the dungeon it's knocked along
+## the corridors rather than into the nearest wall.
 func _go_hit_ball(player: PlayerClass3D, ball: Ball3D) -> void:
 	var target: Node3D = null
 	if ball is Skull3D:
@@ -211,11 +188,7 @@ func _go_hit_ball(player: PlayerClass3D, ball: Ball3D) -> void:
 	else:
 		var goal: Goal3D = _goal_to_attack(player)
 		target = goal.net if goal else null
-	var to_goal: Vector3 = Vector3.ZERO
-	if target:
-		to_goal = target.global_position - ball.global_position
-		to_goal.y = 0.0
-		to_goal = to_goal.normalized()
+	var to_goal: Vector3 = NavPath.direction(ball, target.global_position) if target else Vector3.ZERO
 	var behind: Vector3 = ball.global_position - to_goal * 1.6
 	var to_ball: Vector3 = ball.global_position - player.global_position
 	to_ball.y = 0.0
@@ -307,7 +280,7 @@ func _steer(player: PlayerClass3D, _delta: float) -> void:
 			dir = NavPath.direction(player, _move_target as Vector3)
 	dir += _separation(player)
 	move_dir = dir.normalized() if dir.length() > 0.1 else Vector3.ZERO
-	move_dodge = dist > SPRINT_DISTANCE and not player.held_ball
+	move_dodge = dist > SPRINT_DISTANCE
 
 	if _attack_target and is_instance_valid(_attack_target):
 		var look: Vector3 = _attack_target.global_position - player.global_position
@@ -330,15 +303,7 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 		_attack_hand_left = _pick_attack_hand(player)
 		_last_attack_left = _attack_hand_left
 	var attack: bool = _attack_press_left > 0.0
-
-	# Shot: hold Throw and a hand's button to charge while lining up, then let go
-	var throw: bool = false
-	if _want_shot and player.held_ball:
-		_shot_hold += delta
-		throw = _shot_hold < SHOT_CHARGE
-	else:
-		_shot_hold = 0.0
-	_apply_simple_buttons((attack and _attack_hand_left) or throw, attack and not _attack_hand_left, _want_guard, throw)
+	_apply_simple_buttons(attack and _attack_hand_left, attack and not _attack_hand_left, _want_guard, false)
 
 	_interact_gap_left -= delta
 	if _want_interact and _interact_gap_left <= 0.0:
@@ -346,13 +311,10 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 		_interact_gap_left = 0.3
 
 
-## A push away from teammates who are too close.
 ## Which hand an attack press uses (true = left). Weapons beat shields (a
 ## shield only bashes when it's all we hold); two weapons, or two fists,
 ## take turns, skipping an arm that's still mid-swing.
 func _pick_attack_hand(player: PlayerClass3D) -> bool:
-	if player.held_ball:
-		return false  # Either hand bonks the ball
 	var left: Weapon3D = player.held_weapon_left
 	var right: Weapon3D = player.held_weapon_right
 	var left_attacks: bool = left != null and not left is ShieldClass3D
@@ -368,6 +330,7 @@ func _pick_attack_hand(player: PlayerClass3D) -> bool:
 	return next_left
 
 
+## A push away from teammates who are too close.
 func _separation(player: PlayerClass3D) -> Vector3:
 	var push: Vector3 = Vector3.ZERO
 	for other: PlayerClass3D in Global.Game3D.players:
@@ -401,12 +364,12 @@ func _nearest_boss(player: PlayerClass3D, game: Game3D_Class) -> Boss3D:
 	return best
 
 
-## The nearest ball in play that nobody is carrying.
-func _loose_ball(game: Game3D_Class) -> Ball3D:
+## The nearest ball in play.
+func _nearest_ball(game: Game3D_Class) -> Ball3D:
 	var player := Master as PlayerClass3D
 	var best: Ball3D = null
 	for ball: Ball3D in game.balls:
-		if not is_instance_valid(ball) or not ball.is_inside_tree() or ball.holder:
+		if not is_instance_valid(ball) or not ball.is_inside_tree():
 			continue
 		if not best or _flat_dist(player, ball) < _flat_dist(player, best):
 			best = ball
