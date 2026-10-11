@@ -29,6 +29,14 @@ const ALTAR_SCENE := preload("res://3D/Weapons/Altar.tscn")
 const CHEST_SCENE := preload("res://3D/Weapons/Chest/chest.tscn")
 const ARMOR_SCENE := preload("res://3D/Items/Armor/armor_pickup.tscn")
 const ORB_SCENE := preload("res://3D/Items/Boost/boost_orb.tscn")
+const SKELETON_SCENE := preload("res://3D/Entities/Skeleton/skeleton_enemy.tscn")
+## Which kind of skeleton each SKELETON_* feature is.
+const SKELETON_KINDS: Dictionary[RaceLayout.Feature, SkeletonEnemy3D.Kind] = {
+	Feature.SKELETON_WARRIOR: SkeletonEnemy3D.Kind.WARRIOR,
+	Feature.SKELETON_MINION: SkeletonEnemy3D.Kind.MINION,
+	Feature.SKELETON_ARCHER: SkeletonEnemy3D.Kind.ARCHER,
+	Feature.SKELETON_MAGE: SkeletonEnemy3D.Kind.MAGE,
+}
 const STRUCT_LIB := preload("res://Game/Dungeon/dungeon_mesh_library.res")
 const FLOOR_LIB := preload("res://Game/Dungeon/dungeon_floor_library.res")
 
@@ -47,6 +55,8 @@ var _walls_map: GridMap
 var _floor_map: GridMap
 var _decor: Node3D
 var _walls: Dictionary[Vector2i, bool] = {}
+## Names features (chests, item boxes...) so no two clash.
+var _features_made: int = 0
 ## Room index -> its boss, for doors it holds the key to.
 var _bosses: Dictionary[int, Boss3D] = {}
 
@@ -68,6 +78,7 @@ func _clear() -> void:
 		child.queue_free()
 	_walls.clear()
 	_bosses.clear()
+	_features_made = 0
 
 
 ## Lay out `new_layout`. Bosses, altars, spawn points and the finish go into
@@ -374,12 +385,20 @@ func _feature(room: RaceLayout.Room, feature: RaceLayout.Feature, offset: Vector
 			node.add_to_group(NAV_GROUP)
 		Feature.ARMOR:
 			node = ARMOR_SCENE.instantiate()
+		Feature.ITEM_BOX:
+			node = ItemBox3D.new()
 		Feature.ORB, Feature.BIG_ORB:
 			node = ORB_SCENE.instantiate()
 			if feature == Feature.BIG_ORB:
 				node.set(&"amount", 100.0)
 				node.set(&"respawn_time", 10.0)
-	node.name = "%s_%s" % [RaceLayout.Feature.keys()[feature].capitalize().replace(" ", ""), room.name]
+		Feature.SKELETON_WARRIOR, Feature.SKELETON_MINION, Feature.SKELETON_ARCHER, Feature.SKELETON_MAGE:
+			var skeleton: SkeletonEnemy3D = SKELETON_SCENE.instantiate()
+			skeleton.kind = SKELETON_KINDS[feature]
+			node = skeleton
+	# Numbered, since a room can hold several of the same thing
+	node.name = "%s_%s_%d" % [RaceLayout.Feature.keys()[feature].capitalize().replace(" ", ""), room.name, _features_made]
+	_features_made += 1
 	node.position = at
 	_game.add_child(node)
 

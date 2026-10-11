@@ -84,6 +84,33 @@ func bot_goal(_player: PlayerClass3D) -> Node3D:
 	return get_node_or_null(^"FinishAltar") as Node3D
 
 
+## Mario Kart's catch-up rule: the further behind `player` is (by walking
+## distance to the altar, among everyone still in the race), the wilder
+## their item boxes.
+func item_luck(player: PlayerClass3D) -> float:
+	var finish: Node3D = get_node_or_null(^"FinishAltar") as Node3D
+	if not finish or players.size() < 2:
+		return 0.5
+	var mine: float = _distance_to(player, finish.global_position)
+	var ahead: int = 0  # Players closer to the altar than us
+	for other: PlayerClass3D in players:
+		if other != player and is_instance_valid(other) and _distance_to(other, finish.global_position) < mine:
+			ahead += 1
+	return float(ahead) / float(players.size() - 1)
+
+
+## Walking distance from `player` to `target` along the navmesh.
+func _distance_to(player: PlayerClass3D, target: Vector3) -> float:
+	var map: RID = get_world_3d().navigation_map
+	var path: PackedVector3Array = NavigationServer3D.map_get_path(map, player.global_position, target, true)
+	if path.is_empty():
+		return player.global_position.distance_to(target)
+	var total: float = player.global_position.distance_to(path[0])
+	for i in range(1, path.size()):
+		total += path[i - 1].distance_to(path[i])
+	return total
+
+
 ## A boss kill pays out right away: there are no intermissions to wait for.
 func _reward_boss_kill(killer: PlayerClass3D) -> void:
 	if killer and boss_perk_cards > 0:

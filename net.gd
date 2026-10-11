@@ -213,6 +213,12 @@ func set_boss_drop(kind: BossDrop.Kind) -> void:
 		_request_boss_drop.rpc_id(SERVER_ID, kind)
 
 
+## Leader only: top-down or third-person camera.
+func set_view(view: MatchMap.View) -> void:
+	if is_host and not in_match:
+		_request_view.rpc_id(SERVER_ID, view)
+
+
 ## [team, character] picked by `peer_id`.
 func loadout_of(peer_id: int) -> Array:
 	return loadouts.get(peer_id, [0, 0])
@@ -299,6 +305,7 @@ func _close_session() -> void:
 	loadouts.clear()
 	bots.clear()
 	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0], MatchMap.DROPS[0])
+	Players.view = MatchMap.VIEWS[0]
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -314,13 +321,14 @@ func _broadcast_peers() -> void:
 	peers_changed.emit()
 
 
-## [team_count, map, boss_drop], as sent to everyone.
+## [team_count, map, boss_drop, view], as sent to everyone.
 func _format() -> Array:
-	return [Players.team_count, Players.map, Players.boss_drop]
+	return [Players.team_count, Players.map, Players.boss_drop, Players.view]
 
 
 func _apply_format(format: Array) -> void:
 	Players.set_match_format(format[0], format[1], format[2])
+	Players.view = format[3]
 
 
 ## A new player starts on the smallest team, as the seat's usual character.
@@ -495,6 +503,13 @@ func _request_boss_drop(kind: BossDrop.Kind) -> void:
 
 
 @rpc("any_peer", "reliable")
+func _request_view(view: MatchMap.View) -> void:
+	if _from_leader_in_lobby() and MatchMap.VIEWS.has(view):
+		Players.view = view
+		_broadcast_peers()
+
+
+@rpc("any_peer", "reliable")
 func _request_add_bot() -> void:
 	if _from_leader_in_lobby() and seat_count() < MAX_PLAYERS:
 		bots.append([Players.smallest_team(seat_teams()), _unused_character()])
@@ -533,8 +548,9 @@ func _format_changed() -> void:
 func _request_start() -> void:
 	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
 			and _teams_split():
-		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s)." % [access_code,
-			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop)])
+		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s, %s)." % [access_code,
+			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop),
+			MatchMap.view_name(Players.view)])
 		_start_match.rpc(_format())
 
 

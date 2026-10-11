@@ -109,6 +109,11 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if enemy and enemy_dist < THREAT_RANGE:
 		_fight(player, enemy)
 		return
+	# So is a monster (a skeleton) that's close
+	var monster: SkeletonEnemy3D = SkeletonEnemy3D.nearest_to(player.global_position, THREAT_RANGE)
+	if monster:
+		_fight(player, monster)
+		return
 
 	if _go_get_reward(player):
 		return
@@ -168,7 +173,8 @@ func _fight(player: PlayerClass3D, target: Node3D) -> void:
 		_move_target = target.global_position
 	_want_attack = dist <= reach
 	# Raise a shield against a swing that's coming
-	if target is PlayerClass3D and dist < MELEE_RANGE * 1.5 and target.is_swinging() and _has_shield(player):
+	if (target is PlayerClass3D or target is SkeletonEnemy3D) and dist < MELEE_RANGE * 1.5 \
+			and target.is_swinging() and _has_shield(player):
 		_want_guard = true
 		_want_attack = false
 	# Hurt and pressed: roll out of it now and then

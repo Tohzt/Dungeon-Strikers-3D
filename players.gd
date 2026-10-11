@@ -45,6 +45,9 @@ var team_count: int = TEAM_COUNTS[0]
 var map: MatchMap.Map = MatchMap.MAPS[0]
 ## What every boss drops in the next match.
 var boss_drop: BossDrop.Kind = MatchMap.DROPS[0]
+## Camera for the next match (see MatchMap.View). Online, sent with the
+## match start like team_count.
+var view: MatchMap.View = MatchMap.VIEWS[0]
 ## Offline: seat bots until the match has this many players (0 = no bots).
 ## Always a whole number of players per team; see bot_fill_options().
 var bot_fill_count: int = 0
@@ -283,6 +286,10 @@ func next_map() -> MatchMap.Map:
 
 func next_boss_drop() -> BossDrop.Kind:
 	return MatchMap.DROPS[(MatchMap.DROPS.find(boss_drop) + 1) % MatchMap.DROPS.size()]
+
+
+func next_view() -> MatchMap.View:
+	return MatchMap.VIEWS[(MatchMap.VIEWS.find(view) + 1) % MatchMap.VIEWS.size()]
 
 
 ## "2 (2v1)"-style label for the current format with players on `teams`.

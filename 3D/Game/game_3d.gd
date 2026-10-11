@@ -151,8 +151,8 @@ func _ready() -> void:
 	perks.intermission_started.connect(_on_intermission_started)
 	perks.intermission_finished.connect(_on_intermission_finished)
 	_update_phase()
-	# Solo/online starts in the souls-like view; Tab switches to top-down
-	if not Net.is_server:
+	# The view the host picked (see MatchMap.View)
+	if not Net.is_server and Players.view == MatchMap.View.THIRD_PERSON:
 		toggle_control_scheme()
 
 	await get_tree().create_timer(3.0).timeout
@@ -279,15 +279,10 @@ func _setup_arena() -> void:
 			node.scoring_team = Goal3D.LAST_TOUCH
 
 
-## Tab: swap between souls-like third-person controls (the default) and the
-## shared top-down camera. Only with a single local player (single-player or
-## online); local co-op shares one screen, so it keeps the top-down camera.
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_controls") and not event.is_echo():
-		toggle_control_scheme()
-		get_viewport().set_input_as_handled()
-
-
+## Swap between souls-like third-person controls and the shared top-down
+## camera. Only with a single local player (single-player or online); local
+## co-op shares one screen, so it keeps the top-down camera. The host picks
+## which one a match uses (Players.view); there's no switching mid-match.
 func toggle_control_scheme() -> void:
 	var local_players: Array[PlayerClass3D] = []
 	for p: PlayerClass3D in players:
@@ -546,6 +541,13 @@ func _win(team: int, reason: String = "") -> void:
 ## nearest). Modes with a route to follow (e.g. a race) override this.
 func bot_goal(_player: PlayerClass3D) -> Node3D:
 	return null
+
+
+## How lucky `player`'s next item box (ItemBox3D) should be, from 0 (the
+## leader's odds: tamer items) to 1 (whoever's furthest behind: the wild
+## ones). Modes with a sense of who's ahead override it.
+func item_luck(_player: PlayerClass3D) -> float:
+	return 0.5
 
 
 ## Seconds `player` sits out after dying for the `deaths`th time (counting

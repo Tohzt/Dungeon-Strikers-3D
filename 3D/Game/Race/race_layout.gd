@@ -34,7 +34,7 @@ enum DoorKind {
 
 ## What a room holds besides its boss: Feature, position (metres, relative
 ## to the room's center).
-enum Feature { CHEST, ARMOR, ORB, BIG_ORB }
+enum Feature { CHEST, ARMOR, ORB, BIG_ORB, ITEM_BOX, SKELETON_WARRIOR, SKELETON_MINION, SKELETON_ARCHER, SKELETON_MAGE }
 
 
 class Room:
@@ -160,29 +160,41 @@ func _room_around(cell: Vector2i) -> int:
 	return -1
 
 
-## The hand-made map for trying the mode out, for up to four teams.
+## The hand-made map for trying the mode out, for up to four teams. Past
+## the arena the way splits west and east (crypt / barracks, with a shrine
+## between them full of item boxes), runs up two long passages (with a
+## loot gallery between them) and meets again in the antechamber before
+## the guardian.
 ##
-##   z=-31        +-----+
-##                |ALTAR|            sanctum (the altar), locked by the guardian
-##   z=-27     +--D-----+--+
-##             |  GUARDIAN |         second boss
-##   z=-15 +---+-----a-----+---+
-##         |ARM'   GREAT HALL  'LIB|  armory / library: loot detours
-##   z=-11 |   +--'---+---+--'-+   |
-##   z=-9  +---|  NW  | N |  NE|---+  N = Yellow's start room
-##             |      |   |    |
-##   z=-5      +-D----+-S-+---D+     D = locked by the arena boss
-##       +-----+               +-----+
-##       |  W  S     ARENA     S  E  |   W = Blue, E = Red
-##       +-----+               +-----+
-##   z=5       +------+-S-+----+
-##                    | S |          S = Green
+##   z=-55            +-----+
+##                    |ALTAR|           sanctum, locked by the guardian
+##   z=-51         +--D-----+--+
+##                 |  GUARDIAN |        second boss
+##   z=-39   +-----+-----a-----+-----+
+##           |      ANTECHAMBER      |
+##   z=-35   +-'-+---------------+-'-+
+##           | W |               | E |  passages
+##   z=-31   | E +---------------+ A |
+##           | S '   GALLERY     ' S |
+##   z=-23   +-'-+--+---------+--+-'-+
+##           |CRYPT '  SHRINE ' BARR.|
+##   z=-15 +-+--'---+---------+---'--+-+
+##         |ARM'      GREAT HALL     'LIB|
+##   z=-11 |   +--'---+---+------'-+   |
+##   z=-9  +---|  NW  | N |   NE   |---+  N = Yellow's start room
+##   z=-5      +-D----+-S-+------D-+      D = locked by the arena boss
+##       +-----+                   +-----+
+##       |  W  S       ARENA       S  E  |   W = Blue, E = Red
+##       +-----+                   +-----+
+##   z=5       +------+-S-+--------+
+##                    | S |               S = Green
 ##   z=9              +---+
 ##      x=-15 -9  -5  -2  2   5   9  15
 static func test_layout() -> RaceLayout:
 	var layout := RaceLayout.new()
 	var arena: int = layout.add_room("Arena", Kind.ARENA, Vector2i(-5, -5), Vector2i(5, 5))
 	layout.rooms[arena].boss_hp = 900.0
+	layout.rooms[arena].features = _item_boxes([Vector2(-12, -12), Vector2(12, -12), Vector2(-12, 12), Vector2(12, 12)])
 	for team in 4:
 		# Blue west, Red east, Green south, Yellow north (as Game3D.TEAM_SIDES)
 		var from: Vector2i = [Vector2i(-9, -2), Vector2i(5, -2), Vector2i(-2, 5), Vector2i(-2, -9)][team]
@@ -193,12 +205,16 @@ static func test_layout() -> RaceLayout:
 
 	var nw: int = layout.add_room("GuardRoomWest", Kind.ROOM, Vector2i(-9, -11), Vector2i(-2, -5))
 	var ne: int = layout.add_room("GuardRoomEast", Kind.ROOM, Vector2i(2, -11), Vector2i(9, -5))
-	layout.rooms[nw].features = [[Feature.ORB, Vector2(-6, 0)]]
-	layout.rooms[ne].features = [[Feature.ORB, Vector2(6, 0)]]
+	layout.rooms[nw].features = [[Feature.ORB, Vector2(-6, 0)],
+		[Feature.SKELETON_WARRIOR, Vector2(2, -4)], [Feature.SKELETON_MINION, Vector2(-2, -6)]]
+	layout.rooms[ne].features = [[Feature.ORB, Vector2(6, 0)],
+		[Feature.SKELETON_WARRIOR, Vector2(-2, -4)], [Feature.SKELETON_ARCHER, Vector2(4, -8)]]
 	layout.add_door(Vector2i(-4, -5), DoorKind.BOSS, arena)
 	layout.add_door(Vector2i(4, -5), DoorKind.BOSS, arena)
 
-	layout.add_room("GreatHall", Kind.CORRIDOR, Vector2i(-9, -15), Vector2i(9, -11))
+	var hall: int = layout.add_room("GreatHall", Kind.CORRIDOR, Vector2i(-9, -15), Vector2i(9, -11))
+	layout.rooms[hall].features = _item_boxes([Vector2(-27, 0), Vector2(-24, 0), Vector2(-21, 0),
+		Vector2(21, 0), Vector2(24, 0), Vector2(27, 0)])
 	layout.add_door(Vector2i(-6, -11), DoorKind.GAP)
 	layout.add_door(Vector2i(6, -11), DoorKind.GAP)
 
@@ -209,10 +225,46 @@ static func test_layout() -> RaceLayout:
 	layout.rooms[library].features = [[Feature.CHEST, Vector2(4, 0)], [Feature.BIG_ORB, Vector2(-4, 8)]]
 	layout.add_door(Vector2i(9, -13), DoorKind.GAP)
 
-	var guardian: int = layout.add_room("GuardianHall", Kind.ARENA, Vector2i(-6, -27), Vector2i(6, -15))
-	layout.rooms[guardian].boss_hp = 1400.0
-	layout.add_door(Vector2i(0, -15), DoorKind.ARCH)
+	# The split: crypt (west) and barracks (east), a shrine between them
+	var crypt: int = layout.add_room("Crypt", Kind.ROOM, Vector2i(-9, -23), Vector2i(-3, -15))
+	layout.rooms[crypt].features = [[Feature.ORB, Vector2(0, 4)], [Feature.SKELETON_MAGE, Vector2(0, -10)],
+		[Feature.SKELETON_MINION, Vector2(-4, -4)], [Feature.SKELETON_MINION, Vector2(4, -4)]]
+	layout.add_door(Vector2i(-6, -15), DoorKind.GAP)
+	var barracks: int = layout.add_room("Barracks", Kind.ROOM, Vector2i(3, -23), Vector2i(9, -15))
+	layout.rooms[barracks].features = [[Feature.ARMOR, Vector2(0, 4)], [Feature.SKELETON_WARRIOR, Vector2(-3, -6)],
+		[Feature.SKELETON_WARRIOR, Vector2(3, -6)], [Feature.SKELETON_ARCHER, Vector2(0, -12)]]
+	layout.add_door(Vector2i(6, -15), DoorKind.GAP)
+	var shrine: int = layout.add_room("Shrine", Kind.TREASURE, Vector2i(-3, -21), Vector2i(3, -15))
+	layout.rooms[shrine].features = _item_boxes([Vector2(-4, -4), Vector2(4, -4), Vector2(-4, 4), Vector2(4, 4)])
+	layout.add_door(Vector2i(-3, -18), DoorKind.ARCH)
+	layout.add_door(Vector2i(3, -18), DoorKind.ARCH)
 
-	layout.add_room("Sanctum", Kind.ALTAR, Vector2i(-3, -31), Vector2i(3, -27))
-	layout.add_door(Vector2i(0, -27), DoorKind.BOSS, guardian)
+	# Two long passages north, a loot gallery between them
+	for side: int in [-1, 1]:
+		var passage: int = layout.add_room("Passage%s" % ("West" if side < 0 else "East"), Kind.CORRIDOR,
+			Vector2i(5 * side if side > 0 else -9, -35), Vector2i(9 if side > 0 else -5, -23))
+		layout.rooms[passage].features = _item_boxes([Vector2(-4, 0), Vector2(0, 0), Vector2(4, 0)])
+		layout.add_door(Vector2i(7 * side, -23), DoorKind.GAP)
+		layout.add_door(Vector2i(5 * side, -27), DoorKind.ARCH)
+		layout.add_door(Vector2i(7 * side, -35), DoorKind.GAP)
+	var gallery: int = layout.add_room("Gallery", Kind.TREASURE, Vector2i(-5, -31), Vector2i(5, -23))
+	layout.rooms[gallery].features = [[Feature.CHEST, Vector2(0, -6)], [Feature.BIG_ORB, Vector2(0, 6)]]
+
+	var antechamber: int = layout.add_room("Antechamber", Kind.CORRIDOR, Vector2i(-9, -39), Vector2i(9, -35))
+	layout.rooms[antechamber].features = _item_boxes([Vector2(-4, 0), Vector2(0, 0), Vector2(4, 0)])
+
+	var guardian: int = layout.add_room("GuardianHall", Kind.ARENA, Vector2i(-6, -51), Vector2i(6, -39))
+	layout.rooms[guardian].boss_hp = 1400.0
+	layout.add_door(Vector2i(0, -39), DoorKind.ARCH)
+
+	layout.add_room("Sanctum", Kind.ALTAR, Vector2i(-3, -55), Vector2i(3, -51))
+	layout.add_door(Vector2i(0, -51), DoorKind.BOSS, guardian)
 	return layout
+
+
+## Item boxes at each of `offsets` (from the room's center, in metres).
+static func _item_boxes(offsets: Array[Vector2]) -> Array:
+	var features: Array = []
+	for offset: Vector2 in offsets:
+		features.append([Feature.ITEM_BOX, offset])
+	return features

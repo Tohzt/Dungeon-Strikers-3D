@@ -212,6 +212,7 @@ func _goal_points_near(sources: Array[Vector3]) -> Array[Vector3]:
 
 func _process(delta: float) -> void:
 	_update_listener()
+	_update_shake(delta)
 	if not _placed:
 		_place_on_targets()
 	if !is_active:
@@ -326,6 +327,15 @@ func _update_listener() -> void:
 	_listener.global_transform = Transform3D(global_transform.basis, global_position + forward * reach)
 	if not _listener.is_current():
 		_listener.make_current()
+
+
+## Shake (see CameraShake) about where the line of sight meets the floor.
+func _update_shake(delta: float) -> void:
+	var forward: Vector3 = -global_transform.basis.z
+	var to_floor: float = 20.0  # Looking level or up: just somewhere ahead
+	if forward.y < -0.001:
+		to_floor = -global_position.y / forward.y
+	CameraShake.apply(self, delta, to_floor, global_position + forward * to_floor)
 
 
 ## `point` moved hud_margin toward the bottom of the screen (along the ground).

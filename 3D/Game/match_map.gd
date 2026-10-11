@@ -41,6 +41,17 @@ const DROP_NAMES: Dictionary[BossDrop.Kind, String] = {
 	BossDrop.Kind.BALL: "Soccer Ball",
 }
 
+## How the match is seen (Players.view): the shared top-down camera, or the
+## souls-like third-person camera behind the player. Third-person needs a
+## screen of one's own, so local co-op always plays top-down.
+enum View { TOP_DOWN, THIRD_PERSON }
+## In the order the lobby's View button cycles.
+const VIEWS: Array[View] = [View.THIRD_PERSON, View.TOP_DOWN]
+const VIEW_NAMES: Dictionary[View, String] = {
+	View.TOP_DOWN: "Top-Down",
+	View.THIRD_PERSON: "Third-Person",
+}
+
 
 static func scene_of(map: Map) -> String:
 	return SCENES[map]
@@ -52,6 +63,10 @@ static func name_of(map: Map) -> String:
 
 static func drop_name(kind: BossDrop.Kind) -> String:
 	return DROP_NAMES.get(kind, "?")
+
+
+static func view_name(view: View) -> String:
+	return VIEW_NAMES.get(view, "?")
 
 
 static func max_teams(map: Map) -> int:

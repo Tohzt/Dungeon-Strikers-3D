@@ -94,6 +94,9 @@ const BREAK_TIME := 0.15
 ## Dropped on death: tossed this hard, up and away.
 const DROP_IMPULSE := 3.0
 var rarity: int = WeaponRarity.Tier.COMMON
+## Multiplies the damage and knockback of its hits (a giant wild-item
+## weapon's, see make_giant).
+var power: float = 1.0
 var max_durability: int = 1
 var durability: int = 1
 var is_broken: bool = false
@@ -346,7 +349,7 @@ func _swing_contact(solid: bool) -> void:
 		linear_velocity *= -SOLID_BOUNCE
 	else:
 		swing_time_left += Combat.HITSTOP_LIGHT  # The arm pauses; keep the window open as long
-	if wielder is PlayerClass3D:
+	if wielder and wielder.has_method(&"swing_contact"):
 		wielder.swing_contact(self, solid)
 
 
@@ -380,12 +383,14 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			var travel := Vector3.ZERO if thrown else Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
 			Behavior.hit_ball(body, dir, travel, knockback, attacker)
 			continue
+		damage *= power
+		knockback *= power
 		if final_use:
 			damage *= FINAL_DAMAGE_MULTIPLIER
 			knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
-		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D
+		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D
 	if contact:
 		_swing_contact(solid)
 	# One use per swing or throw, however many it hits
@@ -585,9 +590,9 @@ func _let_go_thrown(spin_direction: float) -> void:
 	_update_collisions("projectile")
 
 
-## Empty whichever of the wielder's hands was holding this.
+## Empty whichever of the wielder's hands (a player's or an enemy's) was holding this.
 func _clear_from_wielder() -> void:
-	if not is_instance_valid(wielder) or not wielder is PlayerClass3D:
+	if not is_instance_valid(wielder) or not "held_weapon_left" in wielder:
 		return
 	if wielder.held_weapon_left == self:
 		wielder.held_weapon_left = null
@@ -596,6 +601,26 @@ func _clear_from_wielder() -> void:
 
 
 # ===== RARITY & DURABILITY =====
+
+## A wild item's giant version: `size` times as big (its model and its
+## hitbox) and hitting `hit_power` times as hard. Call on every machine,
+## before it's handed out.
+func make_giant(size: float, hit_power: float) -> void:
+	power = hit_power
+	var model: Node3D = get_node_or_null(^"Model") as Node3D
+	if model:
+		model.scale *= size
+		model.position *= size
+	var box := Collision.shape as BoxShape3D if Collision else null
+	if box:
+		box = box.duplicate()  # The scene's shape is shared by every copy
+		box.size *= size
+		Collision.shape = box
+		Collision.position *= size
+	for child: Node in get_children():
+		if child is WeaponTrail3D:
+			child.fit_blade()  # A giant blade leaves a giant trail
+
 
 ## Make this a `tier` weapon, at full durability. Call on every machine.
 func set_rarity(tier: int) -> void:
@@ -671,6 +696,7 @@ func _break() -> void:
 		burst(get_world_3d(), global_position, radius, Properties.break_burst_damage * break_burst_scale,
 			Properties.break_burst_knockback * break_burst_scale, breaker, exclude)
 	Sfx.play(&"weapon_break", global_position)
+	CameraShake.add(CameraShake.MEDIUM, global_position)
 	WeaponShatter3D.spawn(get_parent(), global_position, shatter_color(), radius)
 	if wielder:
 		unequip()
@@ -847,9 +873,10 @@ func _equipped(player_name: String, is_left: bool) -> void:
 		hand_to(player, is_left)
 
 
-## Put this in `player`'s hand. Online, every machine does this once the
-## server has decided, and that player's machine simulates it from then on.
-func hand_to(player: PlayerClass3D, is_left: bool) -> void:
+## Put this in `player`'s hand (a player, or an enemy like SkeletonEnemy3D:
+## anything with equip_weapon). Online, every machine does this once the
+## server has decided, and that wielder's machine simulates it from then on.
+func hand_to(player: Node3D, is_left: bool) -> void:
 	if wielder:
 		unequip()
 	if Net.in_session():

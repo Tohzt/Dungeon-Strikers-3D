@@ -26,6 +26,7 @@ const EMPTY_CARD_BORDER := Color(0.2, 0.09, 0.05, 1)
 @onready var solo_bots: Button = %SoloBots
 @onready var solo_map: Button = %SoloMap
 @onready var solo_drop: Button = %SoloDrop
+@onready var solo_view: Button = %SoloView
 @onready var lobby_map: Button = %LobbyMap
 @onready var lobby_drop: Button = %LobbyDrop
 @onready var solo_character: Button = %SoloCharacter
@@ -47,6 +48,7 @@ const EMPTY_CARD_BORDER := Color(0.2, 0.09, 0.05, 1)
 @onready var online_bots: Button = %OnlineBots
 @onready var online_map: Button = %OnlineMap
 @onready var online_drop: Button = %OnlineDrop
+@onready var online_view: Button = %OnlineView
 @onready var online_character: Button = %OnlineCharacter
 @onready var online_team: Button = %OnlineTeam
 
@@ -91,6 +93,8 @@ func _ready() -> void:
 		button.pressed.connect(_cycle_map)
 	for button: Button in [solo_drop, lobby_drop, online_drop]:
 		button.pressed.connect(_cycle_boss_drop)
+	for button: Button in [solo_view, online_view]:
+		button.pressed.connect(_cycle_view)
 	lobby_bots.pressed.connect(_toggle_bots)
 	solo_bots.pressed.connect(_toggle_bots)
 	_setup_cycler(solo_character, _step_solo_character)
@@ -359,13 +363,27 @@ func _cycle_boss_drop() -> void:
 	_refresh_lobby()
 
 
-## Map and Boss Drop button labels for the current format.
+## View button: top-down or third-person camera. Not offered in the local
+## lobby, whose players share one screen (always top-down).
+func _cycle_view() -> void:
+	if online_lobby.visible:
+		Net.set_view(Players.next_view())
+		return
+	Players.view = Players.next_view()
+	_refresh_lobby()
+
+
+## Map, Boss Drop and View button labels for the current format.
 func _map_text() -> String:
 	return "Map: " + MatchMap.name_of(Players.map)
 
 
 func _drop_text() -> String:
 	return "Boss Drop: " + MatchMap.drop_name(Players.boss_drop)
+
+
+func _view_text() -> String:
+	return "View: " + MatchMap.view_name(Players.view)
 
 
 ## Bots button: cycle the match size bots fill up to (Off, 1v1, 2v2, ...).
@@ -431,6 +449,7 @@ func _refresh_lobby() -> void:
 		button.text = _map_text()
 	for button: Button in [solo_drop, lobby_drop]:
 		button.text = _drop_text()
+	solo_view.text = _view_text()
 
 	var solo_match: Array[int] = Players.teams_with_bots(Players.bot_fill_count, [solo_team_choice])
 	solo_teams.text = "Teams: " + Players.format_name(solo_match)
@@ -548,10 +567,11 @@ func _refresh_online_lobby() -> void:
 	online_start.visible = Net.is_host
 	# Only the leader picks the format (it's sent with the match start), but
 	# everyone sees it
-	for button: Button in [online_teams, online_bots, online_map, online_drop]:
+	for button: Button in [online_teams, online_bots, online_map, online_drop, online_view]:
 		button.disabled = not Net.is_host
 	online_map.text = _map_text()
 	online_drop.text = _drop_text()
+	online_view.text = _view_text()
 	online_bots.text = "Bots:  <  %d  >" % Net.bots.size()
 	var teams: Array[int] = Net.seat_teams()
 	var split: bool = Players.team_split(teams) != ""
@@ -577,7 +597,7 @@ func _refresh_online_lobby() -> void:
 func _chain_online_focus() -> void:
 	var chain: Array[Control] = []
 	for button: Button in [online_character, online_team, online_teams, online_bots, online_map, online_drop,
-			online_start, %OnlineLeave]:
+			online_view, online_start, %OnlineLeave]:
 		if button.visible and not button.disabled:
 			chain.append(button)
 	for i in chain.size():

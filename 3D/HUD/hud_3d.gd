@@ -33,9 +33,10 @@ func setup(p: PlayerClass3D, slot: PlayerSlot) -> void:
 
 func _process(_delta: float) -> void:
 	if _down_label and player:
-		_down_label.visible = player.is_knocked_out
-		if player.is_knocked_out:
-			_down_label.text = "Knocked out: %ds" % ceili(player.dead_time)
+		_down_label.visible = player.is_dead()
+		if player.is_dead():
+			var what: String = "Knocked out" if player.is_knocked_out else "Respawning"
+			_down_label.text = "%s: %ds" % [what, ceili(player.dead_time)]
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)

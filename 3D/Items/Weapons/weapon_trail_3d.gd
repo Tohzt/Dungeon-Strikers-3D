@@ -55,6 +55,12 @@ func setup(owner_weapon: Weapon3D, color: Color) -> void:
 	material.vertex_color_use_as_albedo = true
 	material.albedo_color = color
 	material_override = material
+	fit_blade()
+
+
+## Line the ribbon up with the blade's collision box again (e.g. after
+## Weapon3D.make_giant has made it bigger).
+func fit_blade() -> void:
 	var box := weapon.Collision.shape as BoxShape3D if weapon.Collision else null
 	var center: Vector3 = weapon.Collision.position if weapon.Collision else Vector3.ZERO
 	var half: float = box.size.y * 0.5 if box else 0.5

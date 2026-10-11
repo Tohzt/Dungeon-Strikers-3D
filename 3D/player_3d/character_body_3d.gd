@@ -228,13 +228,18 @@ var body_tilt: float = 0.0
 # Kills: the last opponent to hit us gets the kill if we die within
 # KILL_CREDIT_TIME of it, even if something else (a boss stomp) finishes
 # us off. Dying takes us out of play for a while (Game3D.revive_delay): we
-# respawn at our team's spawn, or with Game3D.knockouts, lie where we fell
-# and get back up there.
+# lie where we fell, then respawn at our team's spawn, or with
+# Game3D.knockouts, get back up there.
 const KILL_CREDIT_TIME := 4.0
+## Killed (not knocked out): how long before getting up we vanish from the
+## floor, to move to the spawn point unseen.
+const RESPAWN_HIDE_TIME := 0.3
 var _last_attacker_name: String = ""
 var _last_attacker_msec: int = -1
 ## Seconds left before respawning; 0 = alive.
 var dead_time: float = 0.0
+## Wild items' effects still running: perk -> seconds left (see add_timed_perk).
+var timed_perks: Dictionary[Perk, float] = {}
 ## How many times we've died this match (knockouts take longer each time).
 var deaths: int = 0
 ## Knocked out rather than gone: still in the level, lying where we fell.
@@ -306,8 +311,7 @@ func _physics_process(delta: float) -> void:
 	if is_remote:
 		return
 	if is_dead():
-		if is_knocked_out:
-			_fall_while_down(delta)
+		_fall_while_down(delta)
 		return
 	if hitstop > 0.0:
 		hitstop -= delta
@@ -391,9 +395,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_timed_perks(delta)  # Every machine, alive or not, so they all agree
 	if is_dead():
 		_update_death(delta)
-		if is_remote and is_knocked_out:
+		if is_remote:
 			_process_remote(delta)  # Lying where we fell, but still falling there
 		return
 	if is_remote:
@@ -780,6 +785,7 @@ func _chops(arm: PlayerArm3D) -> bool:
 ## A held weapon's swing connected (see Weapon3D._swing_contact).
 func swing_contact(weapon: Weapon3D, solid: bool) -> void:
 	arm_of(weapon == held_weapon_left).start_contact(solid)
+	_shake_view(CameraShake.LIGHT if solid else CameraShake.TINY)
 
 
 ## Either arm is mid-swing (weapon or fist), drawing one back, or
@@ -1005,6 +1011,7 @@ func _check_fist_hits(arm: PlayerArm3D) -> void:
 			add_knockback(recoil.normalized() * FIST_RECOIL)
 	if contact:
 		arm.start_contact(solid)
+		_shake_view(CameraShake.LIGHT if solid else CameraShake.TINY)
 
 
 # ===== HITS & DEATH =====
@@ -1045,6 +1052,7 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 	_share_iframes(was_in_iframes)
 	if not was_in_iframes:
 		hitstop = Combat.HITSTOP
+		_shake_view(CameraShake.MEDIUM)
 		if exhausted:
 			_stagger()
 	if Entity.hp <= 0:
@@ -1072,39 +1080,39 @@ func is_dead() -> bool:
 	return dead_time > 0.0
 
 
-## Killed: gone from the arena until the respawn delay runs out. The owner
-## calls this the moment it happens and every machine again when Game3D
-## announces the death, so a second call does nothing.
+## Killed: we collapse where we stand and lie there until the revive delay
+## runs out, then get up at our team's spawn (or, with Game3D.knockouts,
+## right where we lay). The owner calls this the moment it happens and
+## every machine again when Game3D announces the death, so a second call
+## does nothing.
 func die() -> void:
 	if is_dead():
 		return
 	armored = false  # Comes back without it
 	deaths += 1
+	_shake_view(CameraShake.HEAVY)
 	var delay: float = Global.Game3D.revive_delay(self, deaths) if Global.Game3D else 0.0
-	if Global.Game3D and Global.Game3D.knockouts and delay > 0.0:
-		_knock_out(delay)
-		return
-	if _is_local():
+	var knocked_out: bool = Global.Game3D and Global.Game3D.knockouts and delay > 0.0
+	if _is_local() and not knocked_out:
 		# Our weapons stay where we fell, for anyone to take
 		for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 			if weapon:
 				weapon.drop()
-		respawn()  # Wait at the spawn point, so remote copies don't streak there later
 	if delay <= 0.0:
+		if _is_local():
+			respawn()
 		return
-	dead_time = delay
-	_last_attacker_name = ""
-	_last_attacker_msec = -1
-	_cancel_attacks()
-	for arm: PlayerArm3D in arms:
-		arm.attack.armed = false
-	_alive_collision_layer = collision_layer
-	collision_layer = 0
-	visible = false
+	_go_down(delay, knocked_out)
 
 
 func _update_death(delta: float) -> void:
 	dead_time = max(dead_time - delta, 0.0)
+	if not is_knocked_out and visible and dead_time <= RESPAWN_HIDE_TIME:
+		# Vanish just before getting up, so the move to the spawn point
+		# (snapped to on remote copies too) happens out of sight
+		visible = false
+		if _is_local():
+			respawn()
 	if dead_time > 0.0:
 		return
 	collision_layer = _alive_collision_layer
@@ -1117,11 +1125,11 @@ func _update_death(delta: float) -> void:
 	Entity.start_iframes()  # A moment of spawn protection
 
 
-## Knocked out for `delay` seconds: we drop where we stand and stay there,
-## weapons still in hand, where enemies can't hit us and others walk
-## through us. Like die(), on every machine.
-func _knock_out(delay: float) -> void:
-	is_knocked_out = true
+## Down for `delay` seconds: we drop where we stand and stay there, where
+## enemies can't hit us and others walk through us. Knocked out, we keep
+## our weapons and get back up on this spot. Like die(), on every machine.
+func _go_down(delay: float, knocked_out: bool) -> void:
+	is_knocked_out = knocked_out
 	dead_time = delay
 	_last_attacker_name = ""
 	_last_attacker_msec = -1
@@ -1140,7 +1148,7 @@ func _knock_out(delay: float) -> void:
 	visual.play_down()
 
 
-## Owner, while knocked out: just fall to the floor (a stomp may have
+## Owner, while down: just fall to the floor (a stomp may have
 ## knocked us into the air) and keep everyone else posted.
 func _fall_while_down(delta: float) -> void:
 	velocity.x = 0.0
@@ -1177,8 +1185,10 @@ func set_leader(leading: bool) -> void:
 		_crown = MeshInstance3D.new()
 		_crown.name = "Crown"
 		_crown.mesh = mesh
-		_crown.position = Vector3(0, 1.4, 0)
-		add_child(_crown)
+		# On the visual (whose origin is at our feet), so it grows and
+		# shrinks with the body (see the "size" perk stat)
+		_crown.position = Vector3(0, 2.4, 0)
+		visual.add_child(_crown)
 	if _crown:
 		_crown.visible = leading
 
@@ -1308,6 +1318,7 @@ func _receive_blocked_hit(damage: float, knockback_velocity: Vector3, shield: Sh
 	Entity.hp -= damage * BLOCK_DAMAGE_RATIO
 	Entity.drain_stamina(damage * BLOCK_STAMINA_PER_DAMAGE * perk_stat(&"block_stamina"))
 	hitstop = Combat.HITSTOP
+	_shake_view(CameraShake.LIGHT)
 	if Entity.stamina <= 0.0:
 		_stagger()
 	if Entity.hp <= 0:
@@ -1421,7 +1432,34 @@ func perk_stat(stat_name: StringName) -> float:
 ## Call on every machine.
 func add_perk(perk: Perk) -> void:
 	perks.add(perk)
+	_on_perks_changed()
+
+
+## A wild item's effect (see WildItem): `perk` for `seconds`, on every
+## machine. Getting the same one again while it lasts starts its clock over.
+func add_timed_perk(perk: Perk, seconds: float) -> void:
+	if not timed_perks.has(perk):
+		perks.add(perk)
+		_on_perks_changed()
+	timed_perks[perk] = seconds
+
+
+func _update_timed_perks(delta: float) -> void:
+	if timed_perks.is_empty():
+		return
+	for perk: Perk in timed_perks.keys():
+		timed_perks[perk] -= delta
+		if timed_perks[perk] <= 0.0:
+			timed_perks.erase(perk)
+			perks.remove(perk)
+			_on_perks_changed()
+
+
+func _on_perks_changed() -> void:
 	Entity.refresh_max_stats()
+	var size: float = perk_stat(&"size")
+	var tween: Tween = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(visual, ^"scale", Vector3.ONE * size, 0.6)
 
 
 # ===== NETWORK =====
@@ -1429,6 +1467,13 @@ func add_perk(perk: Perk) -> void:
 ## Whether this machine controls this player (always, offline).
 func _is_local() -> bool:
 	return not Net.in_session() or is_multiplayer_authority()
+
+
+## Shake the camera (see CameraShake) for something that happened to us,
+## if we're a person playing on this machine (bots don't shake the view).
+func _shake_view(amount: float) -> void:
+	if _is_local() and not (slot and slot.is_bot):
+		CameraShake.add(amount)
 
 
 ## If that hit just started our iframes, flinch and show the fade on

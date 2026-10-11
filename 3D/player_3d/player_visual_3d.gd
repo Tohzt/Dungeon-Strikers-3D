@@ -40,7 +40,7 @@ const BACKSTEP_CLIP := &"MovementAdvanced/Dodge_Backward"
 const STAGGER_CLIP := &"General/Hit_B"
 const HIT_CLIP := &"General/Hit_A"
 const SPAWN_CLIP := &"General/Spawn_Ground"
-## Knocked out (see Game3D.knockouts): fall down and lie there.
+## Killed or knocked out: fall down and lie there.
 const DOWN_CLIP := &"General/Death_A"
 
 ## Ground speeds (m/s) the locomotion blend puts each clip at. Above
@@ -614,7 +614,7 @@ func play_spawn() -> void:
 		_go(&"Spawn")
 
 
-## Knocked out: collapse and stay down until play_spawn().
+## Killed or knocked out: collapse and stay down until play_spawn().
 func play_down() -> void:
 	if _playback:
 		_go(&"Down")

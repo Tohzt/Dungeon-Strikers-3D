@@ -21,6 +21,7 @@ const STATS: Dictionary[StringName, String] = {
 	&"damage_taken": "Damage taken (negative = less)",
 	&"knockback_taken": "Knockback taken (negative = less)",
 	&"block_stamina": "Stamina lost blocking a hit (negative = less)",
+	&"size": "How big the body looks (wild items: Giant, Pipsqueak)",
 }
 ## No stat goes below this multiplier, however many negatives stack up.
 const MIN_MULTIPLIER := 0.1
@@ -30,6 +31,11 @@ var perks: Array[Perk] = []
 
 func add(perk: Perk) -> void:
 	perks.append(perk)
+
+
+## Take one copy of `perk` back off (a wild item's effect wearing off).
+func remove(perk: Perk) -> void:
+	perks.erase(perk)
 
 
 ## The multiplier for `stat`: 1.0 plus every taken perk's bonus to it.

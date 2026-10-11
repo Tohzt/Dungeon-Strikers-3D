@@ -143,6 +143,14 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Boss Drop: Skull"
 
+[node name="SoloView" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "View: Third-Person"
+
 [node name="Prompt" type="Label" parent="Center/Content/Frame/SinglePlayer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
@@ -507,6 +515,14 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Boss Drop: Skull"
+
+[node name="OnlineView" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "View: Third-Person"
 
 [node name="ActionRow" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
 layout_mode = 2

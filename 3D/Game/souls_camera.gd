@@ -120,6 +120,7 @@ func _process(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, yaw, clamp(delta * rotate_ease, 0.0, 1.0))
 	spring.rotation.x = lerp_angle(spring.rotation.x, pitch, clamp(delta * rotate_ease, 0.0, 1.0))
 	global_position = global_position.lerp(_pivot_point(), clamp(delta * follow_speed, 0.0, 1.0))
+	CameraShake.apply(camera, delta, spring.get_hit_length(), _pivot_point(), true)
 
 
 func _pivot_point() -> Vector3:
@@ -150,7 +151,7 @@ func _menu_open() -> bool:
 
 # ===== LOCK-ON =====
 
-## Bosses still fighting and every other player.
+## Bosses still fighting, living enemies and every other player.
 func _lock_candidates() -> Array[Node3D]:
 	var found: Array[Node3D] = []
 	if not Global.Game3D:
@@ -158,6 +159,9 @@ func _lock_candidates() -> Array[Node3D]:
 	for boss: Boss3D in Global.Game3D.bosses:
 		if is_instance_valid(boss):
 			found.append(boss)
+	for enemy: Node in get_tree().get_nodes_in_group(SkeletonEnemy3D.GROUP):
+		if enemy is SkeletonEnemy3D and not enemy.is_dead:
+			found.append(enemy)
 	for other: PlayerClass3D in Global.Game3D.players:
 		if other != player and is_instance_valid(other) and not other.is_dead():
 			found.append(other)
