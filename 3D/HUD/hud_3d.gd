@@ -1,30 +1,51 @@
 class_name HUD3D extends CanvasLayer
 @export var player: PlayerClass3D
 
-@onready var health_bar:  TextureProgressBar = $HealthBar
-@onready var stamina_bar: TextureProgressBar = $StaminaBar
-@onready var mana_bar:    TextureProgressBar = $ManaBar
-@onready var player_icon: TextureRect        = $PlayerIcon
+@onready var panel:       PanelContainer = $Panel
+@onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
+## The blue bar: the player's carry meter (see PlayerClass3D.carry).
+@onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
+@onready var player_icon: TextureRect    = $Panel/Row/PlayerIcon
 
-## Screen space the HUD art occupies, including its margin from the edge.
-const PANEL_SIZE := Vector2(304, 112)
+## Gap between the HUD panel and the screen edges.
+const MARGIN := 16
 
 var signals_connected: bool = false
+## "Knocked out: 7s" under the bars while the player is down (knockout modes).
+var _down_label: Label
+## While a killed player is down: who they'll get back up as (see
+## PlayerClass3D.next_character), stepped through with their own left/right
+## (or clicked, on keyboard & mouse). Made the first time it's needed.
+var _picker: CharacterSelectPanel
+const PICKER_STAGE_SIZE := Vector2(240, 190)
+var _corner: Control.LayoutPreset = Control.PRESET_TOP_LEFT
 
 
-## Binds this HUD to a player and moves it to that player's corner:
-## P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right.
-func setup(p: PlayerClass3D, slot: PlayerSlot) -> void:
+## Binds this HUD to a player and moves it to `corner` (the player's place
+## among this machine's humans): top-left, top-right, bottom-left,
+## bottom-right. Anchored, so it stays in the corner whatever shape the
+## window is.
+func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
 	player = p
-	var screen := Vector2(
-		ProjectSettings.get_setting("display/window/size/viewport_width"),
-		ProjectSettings.get_setting("display/window/size/viewport_height"))
-	offset = Vector2(
-		screen.x - PANEL_SIZE.x if slot.index % 2 == 1 else 0.0,
-		screen.y - PANEL_SIZE.y if slot.index >= 2 else 0.0)
+	var corners: Array[Control.LayoutPreset] = [Control.PRESET_TOP_LEFT, Control.PRESET_TOP_RIGHT,
+		Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]
+	_corner = corners[corner % corners.size()]
+	panel.set_anchors_and_offsets_preset(_corner, Control.PRESET_MODE_MINSIZE, MARGIN)
 	player_icon.modulate = slot.color
+	if not _down_label:
+		_down_label = Label.new()
+		_down_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
+		_down_label.hide()
+		$Panel/Row/Bars.add_child(_down_label)
 
 func _process(_delta: float) -> void:
+	if _down_label and player:
+		_down_label.visible = player.is_dead()
+		if player.is_dead():
+			var what: String = "Knocked out" if player.is_knocked_out else "Respawning"
+			_down_label.text = "%s: %ds" % [what, ceili(player.dead_time)]
+	if player:
+		_update_picker()
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)
@@ -34,22 +55,66 @@ func _connect_signals(eb: Node) -> void:
 	if not eb:
 		return
 	eb.hp_changed.connect(_on_hp_changed)
-	eb.mana_changed.connect(_on_mana_changed)
-	eb.stamina_changed.connect(_on_stamina_changed)
+	player.carry_changed.connect(_on_carry_changed)
+	_on_carry_changed(player.carry, PlayerClass3D.CARRY_MAX)
 
 	# Get initial values immediately after connecting
 	_on_hp_changed(eb.hp, eb.hp_max)
-	_on_mana_changed(eb.mana, eb.mana_max)
-	_on_stamina_changed(eb.stamina, eb.stamina_max)
 
 func _on_hp_changed(new_hp: float, max_hp: float) -> void:
 	health_bar.max_value = max_hp
 	health_bar.value = new_hp
 
-func _on_mana_changed(new_mana: float, max_mana: float) -> void:
-	mana_bar.max_value = max_mana
-	mana_bar.value = new_mana
+func _on_carry_changed(new_carry: float, max_carry: float) -> void:
+	carry_bar.max_value = max_carry
+	carry_bar.value = new_carry
 
-func _on_stamina_changed(new_stamina: float, max_stamina: float) -> void:
-	stamina_bar.max_value = max_stamina
-	stamina_bar.value = new_stamina
+
+# ===== CHARACTER PICK WHILE DOWN =====
+
+func _update_picker() -> void:
+	var picking: bool = player.is_dead() and player.slot and player.is_local_person() \
+			and player.dead_time > PlayerClass3D.RESPAWN_HIDE_TIME
+	if not picking:
+		if _picker:
+			_picker.hide()
+		return
+	if not _picker:
+		_make_picker()
+	if not _picker.visible:
+		_picker.show()
+		_show_pick(player.slot.character)
+	var slot: PlayerSlot = player.slot
+	if Input.is_action_just_pressed(slot.action(&"move_left")):
+		_step_pick(-1)
+	elif Input.is_action_just_pressed(slot.action(&"move_right")):
+		_step_pick(1)
+
+
+func _make_picker() -> void:
+	_picker = CharacterSelectPanel.new(PICKER_STAGE_SIZE)
+	_picker.teams_shown = false
+	_picker.focusable = false
+	_picker.interactive = player.slot.uses_keyboard_mouse()
+	_picker.set_header("Get back up as...")
+	_picker.character_picked.connect(_show_pick)
+	_picker.character_stepped.connect(_step_pick)
+	add_child(_picker)
+	# Beside the HUD panel: below it at the top of the screen, above it at the bottom
+	_picker.set_anchors_and_offsets_preset(_corner, Control.PRESET_MODE_MINSIZE, MARGIN)
+	var shift: float = panel.get_combined_minimum_size().y + MARGIN
+	if _corner in [Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]:
+		shift = -shift
+	_picker.offset_top += shift
+	_picker.offset_bottom += shift
+
+
+func _step_pick(step: int) -> void:
+	_show_pick(Roster.step(_picker.character, player.slot.team, step))
+
+
+func _show_pick(character: int) -> void:
+	if not Roster.fits_team(character, player.slot.team):
+		return
+	player.next_character = character
+	_picker.show_choice(player.slot.team, character)

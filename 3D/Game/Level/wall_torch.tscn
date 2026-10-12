@@ -1,0 +1,29 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Assets/BetterDungeon/glb/torchWall.glb" id="1_sv5yp"]
+[ext_resource type="Script" path="res://3D/Game/Level/flicker_light.gd" id="2_3uxop"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wcj4v"]
+shading_mode = 0
+albedo_color = Color(1, 0.55, 0.15, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_o77pn"]
+material = SubResource("StandardMaterial3D_wcj4v")
+radius = 0.13
+height = 0.34
+
+[node name="WallTorch" type="Node3D" unique_id=1259693481]
+
+[node name="torchWall" parent="." unique_id=2143651968 instance=ExtResource("1_sv5yp")]
+
+[node name="Flame" type="MeshInstance3D" parent="." unique_id=96093599]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.08, 0.72)
+mesh = SubResource("SphereMesh_o77pn")
+
+[node name="Light" type="OmniLight3D" parent="." unique_id=2052031459]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 1.1)
+light_color = Color(1, 0.62, 0.3, 1)
+light_energy = 2.2
+omni_range = 9.0
+omni_attenuation = 1.2
+script = ExtResource("2_3uxop")

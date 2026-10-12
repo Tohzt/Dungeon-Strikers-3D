@@ -10,12 +10,11 @@ const BOT := -3
 
 @export var index: int = 0
 @export var device: int = KEYBOARD_MOUSE
+## Chosen in the menus (see Players.set_team); color follows it.
 @export var team: int = 0
 @export var color: Color = Color.WHITE
-## Off (Simple): one Attack button that picks the hand itself, and a Guard
-## button for shields. On: each hand has its own buttons (see
-## PlayerInputHandler3D). Switchable per player from the pause menu.
-@export var advanced_controls: bool = false
+## Index into PlayerVisual3D.CHARACTERS, chosen in the menus.
+@export var character: int = 0
 ## Played by the computer (BotInputHandler3D) instead of a device.
 @export var is_bot: bool = false
 

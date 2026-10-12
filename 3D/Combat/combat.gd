@@ -33,7 +33,7 @@ static func overlaps(world: World3D, shape: Shape3D, xform: Transform3D, exclude
 
 
 ## Whether a swing stops dead on `body` and springs back (players, blades,
-## walls), rather than following through it (the ball, minions).
+## walls, skeletons), rather than following through it (the ball, minions).
 static func is_solid(body: Node3D) -> bool:
 	return not body is Ball3D and not body is SlimeMinion3D
 
@@ -58,8 +58,7 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 
 
 ## Hit `body` with an attack travelling along `dir`. Players take damage and
-## get shoved (a raised shield facing the attack takes most of it for
-## stamina), bosses and minions take damage;
+## get shoved (a raised shield facing the attack takes most of it), bosses and minions take damage;
 ## other unfrozen physics bodies just get pushed. Returns true if a player,
 ## boss or minion took the hit.
 ## `attacker` is the player behind the attack, if any: their perks scale it,
@@ -68,7 +67,8 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
 ## Teammates pass through each other's attacks untouched.
-static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null) -> bool:
+## `knock_down` (a slide tackle) knocks a player down if it gets through.
+static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null, knock_down: bool = false) -> bool:
 	if are_teammates(body, attacker):
 		return false
 	dir.y = 0
@@ -86,19 +86,27 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 			if body.Entity and body.Entity.hp < body.Entity.hp_max * WOUNDED_HP_RATIO:
 				damage *= attacker.perk_stat(&"damage_vs_wounded")
 	if body is PlayerClass3D:
-		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
-	if body is Boss3D or body is SlimeMinion3D:
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker, knock_down)
+	if body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	if body is Ball3D:
 		body.touched_by(attacker)
+		Sfx.play_everywhere(&"hit_ball", body.global_position)
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
 
 
-## Whether `a` and `b` are different players on the same team.
+## Whether `a` and `b` are different players on the same team, or both
+## monsters (they don't fight each other).
 static func are_teammates(a: Node3D, b: Node3D) -> bool:
+	if is_monster(a) and is_monster(b):
+		return true
 	return a is PlayerClass3D and b is PlayerClass3D and a != b \
 		and a.slot and b.slot and a.slot.team == b.slot.team
+
+
+static func is_monster(node: Node3D) -> bool:
+	return node is Boss3D or node is SlimeMinion3D or node is SkeletonEnemy3D
 
 
 ## Whether `player`'s team has more kills than `other`'s.

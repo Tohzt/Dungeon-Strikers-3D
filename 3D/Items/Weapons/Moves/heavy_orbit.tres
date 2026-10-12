@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+
+[resource]
+script = ExtResource("1_move")
+charge_time = 0.5
+action = 2
+swings = false
+clip = &"General/Throw"
+orbit_radius = 3.2
+orbit_time = 1.0
+orbit_turns = 2.0
+action_damage_scale = 0.7
+action_knockback_scale = 1.0

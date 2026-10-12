@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://3D/Game/game_camera.tscn" id="3_dwu0v"]
 [ext_resource type="Script" uid="uid://cgp742w6j8vmw" path="res://3D/Game/tools.gd" id="3_gq62a"]
 [ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://3D/player_3d/player_3d.tscn" id="5_sboqw"]
-[ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.tres" id="5_uepvo"]
+[ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Dungeon/dungeon_mesh_library.res" id="5_uepvo"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="7_al1ea"]
 [ext_resource type="PackedScene" uid="uid://dufk577afwcoo" path="res://3D/Game/goal.tscn" id="8_al1ea"]
 [ext_resource type="Texture2D" uid="uid://cjuv6qpovopxf" path="res://Assets/Textures/soccer field.png" id="8_drgkw"]
@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" path="res://3D/HUD/boss_health_bar.tscn" id="18_bossbar"]
 [ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://3D/Perks/perk_director.gd" id="19_perks"]
 [ext_resource type="PackedScene" path="res://3D/HUD/perk_picker.tscn" id="20_picker"]
+[ext_resource type="PackedScene" path="res://3D/Items/Armor/armor_pickup.tscn" id="40_armor"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_uepvo"]
 sky_horizon_color = Color(0.5682602, 0.59314984, 0.6274216, 1)
@@ -170,3 +171,17 @@ boss = NodePath("../Boss")
 [node name="Perks" type="Node" parent="." unique_id=884120395 node_paths=PackedStringArray("picker")]
 script = ExtResource("19_perks")
 picker = NodePath("../PerkPicker")
+
+[node name="ArmorPickups" type="Node3D" parent="."]
+
+[node name="Armor1" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, 20)
+
+[node name="Armor2" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 20)
+
+[node name="Armor3" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -20)
+
+[node name="Armor4" parent="ArmorPickups" instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -20)

@@ -68,14 +68,19 @@ func _make_display_copy(scene: PackedScene, tier: int) -> Node3D:
 
 ## Whether `player` could take this stand's weapon right now.
 func can_give_to(player: PlayerClass3D) -> bool:
-	return _is_stocked() and _may_take(player) and reach.overlaps_body(player) \
-		and (not player.is_hand_occupied(false) or not player.is_hand_occupied(true))
+	return has_weapon_for(player) and reach.overlaps_body(player)
 
 
 ## Whether `player` could take a weapon here once in reach (bots use this to
-## pick a stand to walk to).
+## pick a stand to walk to): one they have a free hand for.
 func has_weapon_for(player: PlayerClass3D) -> bool:
-	return _is_stocked() and _may_take(player)
+	return _is_stocked() and _may_take(player) and player.free_hand_for(_stock_grip()) != null
+
+
+## Which hand(s) the weapon handed out here goes in.
+func _stock_grip() -> Weapon3D.Grip:
+	var weapon := _display as Weapon3D
+	return weapon.grip if weapon else Weapon3D.Grip.EITHER_HAND
 
 
 ## Whether there's a weapon here ready to hand out.
@@ -94,9 +99,11 @@ func _may_take(_player: PlayerClass3D) -> bool:
 func request_take(player: PlayerClass3D) -> bool:
 	if not can_give_to(player):
 		return false
-	var is_left: bool = player.is_hand_occupied(false)
+	var is_left: bool = player.free_hand_for(_stock_grip())
 	if not Net.in_session():
 		_given(player.name, is_left, _next_weapon_name())
+	elif Net.is_server:
+		_decide_take(player, is_left)  # A bot
 	else:
 		_request_take.rpc_id(Net.SERVER_ID, is_left)
 	return true
@@ -109,10 +116,13 @@ func _next_weapon_name() -> String:
 
 @rpc("any_peer", "reliable")
 func _request_take(is_left: bool) -> void:
-	if not Net.is_server or not _is_stocked():
-		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and _may_take(player) and not player.is_hand_occupied(is_left):
+	if Net.is_server:
+		_decide_take(Global.Game3D.rpc_sender(), is_left)
+
+
+## Server: give `player` the weapon if there's still one for them.
+func _decide_take(player: PlayerClass3D, is_left: bool) -> void:
+	if _is_stocked() and player and _may_take(player) and player.can_hold_grip(_stock_grip(), is_left):
 		_given.rpc(player.name, is_left, _next_weapon_name())
 
 
@@ -121,16 +131,22 @@ func _request_take(is_left: bool) -> void:
 @rpc("authority", "call_local", "reliable")
 func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
 	var scene: PackedScene = _take_stock()
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player and scene:
-		var weapon: Weapon3D = scene.instantiate()
-		weapon.name = weapon_name
-		Global.Game3D.add_weapon(weapon)
-		weapon.name = weapon_name  # Its _ready renames it after its Properties
-		weapon.set_rarity(_given_rarity)
-		weapon.global_transform = display_anchor.global_transform
-		weapon.hand_to(player, is_left)
+		_hand_weapon(scene, _given_rarity, player, is_left, weapon_name, display_anchor.global_transform)
 	_after_given()
+
+
+## Every machine: make a `scene` weapon named `weapon_name`, of rarity
+## `tier`, at `from`, and put it in `player`'s hand.
+func _hand_weapon(scene: PackedScene, tier: int, player: PlayerClass3D, is_left: bool, weapon_name: String, from: Transform3D) -> void:
+	var weapon: Weapon3D = scene.instantiate()
+	weapon.name = weapon_name
+	Global.Game3D.add_weapon(weapon)
+	weapon.name = weapon_name  # Its _ready renames it after its Properties
+	weapon.set_rarity(tier)
+	weapon.global_transform = from
+	weapon.hand_to(player, is_left)
 
 
 ## The weapon on display is being handed out: empty the stand for the

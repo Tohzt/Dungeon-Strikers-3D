@@ -9,13 +9,67 @@ class_name Weapon3D extends RigidBody3D
 @export var Behavior: WeaponBehavior3D
 @onready var Collision := $CollisionShape3D
 
-## Whether a quick tap plays the shoulder-swipe swing animation. Melee
-## weapons want the swing; a weapon that just fires in place (like the
-## crossbow) turns this off.
+## Whether a quick tap swings it (a melee weapon). A weapon that just fires
+## in place (like the bow) turns this off.
 @export var plays_swipe_animation: bool = true
 
+## Which hand can hold it. The right hand is the main hand: the KayKit
+## one-handed clips all swing with it. The left is the off hand, and swings
+## with the left arm of the dual-wield clips. A compatible pair (see
+## is_compatible_with) is dual wielded: they take turns on light attacks.
+enum Grip {
+	MAIN_HAND,  ## One-handed: the right hand first, the left if that's taken
+	OFF_HAND,  ## Left hand only (shield)
+	EITHER_HAND,  ## Light enough to swing from either hand
+	TWO_HANDED,  ## Right hand, and the left hand has to be free too
+}
+@export var grip: Grip = Grip.MAIN_HAND
+## A two-handed weapon that sits in the left hand rather than the right, like
+## a bow (drawn with the right). It still counts as the right hand's weapon.
+@export var rides_left_hand: bool = false
+
+@export_group("Animation")
+## Clip (library/name, see PlayerVisual3D.CLIP_KEYS) the arm plays when this
+## swings or fires from the right hand, or both hands if two-handed.
+@export var swing_clip: StringName = &"CombatMelee/Melee_1H_Attack_Slice_Horizontal"
+## The same, swung from the left hand.
+@export var offhand_swing_clip: StringName = &"CombatMelee/Melee_Dualwield_Attack_Slice"
+## Pose the arm holds while is_holding_pose() (aiming, blocking). Empty = none.
+## The torso turns into it too (see PlayerVisual3D.TORSO_BONES).
+@export var hold_clip: StringName = &""
+## Thrown point first, like a spear: it flies straight along its throw
+## instead of tumbling end over end.
+@export var throw_point_first: bool = false
+## Where it sits on the hand's handslot bone. The grip is the weapon's
+## origin and the blade runs along its +Y, like the KayKit props, so most
+## weapons need none.
+@export var hold_offset: Transform3D = Transform3D.IDENTITY
+@export_group("Sound")
+## What its swing sounds like (an Sfx.SOUNDS id). Played by PlayerVisual3D
+## as the swing strikes, so every machine hears it.
+@export var swing_sound: StringName = &"swing_sword"
+@export_group("Moves")
+## The light attack button (see WeaponMove3D). Empty = a plain swing or shot.
+@export var light_move: WeaponMove3D
+## Charged by holding the heavy attack button, done on letting go once it's
+## fully charged (see PlayerClass3D's BUTTONS). Empty = no heavy.
+@export var heavy_move: WeaponMove3D
+@export_group("Dual Wielding")
+## Weapons of the same family (e.g. "blade" for sword and scimitar) pair up
+## like two of the same weapon. Empty = it only pairs with itself.
+@export var combo_family: StringName = &""
+## Also pairs with a weapon of this family or weapon_name (e.g. the rapier
+## with the dagger), using pair_heavy_move as the pair's heavy.
+@export var pairs_with: StringName = &""
+## The heavy for this and a `pairs_with` weapon in the other hand. Empty =
+## this weapon's own heavy.
+@export var pair_heavy_move: WeaponMove3D
+@export_group("")
+
 var wielder: Node3D = null
-var held_hand: Area3D = null
+## The wielder's hand bone (see PlayerVisual3D.hand()), which this rides
+## rigidly while held.
+var held_hand: Node3D = null
 var is_held: bool = false
 var is_thrown: bool = false
 
@@ -24,6 +78,18 @@ var can_pickup_cd: float = 0.0
 var can_pickup_dur_in_sec: float = 1.0
 
 var throw_spin_direction: float = 1.0
+
+# Signature kit (see Roster): the weapons a character always has. A kit
+# weapon never wears out and only its owner can hold it. It's put away
+# (holstered: hidden and out of the physics world) while its owner holds
+# anything else, and comes back to them on its own a moment after it
+# leaves their hand (thrown or dropped). Durability is for everything else.
+## Seconds a kit weapon stays loose before it returns to its owner.
+const KIT_RETURN_TIME := 1.5
+## The player whose kit this is; null for any other weapon.
+var kit_owner: Node3D = null
+var holstered: bool = false
+var _loose_time: float = 0.0
 
 # Durability: each use (a swing or throw that hits a player, boss or
 # minion, a block, a shot) wears it by one; at 0 it breaks. How many uses it gets
@@ -46,9 +112,15 @@ const BREAK_TIME := 0.15
 ## Dropped on death: tossed this hard, up and away.
 const DROP_IMPULSE := 3.0
 var rarity: int = WeaponRarity.Tier.COMMON
+## Multiplies the damage and knockback of its hits (a giant wild-item
+## weapon's, see make_giant).
+var power: float = 1.0
 var max_durability: int = 1
 var durability: int = 1
 var is_broken: bool = false
+## Scales its break burst (radius, damage, shove). A shooter whose last shot
+## carried the full burst away shatters in a lesser one (see CrossbowClass3D).
+var break_burst_scale: float = 1.0
 var _worn_this_action: bool = false
 var _glow: StandardMaterial3D = null
 var _worn_glow: StandardMaterial3D = null
@@ -61,8 +133,18 @@ const THROWN_DAMAGE_MULTIPLIER := 1.25
 const THROWN_HIT_MIN_SPEED := 4.0
 const THROWN_SLOWDOWN_ON_HIT := 0.3  # Keeps this much speed after hitting a player
 var swing_time_left: float = 0.0
+## Times the damage of the current swing (a combo beat may hit harder).
+var _swing_damage_scale: float = 1.0
 var thrower: Node3D = null  # Who threw it, so it can't hit them mid-flight
 var _hit_this_action: Array[Node] = []
+## Sent flying by a heavy (see WeaponPhantom3D): still in the hand, but
+## hidden and unable to swing until it comes back.
+var away: bool = false
+## A heavy attack is fully charged and ready to let go (see set_charged).
+var charged: bool = false
+var _charge_glow: StandardMaterial3D = null
+const CHARGED_COLOR := Color(1.0, 0.85, 0.3, 0.7)
+const CHARGED_PULSE_SPEED := 12.0
 
 # A swing knocks things the way the blade is moving (not just away from the
 # wielder), harder the faster it's going: SWING_REFERENCE_SPEED hits for the
@@ -83,6 +165,16 @@ var _blade_in_wall: bool = false
 var _swing_reference_speed: float = SWING_REFERENCE_SPEED
 
 const THROWN_SETTLE_SPEED: float = 0.4
+## Loose and in the air (thrown or dropped) until it first touches the
+## world. It stops tumbling then, and lands lying flat if that was the
+## ground. Set from contacts in _integrate_forces, acted on in _physics_process.
+var _landed: bool = true
+var _touched_world: bool = false
+var _touched_floor: bool = false
+## A thrown weapon that's down but somehow still sliding counts as settled
+## after this long, so it can't stay a projectile forever.
+const LANDED_SETTLE_TIME := 1.5
+var _landed_time: float = 0.0
 const DEFAULT_THROW_FORCE: float = 15.0
 const DEFAULT_THROW_UPWARD_RATIO: float = 0.15
 const DEFAULT_THROW_SPIN_SPEED: float = 8.0
@@ -90,48 +182,122 @@ const DEFAULT_THROW_SPIN_SPEED: float = 8.0
 ## Client: don't ask the server again every frame we're touching the weapon.
 const REQUEST_RETRY_MSEC := 250
 var _next_request_msec: int = 0
-var _last_sent_transform: Transform3D
-var _last_sent_frame: int = -1
-var _last_sent_msec: int = 0
-## Replicas: the owner's recent poses, played back smoothly. While held they
-## are relative to the wielder, so the weapon moves rigidly with the
-## (also smoothed) body holding it.
-var _net_motion: NetInterpolator = null
-var _net_motion_is_local: bool = false
-var _net_motion_sender: int = 0
+## Online: whoever simulates it sends where it is, the rest play it back.
+## Not while held: every machine poses a held weapon from its wielder's hand.
+var _motion := NetMotion.new()
 
 
 func _ready() -> void:
+	# Thrown weapons are fast and thin: without this they can pass through
+	# walls and floors in a single physics step.
+	continuous_cd = true
+	# Frozen while held, and on machines that don't simulate it
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	# To notice landing (see _integrate_forces)
+	contact_monitor = true
+	max_contacts_reported = 4
+	# Spawned loose (e.g. a chest's loot): settle flat when it lands
+	_landed = false
 	_set_props()
 	set_rarity(rarity)
 
 
 func _process(delta: float) -> void:
 	_update_worn_glow()
+	_update_charge_glow()
 	_handle_pickup_cooldown(delta)
 	_send_pose()
-	# A held replica is posed by its wielder, right after the wielder moves
-	if not wielder:
-		follow_net_pose(delta)
+	follow_net_pose(delta)
 
 
 func _physics_process(delta: float) -> void:
 	if not simulates():
 		return
+	# The wielder may have moved since the hand's last pose
+	follow_hand()
+	_update_kit_return(delta)
+	_update_landing(delta)
 	_handle_thrown_settle()
 	_update_hits(delta)
-	if is_thrown:
-		var spin_speed: float = Properties.throw_spin_speed if Properties else DEFAULT_THROW_SPIN_SPEED
-		# Spin around the weapon's own local Z axis (perpendicular to its
-		# length, which runs along local Y for a capsule-shaped weapon), so
-		# it tumbles end-over-end like a flicked frisbee no matter which way
-		# it happened to be pointing at the moment it was released.
-		rotate_object_local(Vector3.FORWARD, spin_speed * throw_spin_direction * delta)
+	if is_thrown and not _landed:
+		if throw_point_first:
+			_point_along(linear_velocity)
+		else:
+			var spin_speed: float = Properties.throw_spin_speed if Properties else DEFAULT_THROW_SPIN_SPEED
+			# Spin around the weapon's own local Z axis (perpendicular to its
+			# length, which runs along local Y), so it tumbles end over end
+			# whichever way it was pointing when it was let go.
+			rotate_object_local(Vector3.FORWARD, spin_speed * throw_spin_direction * delta)
+
+
+## Notes when a loose weapon in the air first touches the world, and
+## whether that was the ground (a contact pushing it up).
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if _landed or is_held:
+		return
+	for i in state.get_contact_count():
+		var other: Object = state.get_contact_collider_object(i)
+		var layer: Variant = other.get("collision_layer") if other else null
+		if layer == null or (int(layer) & Combat.WORLD_MASK) == 0:
+			continue  # A player, the ball, another weapon...
+		_touched_world = true
+		if state.get_contact_local_normal(i).y > 0.6:
+			_touched_floor = true
+
+
+## Down: no more tumbling. Off the floor it lies flat, so it rests still
+## instead of balancing on an end.
+func _update_landing(delta: float) -> void:
+	if is_held:
+		return
+	if _landed:
+		if is_thrown:
+			_landed_time += delta
+			if _landed_time > LANDED_SETTLE_TIME:
+				linear_velocity = Vector3.ZERO
+		return
+	if not _touched_world:
+		return
+	if not _touched_floor:
+		return  # Off a wall: keep falling (and tumbling) until it's down
+	_landed = true
+	_landed_time = 0.0
+	global_basis = _lying_flat_basis()
+
+
+## Its thinnest side up, keeping the way its length points.
+func _lying_flat_basis() -> Basis:
+	var box := Collision.shape as BoxShape3D if Collision else null
+	var size: Vector3 = box.size if box else Vector3(0.3, 1.0, 0.15)
+	var thin: int = size.min_axis_index()
+	var long: int = size.max_axis_index()
+	var current: Basis = global_basis.orthonormalized()
+	var along: Vector3 = current[long]
+	along.y = 0.0
+	along = along.normalized() if along.length() > 0.01 else Vector3.FORWARD
+	var flat := Basis()
+	flat[thin] = Vector3.UP
+	flat[long] = along
+	var other: int = 3 - thin - long
+	flat[other] = flat[(other + 1) % 3].cross(flat[(other + 2) % 3])
+	return flat
+
+
+## Point its blade (local +Y) along `direction`.
+func _point_along(direction: Vector3) -> void:
+	if direction.length() < 0.5:
+		return
+	var y: Vector3 = direction.normalized()
+	var x: Vector3 = y.cross(Vector3.UP)
+	if x.length() < 0.01:
+		x = Vector3.RIGHT
+	x = x.normalized()
+	global_basis = Basis(x, y, x.cross(y))
 
 
 func _set_props() -> void:
 	if !Properties:
-		print("No Propertied found")
+		push_error("%s has no WeaponProperties3D; removing it." % scene_file_path)
 		queue_free()
 		return
 
@@ -139,11 +305,6 @@ func _set_props() -> void:
 	if Properties.weapon_name.is_empty():
 		Properties.weapon_name = "Weapon3D"
 	self.name = Properties.weapon_name
-
-	# Setup collision if available
-	if Collision:
-		# Collision shape should be set up in the scene
-		pass
 
 	_update_collisions("on-ground")
 
@@ -166,14 +327,35 @@ func _handle_thrown_settle() -> void:
 		_update_collisions("on-ground")
 
 
-## Makes the next `duration` seconds of this held weapon's swing able to hit.
-func start_swing(duration: float) -> void:
+## Makes the next `duration` seconds of this held weapon's swing able to
+## hit, for `damage_scale` times its usual damage.
+func start_swing(duration: float, damage_scale: float = 1.0) -> void:
 	swing_time_left = duration
+	_swing_damage_scale = damage_scale
 	_swing_reference_speed = SWING_REFERENCE_SPEED * REFERENCE_SWING_DURATION / max(duration, 0.01)
-	_hit_this_action.clear()
-	_worn_this_action = false
+	begin_action()
 	_blade_tracked = false
 	_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
+
+
+## A new attack starts: nothing's been hit by it yet, and it hasn't worn
+## the weapon.
+func begin_action() -> void:
+	_hit_this_action.clear()
+	_worn_this_action = false
+
+
+## What the current attack has hit so far. Its waves (see AttackWave3D)
+## share the list, so nobody is hit twice by the blade and its wave.
+func hits_this_action() -> Array[Node]:
+	return _hit_this_action
+
+
+## One use's wear for the current attack, however many times it lands.
+func wear_once() -> void:
+	if not _worn_this_action:
+		_worn_this_action = true
+		wear()
 
 
 ## The wielder rolled away or got staggered: this swing hits nothing more.
@@ -181,15 +363,73 @@ func cancel_swing() -> void:
 	swing_time_left = 0.0
 
 
+## Off flying (see WeaponPhantom3D), or back. On every machine.
+func set_away(value: bool) -> void:
+	away = value
+	visible = not value and not holstered
+	if value:
+		swing_time_left = 0.0
+
+
+## Where a charging heavy's sparks gather (see PlayerClass3D._show_charging):
+## the middle of the blade.
+func charge_anchor() -> Node3D:
+	return Collision if Collision else self
+
+
+## The blade's longest side, from its hitbox, before any scaling (a giant
+## weapon's is bigger by its scale). 1 if it has none.
+func blade_length() -> float:
+	var box := Collision.shape as BoxShape3D if Collision else null
+	if not box:
+		return 1.0
+	return maxf(box.size.x, maxf(box.size.y, box.size.z))
+
+
+## Glow while a heavy is charged and ready (see PlayerClass3D). On every machine.
+func set_charged(value: bool) -> void:
+	charged = value
+	if not value and _charge_glow:
+		for mesh: MeshInstance3D in _glow_meshes():
+			mesh.material_overlay = _worn_glow
+		_charge_glow = null
+
+
+## The weapon's own meshes, for a glow to lie over: not those of any effect
+## on it (a charging heavy's sparks, see Vfx), which would light up as a
+## big flat rectangle.
+func _glow_meshes() -> Array[MeshInstance3D]:
+	var meshes: Array[MeshInstance3D] = []
+	for mesh: Node in find_children("*", "MeshInstance3D", true, false):
+		if not Vfx.is_part_of_effect(mesh, self):
+			meshes.append(mesh)
+	return meshes
+
+
+func _update_charge_glow() -> void:
+	if not charged:
+		return
+	if not _charge_glow:
+		_charge_glow = StandardMaterial3D.new()
+		_charge_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_charge_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_charge_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		for mesh: MeshInstance3D in _glow_meshes():
+			mesh.material_overlay = _charge_glow
+	var pulse: float = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 1000.0 * CHARGED_PULSE_SPEED)
+	_charge_glow.albedo_color = Color(CHARGED_COLOR, CHARGED_COLOR.a * pulse)
+
+
 func _update_hits(delta: float) -> void:
 	if swing_time_left > 0.0:
 		swing_time_left -= delta
 		if is_held and wielder:
 			_track_blade(delta)
-			_hit_overlapping(wielder, 1.0, false)
+			_hit_overlapping(wielder, _swing_damage_scale, false)
 			var was_in_wall: bool = _blade_in_wall
 			_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
 			if swing_time_left > 0.0 and _blade_in_wall and not was_in_wall:
+				Sfx.play_everywhere(&"hit_wall", Collision.global_position)
 				_swing_contact(true)
 	elif is_thrown and linear_velocity.length() > THROWN_HIT_MIN_SPEED:
 		_hit_overlapping(thrower, THROWN_DAMAGE_MULTIPLIER, true)
@@ -213,7 +453,7 @@ func _swing_contact(solid: bool) -> void:
 		linear_velocity *= -SOLID_BOUNCE
 	else:
 		swing_time_left += Combat.HITSTOP_LIGHT  # The arm pauses; keep the window open as long
-	if wielder is PlayerClass3D:
+	if wielder and wielder.has_method(&"swing_contact"):
 		wielder.swing_contact(self, solid)
 
 
@@ -239,23 +479,27 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			knockback *= clamp(_blade_velocity.length() / _swing_reference_speed, SWING_POWER_MIN, SWING_POWER_MAX)
 			contact = true
 			solid = solid or Combat.is_solid(body)
+		if body is Weapon3D:
+			Sfx.play_everywhere(&"hit_wall", body.global_position)  # Blade on blade
 		if body is Ball3D and Behavior:
+			Sfx.play_everywhere(&"hit_ball", body.global_position)
 			# Each weapon plays the ball its own way (see WeaponBehavior3D.hit_ball)
 			var travel := Vector3.ZERO if thrown else Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
 			Behavior.hit_ball(body, dir, travel, knockback, attacker)
 			continue
+		damage *= power
+		knockback *= power
 		if final_use:
 			damage *= FINAL_DAMAGE_MULTIPLIER
 			knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
-		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D
+		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D
 	if contact:
 		_swing_contact(solid)
 	# One use per swing or throw, however many it hits
-	if landed and not _worn_this_action:
-		_worn_this_action = true
-		wear()
+	if landed:
+		wear_once()
 
 
 ## Half away from the wielder, half along the blade's travel, so a slash
@@ -268,17 +512,45 @@ func _swing_hit_direction(away: Vector3) -> Vector3:
 	return away.normalized() + travel.normalized()
 
 
+## Whether this and `other` pair up for a special (see WeaponCombo3D): the
+## same weapon, or the same combo_family.
+## Whether this and `other` can be held one in each hand: two one-handed
+## weapons of the same kind (the same weapon, or combo_family), a pair one of
+## them names in pairs_with, or a weapon and a shield.
+func is_compatible_with(other: Weapon3D) -> bool:
+	if grip == Grip.TWO_HANDED or other.grip == Grip.TWO_HANDED:
+		return false
+	var shield: bool = grip == Grip.OFF_HAND
+	if shield or other.grip == Grip.OFF_HAND:
+		return shield != (other.grip == Grip.OFF_HAND)  # Not two shields
+	if pairs_with_weapon(other) or other.pairs_with_weapon(self):
+		return true
+	if combo_family != &"" and combo_family == other.combo_family:
+		return true
+	if not scene_file_path.is_empty():
+		return scene_file_path == other.scene_file_path
+	return _weapon_name() == other._weapon_name()
+
+
+## Whether `other` is this one's pairs_with partner.
+func pairs_with_weapon(other: Weapon3D) -> bool:
+	return pairs_with != &"" and (pairs_with == other.combo_family or pairs_with == StringName(other._weapon_name()))
+
+
+func _weapon_name() -> String:
+	return Properties.weapon_name if Properties else String(name)
+
+
 ## High-level API: called when a quick tap resolves to an attack rather than a
-## hold-to-throw. Base weapons rely on the shoulder-swipe animation alone;
-## ranged weapons (like the crossbow) override this to fire a projectile.
+## hold-to-throw. Base weapons rely on the swing alone; ranged weapons (like
+## the bow) override this to fire a projectile.
 func attack(_aim_direction: Vector3) -> void:
 	pass
 
 
 ## High-level API: called by player/enemy when picking up this weapon.
-## `hand` is the Area3D of the hand it's being equipped into, used by
-## weapon behaviors (like the spring-follow sword) to know what to track.
-func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
+## `hand` is the hand bone it rides from now on.
+func equip(new_wielder: Node3D, hand: Node3D = null) -> void:
 	wielder = new_wielder
 	held_hand = hand
 	is_held = true
@@ -299,32 +571,77 @@ func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
 		add_collision_exception_with(new_wielder)
 		new_wielder.add_collision_exception_with(self)
 
-	# Snap straight to the hand instead of leaving the weapon at its pickup
-	# spot for the hand-follow spring to violently close the gap. A large,
-	# fast RigidBody3D lurching up off the ground right under the wielder's
-	# feet gets picked up by move_and_slide() as if standing on a launching
-	# platform, flinging the wielder into the air.
-	if hand:
-		global_position = hand.global_position
-		linear_velocity = Vector3.ZERO
-		angular_velocity = Vector3.ZERO
+	# Held, it's posed by the hand (on every machine), not by physics, and
+	# steps after the wielder so its swing checks see where the wielder is now
+	freeze = true
+	process_physics_priority = new_wielder.process_physics_priority + 1
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	follow_hand()
 
 	if Behavior:
 		Behavior.equip(new_wielder)
 
 
-## Jump straight to the holding hand, e.g. after the wielder teleports, so
-## the hand-follow spring doesn't fling it across the map to catch up.
-func snap_to_hand() -> void:
-	if not held_hand:
+## Held: sit in the hand, wherever its bone is now. The wielder calls this
+## each time its skeleton is posed; the weapon's own physics step calls it
+## too, in case the wielder moved since.
+func follow_hand() -> void:
+	if not is_held or not held_hand:
 		return
-	global_position = held_hand.global_position
-	linear_velocity = Vector3.ZERO
-	angular_velocity = Vector3.ZERO
+	# Without the body's scale: physics bodies mustn't be scaled
+	var hand := Transform3D(held_hand.global_basis.orthonormalized(), held_hand.global_position)
+	if _mirrors_in_left_hand():
+		hand = hand * LEFT_HAND_TURN
+	global_transform = hand * hold_offset
+
+
+## The left handslot is the right one mirrored on every axis but X (a turn
+## can't mirror all three), so a weapon made for the right hand would sit
+## in the left with its edge (and a katana's curve) on the wrong side.
+## Turning it half round its blade puts that right. Off-hand-only weapons
+## (shields) and ones made to ride the left hand (bows) are set up for it.
+const LEFT_HAND_TURN := Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO)
+
+
+func _mirrors_in_left_hand() -> bool:
+	if grip == Grip.OFF_HAND or rides_left_hand or not wielder:
+		return false
+	return "held_weapon_left" in wielder and wielder.held_weapon_left == self
+
+
+## Its wielder's skeleton was just posed (once per rendered frame).
+func on_hand_posed() -> void:
+	follow_hand()
+
+
+## The Sfx.SOUNDS id for drawing it, by its size.
+func equip_sound() -> StringName:
+	if grip == Grip.TWO_HANDED and not rides_left_hand:
+		return &"equip_long"
+	if grip == Grip.EITHER_HAND:
+		return &"equip_small"
+	return &"equip_medium"
+
+
+## Whether the arm holding this should hold `hold_clip`'s pose right now.
+func is_holding_pose() -> bool:
+	return hold_clip != &""
+
+
+## Off the hand: back to its own physics, if this machine simulates it,
+## falling until it lands (see _update_landing).
+func _release_from_hand() -> void:
+	freeze = not simulates()
+	process_physics_priority = 0
+	_landed = false
+	_touched_world = false
+	_touched_floor = false
 
 
 ## High-level API: called when the weapon is dropped/unequipped.
 func unequip() -> void:
+	set_charged(false)
 	if Behavior:
 		Behavior.unequip()
 
@@ -336,6 +653,7 @@ func unequip() -> void:
 	wielder = null
 	held_hand = null
 	is_held = false
+	_release_from_hand()
 	_update_collisions("on-ground")
 
 
@@ -362,11 +680,14 @@ func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0,
 	var launch_dir: Vector3 = (horizontal_dir + Vector3.UP * upward_ratio).normalized()
 	linear_velocity = launch_dir * throw_force
 	angular_velocity = Vector3.ZERO
+	if throw_point_first:
+		_point_along(launch_dir)
 
 
 ## The part of a throw every machine does: out of the wielder's hand and
 ## into the air. Only the simulating machine launches it.
 func _let_go_thrown(spin_direction: float) -> void:
+	set_charged(false)
 	throw_spin_direction = spin_direction
 	thrower = wielder
 	swing_time_left = 0.0
@@ -384,23 +705,54 @@ func _let_go_thrown(spin_direction: float) -> void:
 	wielder = null
 	held_hand = null
 	is_held = false
+	_release_from_hand()
+	Sfx.play(&"throw", global_position)
 	is_thrown = true
 	can_pickup = false
 	can_pickup_cd = can_pickup_dur_in_sec
 	_update_collisions("projectile")
 
 
-## Empty whichever of the wielder's hands was holding this.
+## Empty whichever of the wielder's hands (a player's or an enemy's) was holding this.
 func _clear_from_wielder() -> void:
-	if not is_instance_valid(wielder) or not wielder is PlayerClass3D:
+	if not is_instance_valid(wielder) or not "held_weapon_left" in wielder:
 		return
 	if wielder.held_weapon_left == self:
 		wielder.held_weapon_left = null
 	if wielder.held_weapon_right == self:
 		wielder.held_weapon_right = null
+	# Their hands may be empty of anything but their kit now (see PlayerClass3D.draw_kit)
+	if wielder.has_method(&"draw_kit"):
+		wielder.draw_kit.call_deferred()
 
 
 # ===== RARITY & DURABILITY =====
+
+## A wild item's giant version: `size` times as big (its model and its
+## hitbox) and hitting `hit_power` times as hard. Call on every machine,
+## before it's handed out.
+func make_giant(size: float, hit_power: float) -> void:
+	power = hit_power
+	var model: Node3D = get_node_or_null(^"Model") as Node3D
+	if model:
+		model.scale *= size
+		model.position *= size
+	var box := Collision.shape as BoxShape3D if Collision else null
+	if box:
+		box = box.duplicate()  # The scene's shape is shared by every copy
+		box.size *= size
+		Collision.shape = box
+		Collision.position *= size
+	for child: Node in get_children():
+		if child is WeaponTrail3D:
+			child.fit_blade()  # A giant blade leaves a giant trail
+
+
+## An effect's own `base` color, leaned toward this weapon's rarity's (see
+## WeaponRarity.tint).
+func tint(base: Color) -> Color:
+	return WeaponRarity.tint(rarity, base)
+
 
 ## Make this a `tier` weapon, at full durability. Call on every machine.
 func set_rarity(tier: int) -> void:
@@ -415,7 +767,7 @@ func set_rarity(tier: int) -> void:
 ## One use's worth of wear, on the machine simulating the weapon. Breaks it
 ## (everywhere) at 0.
 func wear(amount: int = 1) -> void:
-	if is_broken or not simulates():
+	if is_broken or kit_owner or not simulates():
 		return
 	var left: int = maxi(durability - amount, 0)
 	if Net.match_synced:
@@ -436,11 +788,11 @@ func _net_durability(value: int) -> void:
 
 ## The next use breaks it.
 func is_last_use() -> bool:
-	return not is_broken and durability <= 1
+	return not is_broken and not kit_owner and durability <= 1
 
 
 func is_worn() -> bool:
-	return durability <= maxi(ceili(max_durability * WORN_RATIO), 1)
+	return not kit_owner and durability <= maxi(ceili(max_durability * WORN_RATIO), 1)
 
 
 ## Nearly broken: pulse red over (in place of) its rarity glow; white-hot,
@@ -453,8 +805,9 @@ func _update_worn_glow() -> void:
 		_worn_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_worn_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_worn_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
-			(mesh as MeshInstance3D).material_overlay = _worn_glow
+		if not _charge_glow:
+			for mesh: MeshInstance3D in _glow_meshes():
+				mesh.material_overlay = _worn_glow
 	var last: bool = is_last_use()
 	var color: Color = LAST_USE_COLOR if last else WORN_COLOR
 	var speed: float = LAST_USE_PULSE_SPEED if last else WORN_PULSE_SPEED
@@ -470,11 +823,15 @@ func _break() -> void:
 		return
 	is_broken = true
 	var breaker: Node3D = wielder if wielder else thrower
-	var radius: float = Properties.break_burst_radius if Properties else 2.5
-	if simulates():
-		_shatter_burst(breaker, radius)
-	var shard_color: Color = WeaponRarity.COLORS[rarity] if rarity != WeaponRarity.Tier.COMMON else SHATTER_COLOR
-	WeaponShatter3D.spawn(get_parent(), global_position, Color(shard_color, 1.0), radius)
+	var radius: float = (Properties.break_burst_radius if Properties else 2.5) * break_burst_scale
+	if simulates() and is_inside_tree() and Properties:
+		var exclude: Array[RID] = [get_rid()]
+		burst(get_world_3d(), global_position, radius, Properties.break_burst_damage * break_burst_scale,
+			Properties.break_burst_knockback * break_burst_scale, breaker, exclude)
+	Sfx.play(&"weapon_break", global_position)
+	CameraShake.add(CameraShake.MEDIUM, global_position)
+	WeaponShatter3D.spawn(get_parent(), global_position, shatter_color(), radius)
+	Vfx.play(&"shatter", global_position, Vector3.FORWARD, false, radius, shatter_color())
 	if wielder:
 		unequip()
 	swing_time_left = 0.0
@@ -486,22 +843,26 @@ func _break() -> void:
 	tween.tween_callback(queue_free)
 
 
-## Hurt and shove everything in the break burst but `breaker` (whoever held
-## or threw it) and their team, who get the credit.
-func _shatter_burst(breaker: Node3D, radius: float) -> void:
-	if not is_inside_tree() or not Properties:
-		return
+## The color its shards fly in: its rarity's, or plain steel for a common.
+func shatter_color() -> Color:
+	var color: Color = WeaponRarity.COLORS[rarity] if rarity != WeaponRarity.Tier.COMMON else SHATTER_COLOR
+	return Color(color, 1.0)
+
+
+## A break burst at `origin`: hurt and shove everything within `radius` but
+## `breaker` (whoever held, threw or shot it), their team and their gear, who
+## get the credit. Also how the shot that breaks a shooter bursts where it
+## lands (see Arrow3D).
+static func burst(world: World3D, origin: Vector3, radius: float, damage: float, knockback: float,
+		breaker: Node3D, exclude: Array[RID]) -> void:
 	var sphere := SphereShape3D.new()
 	sphere.radius = radius
-	var exclude: Array[RID] = [get_rid()]
 	if breaker is CollisionObject3D:
 		exclude.append(breaker.get_rid())
-	var origin: Vector3 = global_position
-	for body: Node3D in Combat.overlaps(get_world_3d(), sphere, Transform3D(Basis(), origin), exclude):
+	for body: Node3D in Combat.overlaps(world, sphere, Transform3D(Basis(), origin), exclude):
 		if _on_team_of(body, breaker) or (body is Weapon3D and breaker and body.wielder == breaker):
 			continue
-		Combat.strike(body, body.global_position - origin, Properties.break_burst_damage,
-			Properties.break_burst_knockback, HIT_POP, -1.0, breaker)
+		Combat.strike(body, body.global_position - origin, damage, knockback, HIT_POP, -1.0, breaker)
 
 
 static func _on_team_of(body: Node3D, breaker: Node3D) -> bool:
@@ -529,12 +890,66 @@ func _net_dropped() -> void:
 		unequip()
 
 
+# ===== SIGNATURE KIT =====
+
+## Put away by its owner (on every machine): out of their hand if it's in
+## it, out of sight and out of the physics world until drawn again.
+func holster() -> void:
+	if wielder:
+		unequip()
+	holstered = true
+	away = false
+	set_charged(false)
+	is_thrown = false
+	thrower = null
+	swing_time_left = 0.0
+	_loose_time = 0.0
+	visible = false
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	process_mode = Node.PROCESS_MODE_DISABLED  # Leaves the physics world
+
+
+## Back out of the holster, ready to go in its owner's hand.
+func unholster() -> void:
+	holstered = false
+	visible = true
+	process_mode = Node.PROCESS_MODE_INHERIT
+
+
+## The machine simulating it: a kit weapon left lying (thrown or dropped)
+## goes back to its owner after KIT_RETURN_TIME, on every machine.
+func _update_kit_return(delta: float) -> void:
+	if not kit_owner or wielder or holstered:
+		_loose_time = 0.0
+		return
+	_loose_time += delta
+	if _loose_time < KIT_RETURN_TIME:
+		return
+	_loose_time = 0.0
+	if Net.match_synced:
+		_net_return_to_owner.rpc()
+	else:
+		_net_return_to_owner()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _net_return_to_owner() -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender != 0 and sender != get_multiplayer_authority():
+		return
+	if is_instance_valid(kit_owner) and kit_owner.has_method(&"take_back_kit"):
+		kit_owner.take_back_kit(self)
+
+
 # ===== NETWORK =====
 
 ## Online, on every machine: the server simulates loose weapons to begin
-## with. Call before the match starts syncing.
+## with; a kit weapon always goes with its owner. Call before the match
+## starts syncing.
 func setup_network() -> void:
-	_set_net_owner(Net.SERVER_ID)
+	_set_net_owner(kit_owner.get_multiplayer_authority() if is_instance_valid(kit_owner) else Net.SERVER_ID)
 
 
 ## Whether this machine runs the weapon's physics (and checks its hits).
@@ -546,10 +961,8 @@ func _set_net_owner(peer_id: int) -> void:
 	set_multiplayer_authority(peer_id)
 	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	freeze = not is_multiplayer_authority()
-	_last_sent_transform = Transform3D()
-	if not _net_motion:
-		_net_motion = NetInterpolator.new(0.0 if Net.is_server else NetInterpolator.DELAY)
-	_net_motion.clear()
+	_motion.send_next()
+	_motion.clear()
 
 
 ## Whoever simulated this weapon left: the server takes it back, out of
@@ -565,22 +978,10 @@ func forget_departed_owner() -> void:
 	_set_net_owner(Net.SERVER_ID)
 
 
-## Once per physics tick at most, and only when it moved. Held weapons
-## send their pose relative to the wielder.
+## Not while held (see _motion).
 func _send_pose() -> void:
-	if not Net.match_synced or not is_multiplayer_authority():
-		return
-	var frame: int = Engine.get_physics_frames()
-	var is_local: bool = wielder != null
-	var xform: Transform3D = wielder.global_transform.affine_inverse() * global_transform if is_local else global_transform
-	var now_msec: int = Time.get_ticks_msec()
-	if frame == _last_sent_frame or (xform.is_equal_approx(_last_sent_transform) \
-			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC):
-		return
-	_last_sent_frame = frame
-	_last_sent_transform = xform
-	_last_sent_msec = now_msec
-	_net_pose.rpc(NetInterpolator.now(), xform, is_local)
+	if Net.match_synced and is_multiplayer_authority() and not wielder and _motion.should_send(global_transform):
+		_net_pose.rpc(NetInterpolator.now(), global_transform)
 
 
 func _is_from_owner() -> bool:
@@ -588,29 +989,21 @@ func _is_from_owner() -> bool:
 
 
 @rpc("any_peer", "unreliable_ordered")
-func _net_pose(time: float, xform: Transform3D, is_local: bool) -> void:
-	if not _is_from_owner() or not _net_motion:
-		return
-	# Snapshots in the other space, or stamped by another machine's clock,
-	# can't be blended with these
-	var sender: int = multiplayer.get_remote_sender_id()
-	if is_local != _net_motion_is_local or sender != _net_motion_sender:
-		_net_motion.clear()
-		_net_motion_is_local = is_local
-		_net_motion_sender = sender
-	_net_motion.push(time, xform)
+func _net_pose(time: float, xform: Transform3D) -> void:
+	if _is_from_owner():
+		_motion.push(time, xform, PackedFloat32Array(), multiplayer.get_remote_sender_id())
 
 
 ## Replicas, once per rendered frame: move to where the owner had this a
 ## moment ago.
 func follow_net_pose(delta: float) -> void:
-	if simulates() or not _net_motion:
+	if simulates():
 		return
-	if _net_motion_is_local != (wielder != null):
-		return  # e.g. just thrown here, world-space poses not in yet
-	var sample: Array = _net_motion.sample(delta)
-	if not sample.is_empty():
-		global_transform = wielder.global_transform * sample[0] if wielder else sample[0]
+	if wielder:
+		# Poses from before it was picked up are stale by the time it's dropped
+		_motion.clear()
+		return
+	_motion.play(self, delta)
 
 
 @rpc("any_peer", "reliable")
@@ -638,6 +1031,8 @@ func _request_push(impulse: Vector3) -> void:
 func request_equip(player: PlayerClass3D, is_left: bool) -> void:
 	if not Net.in_session():
 		player.equip_weapon(self, is_left)
+	elif Net.is_server:
+		_decide_equip(player, is_left)  # A bot
 	elif Time.get_ticks_msec() >= _next_request_msec:
 		_next_request_msec = Time.get_ticks_msec() + REQUEST_RETRY_MSEC
 		_request_equip.rpc_id(Net.SERVER_ID, is_left)
@@ -645,10 +1040,13 @@ func request_equip(player: PlayerClass3D, is_left: bool) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_equip(is_left: bool) -> void:
-	if not Net.is_server or wielder or not can_pickup:
-		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and not player.is_hand_occupied(is_left):
+	if Net.is_server:
+		_decide_equip(Global.Game3D.rpc_sender(), is_left)
+
+
+## Server: hand this to `player` if it's still free.
+func _decide_equip(player: PlayerClass3D, is_left: bool) -> void:
+	if not wielder and not kit_owner and can_pickup and player and player.can_hold(self, is_left):
 		_equipped.rpc(player.name, is_left)
 
 
@@ -658,14 +1056,15 @@ func _request_equip(is_left: bool) -> void:
 func _equipped(player_name: String, is_left: bool) -> void:
 	if multiplayer.get_remote_sender_id() != Net.SERVER_ID:
 		return
-	var player: PlayerClass3D = Global.Game3D.get_node_or_null(player_name) as PlayerClass3D
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player:
 		hand_to(player, is_left)
 
 
-## Put this in `player`'s hand. Online, every machine does this once the
-## server has decided, and that player's machine simulates it from then on.
-func hand_to(player: PlayerClass3D, is_left: bool) -> void:
+## Put this in `player`'s hand (a player, or an enemy like SkeletonEnemy3D:
+## anything with equip_weapon). Online, every machine does this once the
+## server has decided, and that wielder's machine simulates it from then on.
+func hand_to(player: Node3D, is_left: bool) -> void:
 	if wielder:
 		unequip()
 	if Net.in_session():
@@ -679,7 +1078,7 @@ func _update_collisions(state: String) -> void:
 			set_collision_layer_value(2, false)
 			set_collision_layer_value(4, true)
 			set_collision_mask_value(1, true)  # World
-			set_collision_mask_value(2, true)  # Player
+			set_collision_mask_value(2, false)  # Player: walked over, picked up with interact
 			set_collision_mask_value(3, true)  # Enemy
 			set_collision_mask_value(4, true)  # Weapon
 

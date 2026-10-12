@@ -1,34 +1,20 @@
 class_name CrossbowClass3D extends WeaponClass3D
-## Crossbow: hold-to-throw comes for free from the generic WeaponClass3D
-## hand-follow behavior. Unlike a melee weapon, it doesn't dangle at/swing
-## from the hand - while held (and not being thrown) it springs to a fixed
-## aim-forward pose in front of the wielder instead, and a tap fires an arrow
-## rather than playing the shoulder-swipe animation.
-## The staff uses this too, firing magic bolts, but with `aims_forward` off
-## so it's carried upright in the hand like any other weapon.
+## A shooting weapon: hold-to-throw comes for free from the generic
+## WeaponClass3D behavior. A tap fires `arrow_scene` instead of swinging, and
+## while held the arms keep it aimed (its hold_clip). The bow uses it for
+## arrows; the staff and wand fire magic bolts, with no hold_clip, so they're
+## just carried in the hand.
 
 @export var arrow_scene: PackedScene
 @export var arrow_speed: float = 40.0
 @export var muzzle_forward_offset: float = 0.6
 @export var muzzle_height_offset: float = 0.0
+## What a shot sounds like (an Sfx.SOUNDS id).
+@export var fire_sound: StringName = &"bow_release"
 
-## Held out in front, aimed (crossbow), or carried in the hand (staff).
-@export var aims_forward: bool = true
-@export var hold_forward_offset: float = 0.85
-@export var hold_height_offset: float = 0.1
-
-# Sideways offset (in the wielder's local space) of whichever hand is
-# holding this, cached on equip. Without this, both hands' held-forward
-# poses would collapse to the same point straight out from body-center, so
-# picking up two crossbows would pile them on top of each other instead of
-# one at each hand's side.
-var _hand_side_offset: float = 0.0
-
-
-func equip(new_wielder: Node3D, hand: Area3D = null) -> void:
-	super.equip(new_wielder, hand)
-	if new_wielder and hand:
-		_hand_side_offset = new_wielder.to_local(hand.global_position).x
+## The shot that breaks it carries its full break burst, bursting where it
+## lands; the weapon itself then shatters in this much of one.
+const SPENT_BREAK_BURST_SCALE := 0.4
 
 
 func attack(aim_direction: Vector3) -> void:
@@ -44,22 +30,53 @@ func attack(aim_direction: Vector3) -> void:
 	wear()  # Each shot is a use
 
 
+## A heavy attack's big shot (see WeaponMove3D.Action.SHOT): `move` says how
+## much bigger, harder and faster, and whether it pierces.
+func fire_heavy(aim_direction: Vector3, move: WeaponMove3D) -> void:
+	if not arrow_scene or not wielder:
+		return
+	var muzzle: Vector3 = global_position \
+		+ aim_direction.normalized() * muzzle_forward_offset \
+		+ Vector3.UP * muzzle_height_offset
+	_fire_arrow(muzzle, aim_direction, true, move)
+	if Net.match_synced:
+		_net_fire_heavy.rpc(muzzle, aim_direction)
+	wear()
+
+
 ## `real` arrows hit things; online, everyone else's copy of a shot is just
-## for show, since the shooter's machine decides what it hit.
-func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
+## for show, since the shooter's machine decides what it hit. With `heavy`,
+## it's that move's big shot.
+func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool, heavy: WeaponMove3D = null) -> void:
 	var arrow: Arrow3D = arrow_scene.instantiate()
 	arrow.deals_damage = real
+	var speed: float = arrow_speed
+	if heavy:
+		arrow.damage *= heavy.shot_damage_scale
+		arrow.knockback *= heavy.shot_damage_scale
+		arrow.impact_impulse *= heavy.shot_damage_scale
+		arrow.ball_redirect_speed *= heavy.shot_speed_scale
+		arrow.pierce = heavy.shot_pierce
+		arrow.enlarge(heavy.shot_scale)
+		speed *= heavy.shot_speed_scale
 	# The shot that breaks it is the big one (see Weapon3D.is_last_use)
 	if is_last_use():
 		arrow.damage *= FINAL_DAMAGE_MULTIPLIER
 		arrow.knockback *= FINAL_KNOCKBACK_MULTIPLIER
-		arrow.scale = Vector3.ONE * 1.6
+		arrow.enlarge(1.6)
+		if Properties:
+			arrow.set_burst(Properties.break_burst_radius, Properties.break_burst_damage,
+				Properties.break_burst_knockback, shatter_color())
+			break_burst_scale = SPENT_BREAK_BURST_SCALE
+	if arrow.look_color.a > 0.0:
+		arrow.look_color = tint(arrow.look_color)
 	wielder.get_parent().add_child(arrow)
 	arrow.global_position = muzzle
 	arrow.exclude_body(wielder)
 	arrow.shooter = wielder
 	arrow.exclude_body(self)
-	arrow.fire(aim_direction, arrow_speed)
+	arrow.fire(aim_direction, speed)
+	Sfx.play(fire_sound, muzzle)
 
 
 @rpc("any_peer", "reliable")
@@ -68,20 +85,7 @@ func _net_fire(muzzle: Vector3, aim_direction: Vector3) -> void:
 		_fire_arrow(muzzle, aim_direction, false)
 
 
-func _physics_process(delta: float) -> void:
-	if aims_forward and is_held and not is_thrown and wielder and simulates():
-		_physics_process_held_forward(delta)
-	else:
-		super._physics_process(delta)
-
-
-func _physics_process_held_forward(_delta: float) -> void:
-	var target_local: Vector3 = Vector3(_hand_side_offset, hold_height_offset, hold_forward_offset)
-	var target_pos: Vector3 = wielder.to_global(target_local)
-
-	var offset: Vector3 = target_pos - global_position
-	var spring_force: Vector3 = offset * follow_strength
-	var damping_force: Vector3 = -linear_velocity * follow_damping
-	apply_central_force(spring_force + damping_force)
-
-	rotation = Vector3(0.0, wielder.rotation.y, 0.0)
+@rpc("any_peer", "reliable")
+func _net_fire_heavy(muzzle: Vector3, aim_direction: Vector3) -> void:
+	if _is_from_owner() and arrow_scene and wielder and heavy_move:
+		_fire_arrow(muzzle, aim_direction, false, heavy_move)

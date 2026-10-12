@@ -6,13 +6,18 @@ extends Node
 ## events, so bindings stay editable in Project Settings > Input Map and
 ## players never read each other's input.
 ##
-## A future lobby/team-select menu should call join()/leave() and set each
-## slot's team/color; Game3D only seats players automatically when nothing
-## has been joined yet.
+## The menus call join()/leave() and let each player pick their team and
+## character (set_team, cycle_team, cycle_character); Game3D only seats
+## players automatically when nothing has been joined yet. Teams are sides:
+## Humans against Skeletons, and each side has its own characters (see
+## Roster), so changing team changes character too.
 ##
 ## team_count picks the match format: 2 teams play end to end on the 2P
-## field, 4 teams get a goal on every side (4P field). Seats are spread
-## across the teams in order, so 4 players make 2v2 or a four-way match.
+## field, 4 teams get a goal on every side (4P field; hidden for now, see
+## TEAM_COUNTS). New seats start out
+## spread across the teams in order (see team_for_seat), and bots join
+## whichever team is smallest. The format also picks the level (map) and
+## what every boss drops (boss_drop); see MatchMap for which go together.
 
 signal slot_joined(slot: PlayerSlot)
 signal slot_left(slot: PlayerSlot)
@@ -20,7 +25,8 @@ signal slot_left(slot: PlayerSlot)
 ## layout (Simple/Advanced).
 signal slot_changed(slot: PlayerSlot)
 
-const MAX_PLAYERS := 4
+## 4v4.
+const MAX_PLAYERS := 8
 ## What device_of() returns for input that can't pick a device (e.g. mouse motion).
 const NO_DEVICE := -2
 const TEAM_COLORS: Array[Color] = [
@@ -29,16 +35,26 @@ const TEAM_COLORS: Array[Color] = [
 	Color(0.1, 0.8, 0.2),   # Green
 	Color(1, 0.85, 0.1),    # Yellow
 ]
+## Matches TEAM_COLORS. The first two are the sides (see Roster).
+const TEAM_NAMES: Array[String] = ["Humans", "Skeletons", "Green", "Yellow"]
 
-## Team counts a match can be played with (see team_count).
-const TEAM_COUNTS: Array[int] = [2, 4]
+## Team counts a match can be played with (see team_count). Humans vs
+## Skeletons is two teams; the 4-team format still works but is hidden
+## until it has sides of its own: add 4 back here to offer it.
+const TEAM_COUNTS: Array[int] = [2]
 
 var slots: Array[PlayerSlot] = []
 ## Teams in the next match. Online, the leader's choice is sent to everyone
 ## with the match start (see Net.start_match).
 var team_count: int = TEAM_COUNTS[0]
-## Offline: fill every empty seat with a bot when the match starts.
-var fill_with_bots: bool = false
+## Level for the next match. Online, sent with the match start like team_count.
+var map: MatchMap.Map = MatchMap.MAPS[0]
+## What every boss drops in the next match.
+var boss_drop: BossDrop.Kind = MatchMap.DROPS[0]
+## Offline: seat bots until the match has this many players (0 = no bots).
+## Always a whole number of players per team; see bot_fill_options().
+## Starts at a full 4v4.
+var bot_fill_count: int = MAX_PLAYERS
 
 ## Project actions captured before any per-slot copies are added.
 var _base_actions: Array[StringName] = []
@@ -50,15 +66,16 @@ func _ready() -> void:
 			_base_actions.append(action_name)
 
 
-## index picks a specific seat (online play uses the session seat); -1 = next free.
-func join(device: int, team: int = -1, index: int = -1) -> PlayerSlot:
+## index picks a specific seat (online play uses the session seat); -1 = next
+## free. team and character default by seat.
+func join(device: int, team: int = -1, index: int = -1, character: int = -1) -> PlayerSlot:
 	if slots.size() >= MAX_PLAYERS or get_slot_for_device(device):
 		return null
 	var slot := PlayerSlot.new()
 	slot.index = index if index >= 0 else _next_free_index()
 	slot.device = device
-	slot.team = team if team >= 0 else team_for_seat(slot.index)
-	slot.color = team_color(slot.team)
+	_assign_team(slot, team if team >= 0 else team_for_seat(slot.index))
+	slot.character = Roster.for_team(character if character >= 0 else default_character(slot.index), slot.team)
 	slots.append(slot)
 	_register_actions(slot)
 	slot_joined.emit(slot)
@@ -73,17 +90,32 @@ func add_bot() -> PlayerSlot:
 	slot.index = _next_free_index()
 	slot.device = PlayerSlot.BOT
 	slot.is_bot = true
-	slot.team = team_for_seat(slot.index)
-	slot.color = team_color(slot.team)
+	_assign_team(slot, smallest_team(slot_teams()))
+	slot.character = unused_character(slot.team)
 	slots.append(slot)
 	slot_joined.emit(slot)
 	return slot
 
 
-## Seat bots until every seat is taken.
+## Seat bots until the match has bot_fill_count players.
 func fill_bots() -> void:
-	while add_bot():
+	while slots.size() < bot_fill_count and add_bot():
 		pass
+
+
+## Match sizes the Bots option can fill to with the current team_count:
+## 0 (off), then every even split, e.g. 2 (1v1) and 4 (2v2) for two teams.
+func bot_fill_options() -> Array[int]:
+	var options: Array[int] = [0]
+	for count: int in range(team_count, MAX_PLAYERS + 1, team_count):
+		options.append(count)
+	return options
+
+
+## The next match size after bot_fill_count (menu toggles).
+func next_bot_fill_count() -> int:
+	var options: Array[int] = bot_fill_options()
+	return options[(options.find(bot_fill_count) + 1) % options.size()]
 
 
 ## Seats played by people, not bots.
@@ -110,7 +142,7 @@ func leave_all() -> void:
 		leave(slot)
 
 
-## The team a seat plays on: seats take turns, P1 on Blue, P2 Red, P3 Blue
+## The team a seat starts on: seats take turns, P1 on Blue, P2 Red, P3 Blue
 ## (or Green with four teams), and so on.
 func team_for_seat(index: int) -> int:
 	return index % team_count
@@ -120,14 +152,114 @@ func team_color(team: int) -> Color:
 	return TEAM_COLORS[team % TEAM_COLORS.size()]
 
 
-## Switch the match format; every joined slot moves to its seat's new team.
+func team_name(team: int) -> String:
+	return TEAM_NAMES[team % TEAM_NAMES.size()]
+
+
+## Put `slot` on `team` (wrapping around the teams in play), switching to
+## that side's character in the same place on its list.
+func set_team(slot: PlayerSlot, team: int) -> void:
+	_assign_team(slot, team)
+	slot.character = Roster.for_team(slot.character, slot.team)
+	slot_changed.emit(slot)
+
+
+## Move `slot` to the next (step 1) or previous (step -1) team.
+func cycle_team(slot: PlayerSlot, step: int) -> void:
+	set_team(slot, slot.team + step)
+
+
+func _assign_team(slot: PlayerSlot, team: int) -> void:
+	slot.team = posmod(team, team_count)
+	slot.color = team_color(slot.team)
+
+
+## The teams of everyone seated, in seat order.
+func slot_teams() -> Array[int]:
+	var teams: Array[int] = []
+	for slot: PlayerSlot in slots:
+		teams.append(slot.team)
+	return teams
+
+
+## How many of `teams` are on each team in play.
+func team_sizes(teams: Array[int]) -> Array[int]:
+	var sizes: Array[int] = []
+	sizes.resize(team_count)
+	for team: int in teams:
+		sizes[posmod(team, team_count)] += 1
+	return sizes
+
+
+## The team with the fewest of `teams` on it (the first one on a tie).
+func smallest_team(teams: Array[int]) -> int:
+	var sizes: Array[int] = team_sizes(teams)
+	return sizes.find(sizes.min())
+
+
+## `seated` (the teams of players already in), plus the teams of the bots
+## fill_bots() would add to reach `total` players.
+func teams_with_bots(total: int, seated: Array[int]) -> Array[int]:
+	var teams: Array[int] = seated.duplicate()
+	while teams.size() < total:
+		teams.append(smallest_team(teams))
+	return teams
+
+
+# ===== CHARACTERS =====
+
+func character_count() -> int:
+	return Roster.count()
+
+
+func character_name(character: int) -> String:
+	return Roster.name_of(character)
+
+
+## Seats start on different characters so players don't all look alike.
+## Not yet fitted to a team (see Roster.for_team).
+func default_character(index: int) -> int:
+	return index % character_count()
+
+
+## The first of `team`'s characters nobody seated is playing (bots spread
+## out over the roster), or one at random if all are taken.
+func unused_character(team: int) -> int:
+	var choices: Array[int] = Roster.characters_of_team(team)
+	for character: int in choices:
+		if not slots.any(func(s: PlayerSlot) -> bool: return s.character == character):
+			return character
+	return choices.pick_random()
+
+
+## Switch `slot` to `character`, if its team can play it.
+func set_character(slot: PlayerSlot, character: int) -> void:
+	if Roster.fits_team(character, slot.team):
+		slot.character = character
+		slot_changed.emit(slot)
+
+
+## Switch `slot` to the next (step 1) or previous (step -1) character on
+## its team.
+func cycle_character(slot: PlayerSlot, step: int) -> void:
+	slot.character = Roster.step(slot.character, slot.team, step)
+	slot_changed.emit(slot)
+
+
+## Switch the match format. Players keep their team when it's still in
+## play; teams that aren't wrap around onto ones that are. A level with
+## too few sides gives way to one that has enough.
 func set_team_count(count: int) -> void:
 	if not TEAM_COUNTS.has(count):
 		return
 	team_count = count
+	if not MatchMap.fits(map, team_count, boss_drop):
+		map = MatchMap.first_fitting(team_count, boss_drop)
+	if not bot_fill_options().has(bot_fill_count):
+		bot_fill_count = bot_fill_options()[-1]
 	for slot: PlayerSlot in slots:
-		slot.team = team_for_seat(slot.index)
-		slot.color = team_color(slot.team)
+		_assign_team(slot, slot.team)
+		slot.character = Roster.for_team(slot.character, slot.team)
 		slot_changed.emit(slot)
 
 
@@ -136,17 +268,56 @@ func next_team_count() -> int:
 	return TEAM_COUNTS[(TEAM_COUNTS.find(team_count) + 1) % TEAM_COUNTS.size()]
 
 
-## "2 (2v2)"-style label for the current format with `player_count` players.
-func format_name(player_count: int) -> String:
+## Switch level. Whatever it can't host gives way: too many teams are cut
+## down, and a drop it has no place for (a ball without goals) is swapped
+## for the first one it does.
+func set_map(new_map: MatchMap.Map) -> void:
+	map = new_map
+	var teams: int = mini(team_count, MatchMap.max_teams(map))
+	if not MatchMap.fits(map, teams, boss_drop):
+		for kind: BossDrop.Kind in MatchMap.DROPS:
+			if MatchMap.fits(map, teams, kind):
+				boss_drop = kind
+				break
+	set_team_count(teams)
+
+
+## Switch what bosses drop, moving to a level that can host it if need be
+## (a ball needs goals).
+func set_boss_drop(kind: BossDrop.Kind) -> void:
+	boss_drop = kind
+	if not MatchMap.fits(map, team_count, boss_drop):
+		map = MatchMap.first_fitting(team_count, boss_drop)
+
+
+## The whole format at once, as the online leader picked it (already
+## consistent, so nothing gives way).
+func set_match_format(count: int, new_map: MatchMap.Map, kind: BossDrop.Kind) -> void:
+	map = new_map
+	boss_drop = kind
+	set_team_count(count)
+
+
+func next_map() -> MatchMap.Map:
+	return MatchMap.MAPS[(MatchMap.MAPS.find(map) + 1) % MatchMap.MAPS.size()]
+
+
+func next_boss_drop() -> BossDrop.Kind:
+	return MatchMap.DROPS[(MatchMap.DROPS.find(boss_drop) + 1) % MatchMap.DROPS.size()]
+
+
+## "2 (2v1)"-style label for the current format with players on `teams`.
+func format_name(teams: Array[int]) -> String:
+	return "%d (%s)" % [team_count, team_split(teams)] if team_split(teams) != "" else str(team_count)
+
+
+## "2v1"-style split of `teams`, or "" if fewer than two teams have players.
+func team_split(teams: Array[int]) -> String:
 	var sizes: Array[String] = []
-	for team: int in team_count:
-		var size: int = 0
-		for seat: int in player_count:
-			if team_for_seat(seat) == team:
-				size += 1
+	for size: int in team_sizes(teams):
 		if size > 0:
 			sizes.append(str(size))
-	return "%d (%s)" % [team_count, "v".join(sizes)] if sizes.size() > 1 else str(team_count)
+	return "v".join(sizes) if sizes.size() > 1 else ""
 
 
 func get_slot_for_device(device: int) -> PlayerSlot:

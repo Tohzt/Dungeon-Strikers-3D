@@ -8,21 +8,19 @@ const STATS: Dictionary[StringName, String] = {
 	&"boss_damage": "Extra damage dealt to bosses",
 	&"damage_vs_leader": "Extra damage dealt to players whose team is ahead in kills",
 	&"damage_vs_wounded": "Extra damage dealt to players below 30% HP",
-	&"ball_strip": "How easily your hits knock the ball loose",
 	&"kill_heal": "Share of max HP healed on a player kill (starts at 0)",
-	&"leader_bounty": "Above 1: killing the kill leader earns your team a bounty shield",
 	&"respawn_time": "How long you're out after dying (negative = less)",
 	&"ball_power": "How hard hits send the ball",
-	&"throw_power": "How hard weapons and the ball are thrown",
-	&"ball_grip": "How big a hit it takes to knock the ball loose",
+	&"throw_power": "How hard weapons are thrown",
 	&"move_speed": "Walking and sprinting speed",
-	&"jump": "Jump height",
 	&"max_hp": "Max health",
-	&"max_stamina": "Max stamina",
-	&"stamina_regen": "Stamina regeneration speed",
 	&"damage_taken": "Damage taken (negative = less)",
 	&"knockback_taken": "Knockback taken (negative = less)",
-	&"block_stamina": "Stamina lost blocking a hit (negative = less)",
+	&"size": "How big the body looks (wild items: Giant, Pipsqueak)",
+	# Wild items' status buffs: on above 1 (see PlayerStatus3D)
+	&"frost_touch": "Hits freeze whoever they land on",
+	&"ablaze": "On fire: hits set people burning, touching the ball lights it",
+	&"regen": "Heals over time",
 }
 ## No stat goes below this multiplier, however many negatives stack up.
 const MIN_MULTIPLIER := 0.1
@@ -32,6 +30,11 @@ var perks: Array[Perk] = []
 
 func add(perk: Perk) -> void:
 	perks.append(perk)
+
+
+## Take one copy of `perk` back off (a wild item's effect wearing off).
+func remove(perk: Perk) -> void:
+	perks.erase(perk)
 
 
 ## The multiplier for `stat`: 1.0 plus every taken perk's bonus to it.

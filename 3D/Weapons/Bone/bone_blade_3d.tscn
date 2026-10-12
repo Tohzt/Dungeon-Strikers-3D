@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
+[ext_resource type="PackedScene" uid="uid://b421s7jbhjiyv" path="res://Assets/Skeleton/Props/Skeleton_Blade.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_slash.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_slash.tres" id="mv_heavy"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.5, 1.17, 0.15)
+
+[node name="BoneBlade_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+script = ExtResource("1_script")
+combo_family = &"blade"
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
+weapon_name = "Bone Blade"
+base_damage = 35.0
+
+[node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]
+weapon_name = "Bone Blade"
+durability_scale = 0.7
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.585, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

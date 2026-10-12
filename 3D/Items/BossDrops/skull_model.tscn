@@ -1,0 +1,68 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="Mat_bone"]
+albedo_color = Color(0.92, 0.88, 0.76, 1)
+roughness = 0.7
+emission_enabled = true
+emission = Color(0.92, 0.88, 0.76, 1)
+emission_energy_multiplier = 0.25
+
+[sub_resource type="StandardMaterial3D" id="Mat_socket"]
+albedo_color = Color(0.08, 0.02, 0.02, 1)
+emission_enabled = true
+emission = Color(0.95, 0.15, 0.08, 1)
+emission_energy_multiplier = 2.5
+
+[sub_resource type="SphereMesh" id="Mesh_cranium"]
+material = SubResource("Mat_bone")
+radius = 0.42
+height = 0.8
+
+[sub_resource type="BoxMesh" id="Mesh_jaw"]
+material = SubResource("Mat_bone")
+size = Vector3(0.46, 0.22, 0.4)
+
+[sub_resource type="BoxMesh" id="Mesh_teeth"]
+material = SubResource("Mat_bone")
+size = Vector3(0.36, 0.08, 0.06)
+
+[sub_resource type="SphereMesh" id="Mesh_socket"]
+material = SubResource("Mat_socket")
+radius = 0.11
+height = 0.2
+
+[sub_resource type="PrismMesh" id="Mesh_nose"]
+material = SubResource("Mat_socket")
+size = Vector3(0.1, 0.12, 0.06)
+
+[node name="SkullModel" type="Node3D"]
+
+[node name="Cranium" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1.1, 0, 0.08, 0.02)
+mesh = SubResource("Mesh_cranium")
+
+[node name="Jaw" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.24, -0.12)
+mesh = SubResource("Mesh_jaw")
+
+[node name="Teeth" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.17, -0.33)
+mesh = SubResource("Mesh_teeth")
+
+[node name="EyeLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15, 0.04, -0.35)
+mesh = SubResource("Mesh_socket")
+
+[node name="EyeRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.15, 0.04, -0.35)
+mesh = SubResource("Mesh_socket")
+
+[node name="Nose" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.08, -0.4)
+mesh = SubResource("Mesh_nose")
+
+[node name="Glow" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.6)
+light_color = Color(0.95, 0.25, 0.1, 1)
+light_energy = 1.2
+omni_range = 3.0

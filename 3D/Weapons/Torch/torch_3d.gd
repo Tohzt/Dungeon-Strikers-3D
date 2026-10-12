@@ -16,6 +16,7 @@ func _ready() -> void:
 	super()
 	_base_energy = flame_light.light_energy
 	_flicker_seed = randf() * 100.0
+	Sfx.play_loop(&"fire_loop", self)
 
 
 func _process(delta: float) -> void:

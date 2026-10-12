@@ -1,30 +1,46 @@
 class_name PerkDirector extends Node
-## Runs the rogue-lite perk picks. Over a round it notes who earned what:
-## the boss's killer an offensive card and everyone else a mobility/defense
-## card; the scoring team a striker card and everyone else a comeback card;
-## the round's top player killer a hunter card. At the intermission each
-## player is dealt three cards (boss card, goal card, and a hunter card for
-## the top killer or a general card for everyone else), and picks one by
-## activating their altar. Like
-## Rounds, the whole game pauses while one player picks; the next boss
-## comes once everyone has.
+## Runs the rogue-lite perk picks. Whoever lands the killing blow on a boss
+## is dealt a hand of offensive cards on the spot, to pick from at their
+## altar whenever they like; nobody else's game stops for it. Over a round
+## it also notes who earned what: everyone a mobility/defense card for the
+## boss going down; the scoring team a striker card and everyone else a
+## comeback card; the round's top player killer a hunter card. At the
+## intermission each player is dealt three cards (boss card, goal card, and
+## a hunter card for the top killer or a general card for everyone else).
+## Every player walks back to their altar on their own (see
+## PlayerClass3D._walk_to_altar) and picks there, all at the same time, each
+## seeing only their own cards; the next boss comes once everyone has.
+## A mode can also open with a draft (begin_draft): everyone is dealt a
+## hand at once and takes several cards from it, one at a time, before play
+## starts.
 ## Online the server deals and approves picks; every machine applies them.
 
 signal intermission_started
 ## Everyone has picked. On every machine.
 signal intermission_finished
 signal perk_taken(player: PlayerClass3D, perk: Perk)
+## Everyone has finished drafting. On every machine.
+signal draft_finished
 
 const OFFER_SIZE := 3
+## Online: don't ask the server to open the cards again this soon.
+const OPEN_RETRY_MSEC := 500
 
 @export var catalog: PerkCatalog = preload("res://3D/Perks/perk_catalog.tres")
 @export var picker: PerkPicker3D
 
 var in_intermission: bool = false
-## Player name -> catalog indices on offer, for everyone yet to pick.
-var offers: Dictionary[String, PackedInt32Array] = {}
-## The player at the picker right now ("" = nobody).
-var picking: String = ""
+## A draft is on: everyone stands still until it's done.
+var in_draft: bool = false
+## Draft: cards each player (by name) still takes from their hand.
+var _draft_left: Dictionary[String, int] = {}
+## Player name -> the hands of catalog indices they have yet to pick from,
+## oldest first (a boss-kill hand can still be waiting at the intermission).
+var offers: Dictionary[String, Array] = {}
+## Players looking at their cards right now, by name.
+var picking: Dictionary[String, bool] = {}
+## Online: when this machine last asked to open each player's cards.
+var _open_requested_msec: Dictionary[String, int] = {}
 ## What each player (by name) has earned since the last intermission.
 var _boss_rewards: Dictionary[String, Perk.Category] = {}
 var _goal_rewards: Dictionary[String, Perk.Category] = {}
@@ -33,26 +49,75 @@ var _round_kills: Dictionary[String, int] = {}
 
 
 func _ready() -> void:
-	process_mode = Node.PROCESS_MODE_ALWAYS
 	if picker:
 		picker.chosen.connect(_on_picker_chosen)
 
 
-func _process(_delta: float) -> void:
-	# Keep the game paused while someone picks, even if the pause menu
-	# was opened and closed in the meantime
-	if picking != "" and not get_tree().paused:
-		get_tree().paused = true
-
-
 # ===== EARNING =====
 
+## On every machine. The killer (server/offline decides) gets a hand of
+## offensive cards right away; everyone gets a mobility card at the
+## intermission.
 func record_boss_kill(killer: PlayerClass3D) -> void:
 	for player: PlayerClass3D in _players():
-		# A kill earned this round isn't lost to someone else's later kill
-		if _boss_rewards.get(player.name) == Perk.Category.OFFENSE:
-			continue
-		_boss_rewards[player.name] = Perk.Category.OFFENSE if player == killer else Perk.Category.MOBILITY
+		_boss_rewards[player.name] = Perk.Category.MOBILITY
+	if not killer or not Net.decides():
+		return
+	var categories: Array[Perk.Category] = []
+	categories.resize(OFFER_SIZE)
+	categories.fill(Perk.Category.OFFENSE)
+	var hand: PackedInt32Array = _deal_hand(categories)
+	Net.everywhere(_grant_hand, killer.name, hand)
+
+
+@rpc("authority", "call_local", "reliable")
+func _grant_hand(player_name: String, hand: PackedInt32Array) -> void:
+	_add_hand(player_name, hand)
+	var player: PlayerClass3D = _player_named(player_name)
+	if player and Global.Game3D:
+		var label: String = "P%d" % (player.slot.index + 1) if player.slot else player_name
+		Global.Game3D.scoreboard.announce("%s slew the boss! A perk awaits at their altar" % label,
+			player.slot.color if player.slot else Color.WHITE)
+
+
+## Server/offline: a find deals `player` a hand of `size` cards, put first
+## in line, and opens it for them on the spot (bots pick theirs on their
+## own). A chest deals from every category but Relic; a skull's altar
+## (`relic`) deals Relic cards only.
+func grant_bonus_hand(player: PlayerClass3D, size: int, relic: bool = false) -> void:
+	if not Net.decides():
+		return
+	var hand := PackedInt32Array()
+	var choices: Array[int] = []
+	for i in catalog.perks.size():
+		if (catalog.perks[i].category == Perk.Category.RELIC) == relic:
+			choices.append(i)
+	choices.shuffle()
+	for i in mini(size, choices.size()):
+		hand.append(choices[i])
+	Net.everywhere(_grant_bonus_hand, player.name, hand)
+
+
+@rpc("authority", "call_local", "reliable")
+func _grant_bonus_hand(player_name: String, hand: PackedInt32Array) -> void:
+	if hand.is_empty():
+		return
+	if not offers.has(player_name):
+		offers[player_name] = []
+	offers[player_name].push_front(hand)
+	var player: PlayerClass3D = _player_named(player_name)
+	if not player or (player.slot and player.slot.is_bot):
+		return
+	if not Net.in_session() or player.is_multiplayer_authority():
+		open_for(player)
+
+
+func _add_hand(player_name: String, hand: PackedInt32Array) -> void:
+	if hand.is_empty():
+		return
+	if not offers.has(player_name):
+		offers[player_name] = []
+	offers[player_name].append(hand)
 
 
 func record_goal(team: int) -> void:
@@ -72,7 +137,7 @@ func record_kill(killer: PlayerClass3D) -> void:
 
 ## Server/offline: deal everyone their cards and open the altars.
 func begin_intermission() -> void:
-	if in_intermission or (Net.in_session() and not Net.is_server):
+	if in_intermission or not Net.decides():
 		return
 	var dealt: Dictionary = {}
 	for player: PlayerClass3D in _players():
@@ -80,31 +145,33 @@ func begin_intermission() -> void:
 	_boss_rewards.clear()
 	_goal_rewards.clear()
 	_round_kills.clear()
-	if Net.in_session():
-		_start_intermission.rpc(dealt)
-	else:
-		_start_intermission(dealt)
+	Net.everywhere(_start_intermission, dealt)
 
 
 ## One card per source: the boss result, the goal result, and a hunter
 ## card for the round's top killer (ties included) or a general one. A
 ## source that didn't happen this round (no boss, no goal) gives a general
-## card instead. No card twice in one hand.
+## card instead.
 func _deal(player_name: String) -> PackedInt32Array:
 	var categories: Array[Perk.Category] = [
 		_boss_rewards.get(player_name, Perk.Category.GENERAL),
 		_goal_rewards.get(player_name, Perk.Category.GENERAL),
 		Perk.Category.HUNTER if _is_top_killer(player_name) else Perk.Category.GENERAL,
 	]
+	return _deal_hand(categories)
+
+
+## A card of each category, none twice in one hand.
+func _deal_hand(categories: Array[Perk.Category]) -> PackedInt32Array:
 	var hand := PackedInt32Array()
 	for category: Perk.Category in categories:
 		var choices: Array[int] = []
 		for i in catalog.perks.size():
 			if catalog.perks[i].category == category and not hand.has(i):
 				choices.append(i)
-		if choices.is_empty():  # Category ran dry: anything not in the hand yet
+		if choices.is_empty():  # Category ran dry: anything not in the hand yet (but no relics)
 			for i in catalog.perks.size():
-				if not hand.has(i):
+				if not hand.has(i) and catalog.perks[i].category != Perk.Category.RELIC:
 					choices.append(i)
 		if not choices.is_empty():
 			hand.append(choices.pick_random())
@@ -123,10 +190,10 @@ func _is_top_killer(player_name: String) -> bool:
 
 @rpc("authority", "call_local", "reliable")
 func _start_intermission(dealt: Dictionary) -> void:
-	offers.clear()
 	for player_name: String in dealt:
-		offers[player_name] = dealt[player_name]
+		_add_hand(player_name, dealt[player_name])
 	in_intermission = true
+	picker.set_full_screen(true)
 	_update_waiting()
 	intermission_started.emit()
 	if offers.is_empty():
@@ -135,41 +202,102 @@ func _start_intermission(dealt: Dictionary) -> void:
 
 func _finish_intermission() -> void:
 	in_intermission = false
+	picker.set_full_screen(false)
 	picker.show_waiting([])
 	intermission_finished.emit()
 
 
+# ===== DRAFT =====
+
+## Server/offline: deal every player `hand_size` cards (no relics) and have
+## them take `picks` of them, one at a time.
+func begin_draft(hand_size: int, picks: int) -> void:
+	if in_draft or not Net.decides():
+		return
+	var choices: Array[int] = []
+	for i in catalog.perks.size():
+		if catalog.perks[i].category != Perk.Category.RELIC:
+			choices.append(i)
+	var dealt: Dictionary = {}
+	for player: PlayerClass3D in _players():
+		choices.shuffle()
+		dealt[player.name] = PackedInt32Array(choices.slice(0, hand_size))
+	Net.everywhere(_start_draft, dealt, picks)
+
+
+@rpc("authority", "call_local", "reliable")
+func _start_draft(dealt: Dictionary, picks: int) -> void:
+	in_draft = true
+	for player_name: String in dealt:
+		var hand: PackedInt32Array = dealt[player_name]
+		if hand.is_empty():
+			continue
+		_add_hand(player_name, hand)
+		_draft_left[player_name] = mini(picks, hand.size())
+	picker.set_full_screen(true)
+	_update_waiting()
+	for player: PlayerClass3D in _players():
+		_open_own(player)
+	if offers.is_empty():
+		_finish_draft()
+
+
+func _finish_draft() -> void:
+	in_draft = false
+	_draft_left.clear()
+	picker.set_full_screen(false)
+	picker.show_waiting([])
+	draft_finished.emit()
+
+
+## Show `player` their cards, if this machine controls them and they're
+## not a bot (bots take theirs on their own; see BotInputHandler3D).
+func _open_own(player: PlayerClass3D) -> void:
+	if player.slot and player.slot.is_bot:
+		return
+	if not Net.in_session() or player.is_multiplayer_authority():
+		open_for(player)
+
+
 # ===== PICKING =====
 
-## Whether `player` has cards waiting and the picker is free.
+## Whether `player` has cards waiting and isn't looking at them already.
 func can_open(player: PlayerClass3D) -> bool:
-	return in_intermission and picking == "" and offers.has(player.name)
+	return offers.has(player.name) and not picking.has(player.name)
+
+
+## `player` is looking at their cards (they stand still meanwhile).
+func is_picking(player: PlayerClass3D) -> bool:
+	return picking.has(player.name)
 
 
 ## Whether anyone on `team` still has cards to pick from (lights the altar).
 func team_has_offer(team: int) -> bool:
-	if not in_intermission:
-		return false
 	for player: PlayerClass3D in _players():
 		if player.slot and player.slot.team == team and offers.has(player.name):
 			return true
 	return false
 
 
-## Offline: a bot takes a random card from its hand, without pausing.
+## Offline or on the server: a bot takes a random card from its oldest hand.
 func auto_pick(player: PlayerClass3D) -> void:
-	if Net.in_session() or not can_open(player):
+	if not Net.decides() or not can_open(player):
 		return
-	var hand: PackedInt32Array = offers[player.name]
-	_apply_pick(player.name, hand[randi() % hand.size()])
+	var hand: PackedInt32Array = offers[player.name][0]
+	Net.everywhere(_apply_pick, player.name, hand[randi() % hand.size()])
 
 
-## `player` activated their altar: pause everyone and show their cards.
-## Call on the machine that controls the player.
+## Show `player` their oldest hand (at their altar). Nobody else's game
+## stops. Call on the machine that controls the player.
 func open_for(player: PlayerClass3D) -> void:
-	if not can_open(player):
+	# Bots never look at cards: auto_pick only works while they aren't
+	if not can_open(player) or (player.slot and player.slot.is_bot):
 		return
 	if Net.in_session():
+		var now: int = Time.get_ticks_msec()
+		if now - _open_requested_msec.get(player.name, -OPEN_RETRY_MSEC) < OPEN_RETRY_MSEC:
+			return
+		_open_requested_msec[player.name] = now
 		_request_open.rpc_id(Net.SERVER_ID)
 	else:
 		_begin_pick(player.name)
@@ -179,7 +307,7 @@ func open_for(player: PlayerClass3D) -> void:
 func _request_open() -> void:
 	if not Net.is_server:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and can_open(player):
 		_begin_pick.rpc(player.name)
 
@@ -187,34 +315,36 @@ func _request_open() -> void:
 @rpc("authority", "call_local", "reliable")
 func _begin_pick(player_name: String) -> void:
 	var player: PlayerClass3D = _player_named(player_name)
+	_open_requested_msec.erase(player_name)
 	if not player or not offers.has(player_name):
 		return
-	picking = player_name
-	get_tree().paused = true
+	picking[player_name] = true
+	# Only the picker's own machine shows their cards
+	if Net.in_session() and not player.is_multiplayer_authority():
+		return
 	var hand: Array[Perk] = []
-	for index: int in offers[player_name]:
+	for index: int in offers[player_name][0]:
 		hand.append(catalog.perks[index])
-	var local: bool = not Net.in_session() or player.is_multiplayer_authority()
-	picker.open(player, hand, local)
+	picker.open(player, hand)
 
 
-## The picking player chose card `card` of their hand.
-func _on_picker_chosen(card: int) -> void:
-	if picking == "" or card < 0 or card >= offers[picking].size():
+## `player` chose card `card` of the hand they were shown.
+func _on_picker_chosen(player: PlayerClass3D, card: int) -> void:
+	if not picking.has(player.name) or card < 0 or card >= offers[player.name][0].size():
 		return
 	if Net.in_session():
 		_request_pick.rpc_id(Net.SERVER_ID, card)
 	else:
-		_apply_pick(picking, offers[picking][card])
+		_apply_pick(player.name, offers[player.name][0][card])
 
 
 @rpc("any_peer", "reliable")
 func _request_pick(card: int) -> void:
-	if not Net.is_server or picking == "":
+	if not Net.is_server:
 		return
-	var player: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
-	if player and player.name == picking and card >= 0 and card < offers[picking].size():
-		_apply_pick.rpc(picking, offers[picking][card])
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
+	if player and picking.has(player.name) and card >= 0 and card < offers[player.name][0].size():
+		_apply_pick.rpc(player.name, offers[player.name][0][card])
 
 
 @rpc("authority", "call_local", "reliable")
@@ -223,20 +353,35 @@ func _apply_pick(player_name: String, catalog_index: int) -> void:
 	var perk: Perk = catalog.perks[catalog_index]
 	if player:
 		player.add_perk(perk)
-	offers.erase(player_name)
-	_end_pick()
+	var drafting: bool = _draft_left.get(player_name, 0) > 1
+	if drafting:
+		# More to take from the same hand, minus this card
+		_draft_left[player_name] -= 1
+		var rest: Array = Array(offers[player_name][0])
+		rest.erase(catalog_index)
+		offers[player_name][0] = PackedInt32Array(rest)
+	elif offers.has(player_name):
+		_draft_left.erase(player_name)
+		offers[player_name].pop_front()
+		if offers[player_name].is_empty():
+			offers.erase(player_name)
+	_end_pick(player_name)
 	if player:
 		perk_taken.emit(player, perk)
+		if drafting:
+			_open_own(player)
 	if in_intermission and offers.is_empty():
 		_finish_intermission()
+	if in_draft and offers.is_empty():
+		_finish_draft()
 
 
-func _end_pick() -> void:
-	picking = ""
-	picker.close()
-	get_tree().paused = false
-	# Buttons pressed or let go while paused never reached the players
-	for player: PlayerClass3D in _players():
+func _end_pick(player_name: String) -> void:
+	picking.erase(player_name)
+	var player: PlayerClass3D = _player_named(player_name)
+	if player:
+		picker.close(player)
+		# The button that took the card shouldn't also swing
 		if player.Input_Handler:
 			player.Input_Handler.release_all()
 	_update_waiting()
@@ -245,26 +390,30 @@ func _end_pick() -> void:
 ## An online player left: they no longer hold anyone up.
 func forget_player(player: PlayerClass3D) -> void:
 	offers.erase(player.name)
+	_draft_left.erase(player.name)
 	_boss_rewards.erase(player.name)
 	_goal_rewards.erase(player.name)
 	_round_kills.erase(player.name)
-	if picking == player.name:
-		_end_pick()
-	elif in_intermission:
+	if picking.has(player.name):
+		_end_pick(player.name)
+	elif in_intermission or in_draft:
 		_update_waiting()
 	if in_intermission and offers.is_empty():
 		_finish_intermission()
+	if in_draft and offers.is_empty():
+		_finish_draft()
 
 
 # ===== HELPERS =====
 
 func _update_waiting() -> void:
 	var waiting: Array[PlayerClass3D] = []
-	if in_intermission:
+	if in_intermission or in_draft:
 		for player: PlayerClass3D in _players():
 			if offers.has(player.name):
 				waiting.append(player)
-	picker.show_waiting(waiting)
+	var heading: String = "Choose your perks" if in_draft else "Choose a perk at your altar"
+	picker.show_waiting(waiting, heading)
 
 
 func _players() -> Array[PlayerClass3D]:

@@ -19,8 +19,24 @@ class_name Arrow3D extends RigidBody3D
 ## Above 0, hitting the ball turns it to fly the way this was going, at
 ## least this fast (m/s), instead of just shoving it (the staff's bolt).
 @export var ball_redirect_speed: float = 0.0
+## With ball_redirect_speed: added to the ball's speed, so a bolt always
+## speeds it up, even when it's already flying.
+@export var ball_redirect_boost: float = 0.0
+## With ball_redirect_speed: pops the ball up at least this fast (m/s).
+@export var ball_redirect_lift: float = 0.0
 ## Safety net: an arrow that somehow never hits anything is removed after this.
 @export var max_lifetime: float = 5.0
+## What hitting a wall or the floor sounds like (an Sfx.SOUNDS id).
+@export var wall_sound: StringName = &"arrow_wall"
+## What hitting anything else sounds like, on top of its own hit sound.
+## Empty = only the hit sound.
+@export var body_sound: StringName = &""
+## Shown as it instead of its Mesh and light: a HELD Vfx.EFFECTS id (a
+## spell's bolt), `look_size` meters across, in `look_color`. Empty = its
+## Mesh.
+@export var look: StringName = &""
+@export var look_size: float = 0.5
+@export var look_color: Color = Color.TRANSPARENT
 
 ## Walls and floor. The HitArea can't be relied on for these: areas don't
 ## always report static bodies (Jolt skips them by default), and a fast arrow
@@ -30,6 +46,17 @@ const WORLD_MASK := 0b1
 
 ## False for online copies of someone else's shot, which only show it.
 var deals_damage: bool = true
+## Flies on through whoever it hits (a heavy shot), hitting each once; only
+## a wall stops it.
+var pierce: bool = false
+var _pierced: Array[Node] = []
+
+## The shot that breaks its weapon bursts where it lands, wall or body, in
+## the weapon's break burst (see CrossbowClass3D). 0 = an ordinary shot.
+var burst_radius: float = 0.0
+var burst_damage: float = 0.0
+var burst_knockback: float = 0.0
+var burst_color: Color = Color.WHITE
 
 @onready var hit_area: Area3D = $HitArea
 
@@ -39,6 +66,25 @@ var _excluded_bodies: Array[Node] = []
 var shooter: Node3D = null
 var _age: float = 0.0
 var _last_tip: Vector3
+var _look: Node3D = null
+## Times its size, from enlarge() (which may come before its look is made).
+var _size: float = 1.0
+
+
+func _ready() -> void:
+	if look == &"":
+		return
+	_look = Vfx.attach(look, self, Vector3.ZERO, 0.0, look_size * _size, look_color)
+	if _look:
+		for child: Node in get_children():
+			if child is MeshInstance3D or child is OmniLight3D:
+				child.visible = false
+
+
+## Gone (landed, or flown too long): its look fades out where it is.
+func _finish() -> void:
+	Vfx.release(_look)
+	queue_free()
 
 
 ## Exempts a body from ever registering as a hit. Used to keep the arrow
@@ -46,7 +92,7 @@ var _last_tip: Vector3
 ## fired from - a held weapon is tagged with the Player collision layer (see
 ## Weapon3D._update_collisions), which the hit mask below deliberately
 ## includes so arrows can hit other players later, so without this the arrow
-## detects the crossbow it just spawned next to as an instant hit.
+## detects the bow it just spawned next to as an instant hit.
 ## (Area3D has no add_collision_exception_with - that's PhysicsBody3D-only -
 ## so this is a plain manual skip-list instead.)
 func exclude_body(body: Node) -> void:
@@ -74,10 +120,12 @@ func _physics_process(delta: float) -> void:
 		return
 	_age += delta
 	if _age > max_lifetime:
-		queue_free()
+		_finish()
 		return
 	if _hit_world():
-		queue_free()
+		Sfx.play(wall_sound, global_position)
+		_burst(null)
+		_finish()
 		return
 	if linear_velocity.length_squared() < 0.01:
 		return
@@ -96,15 +144,52 @@ func _hit_world() -> bool:
 	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 
+## Make this shot burst where it lands.
+func set_burst(radius: float, burst_dmg: float, burst_shove: float, color: Color) -> void:
+	burst_radius = radius
+	burst_damage = burst_dmg
+	burst_knockback = burst_shove
+	burst_color = color
+
+
+## Burst, if this shot does, sparing `struck` (just hit by the shot itself).
+## Everyone sees it; only a real shot hurts.
+func _burst(struck: Node) -> void:
+	if burst_radius <= 0.0 or not is_inside_tree():
+		return
+	if deals_damage:
+		var exclude: Array[RID] = [get_rid()]
+		if struck is CollisionObject3D:
+			exclude.append(struck.get_rid())
+		Weapon3D.burst(get_world_3d(), global_position, burst_radius, burst_damage, burst_knockback, shooter, exclude)
+	Sfx.play(&"weapon_break", global_position)
+	WeaponShatter3D.spawn(get_parent(), global_position, burst_color, burst_radius)
+	Vfx.play(&"shatter", global_position, Vector3.FORWARD, false, burst_radius, burst_color)
+
+
 func _align_to_velocity(velocity: Vector3) -> void:
 	var dir: Vector3 = velocity.normalized()
 	rotation.y = atan2(dir.x, dir.z)
 	rotation.x = asin(clamp(dir.y, -1.0, 1.0))
 
 
+## Everything about it this many times bigger (not the body itself: physics
+## bodies mustn't be scaled).
+func enlarge(factor: float) -> void:
+	_size *= factor
+	for child: Node in get_children():
+		if child is Node3D:
+			(child as Node3D).scale *= factor
+
+
 func _on_body_entered(body: Node) -> void:
-	if not is_flying or body in _excluded_bodies: return
-	is_flying = false
+	if not is_flying or body in _excluded_bodies or body in _pierced: return
+	if pierce:
+		_pierced.append(body)
+	else:
+		is_flying = false
+	if body_sound != &"":
+		Sfx.play(body_sound, global_position)
 
 	var travel_dir: Vector3 = Vector3.FORWARD
 	if linear_velocity.length_squared() > 0.01:
@@ -114,9 +199,14 @@ func _on_body_entered(body: Node) -> void:
 	# (the ball, a placeholder dummy) just get shoved - same as every attack.
 	if deals_damage:
 		if body is Ball3D and ball_redirect_speed > 0.0:
-			body.redirect(travel_dir, ball_redirect_speed)
+			var power: float = shooter.perk_stat(&"ball_power") if shooter is PlayerClass3D else 1.0
+			body.redirect(travel_dir, ball_redirect_speed * power, ball_redirect_boost * power, ball_redirect_lift)
 			body.touched_by(shooter)
+			Sfx.play_everywhere(&"hit_ball", body.global_position)
 		else:
 			Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
+	if pierce:
+		return
+	_burst(body)
 
-	queue_free()
+	_finish()

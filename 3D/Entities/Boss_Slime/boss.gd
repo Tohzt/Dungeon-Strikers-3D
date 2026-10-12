@@ -1,10 +1,13 @@
 class_name Boss3D extends CharacterBody3D
-## A big slime that roams the pitch in short hops. It bodies anyone it
-## lands on or bumps into, leaps up for a big stomp when a player is close,
+## A big slime that roams the pitch in short hops. Touching it is safe; its
+## attacks are telegraphed: it lunges at players a little way off, swells
+## up in a burst when they crowd it, leaps up for a big stomp when one is close,
 ## and when it finds itself near the ball it dribbles it into whichever goal
 ## it's nearest, so it's a threat to both teams. Every so often it swells
 ## up and spits out little minion slimes (SlimeMinion3D) that chase players.
-## A ball floats in its core; beating it drops a fresh ball into play.
+## Its drop (see `drop`) floats in its core; beating it drops that into play.
+## With `swallows_ball` it gulps down a ball it touches instead of kicking
+## it, and only gives it back when beaten.
 ## Online the server runs it and streams where it is (like the ball);
 ## everyone else just plays that back.
 
@@ -19,6 +22,10 @@ enum State {
 	RECOVER,        ## Flattened after a stomp, catching its breath
 	STAGGERED,      ## Poise broken: dazed and defenseless for a while
 	SPIT_WINDUP,    ## Swelling up, about to spit out minions
+	LUNGE_WINDUP,   ## Rearing back, about to lunge
+	LUNGE,          ## Skimming forward in a low, fast leap
+	SWELL_WINDUP,   ## Crouched and shivering, about to burst outward
+	SWELL,          ## Puffed up: the burst
 	DEAD,           ## Beaten: deflating, ball released
 }
 
@@ -84,12 +91,35 @@ const SPIT_WINDUP_TIME := 0.8
 ## Spread (radians) around the aim toward a player.
 const SPIT_SPREAD := 0.6
 
-# ===== BUMPING =====
-@export_category("Bump")
-@export var bump_damage: float = 12.5
-@export var bump_knockback: float = 10.0
-@export var bump_pop: float = 3.0
-const BUMP_COOLDOWN := 0.8  # Per player
+# ===== LUNGE =====
+@export_category("Lunge")
+@export var lunge_trigger_range: float = 14.0  ## Lunge at a player this close
+@export var lunge_cooldown: float = 4.0
+@export var lunge_distance: float = 9.0  ## Farthest it travels in one lunge
+@export var lunge_damage: float = 20.0
+@export var lunge_knockback: float = 14.0
+@export var lunge_pop: float = 4.0
+const LUNGE_WINDUP_TIME := 0.6
+const LUNGE_AIR_TIME := 0.4
+## It stops tracking its target this long before it goes, so a late sidestep works.
+const LUNGE_AIM_LOCK := 0.2
+## Rest after a lunge: the opening to punish it.
+const LUNGE_RECOVER_TIME := 0.8
+## How far the body leans back while rearing (and forward while lunging).
+const LUNGE_LEAN := 0.8
+
+# ===== SWELL =====
+# A burst outward when players crowd it, so hugging it isn't free.
+@export_category("Swell")
+@export var swell_trigger_range: float = 5.0  ## Burst when a player is this close to its center
+@export var swell_cooldown: float = 3.5
+@export var swell_radius: float = 6.0  ## Burst reach from its center
+@export var swell_damage: float = 25.0
+@export var swell_knockback: float = 16.0
+@export var swell_pop: float = 6.0
+const SWELL_WINDUP_TIME := 0.55
+const SWELL_TIME := 0.3
+const SWELL_SCALE := 1.6  # How big it puffs up at the burst
 
 # ===== BALL =====
 @export_category("Ball")
@@ -105,10 +135,16 @@ const DRIBBLE_SETUP_OFFSET := RADIUS + BALL_RADIUS + 0.5
 @export_category("Health")
 @export var display_name: String = "Gelatinous Colossus"
 @export var max_hp: float = 1200.0
-## Drop a ball into play when beaten (shown floating in the core until then).
-@export var drops_ball: bool = true
-## How hard the dropped ball pops out.
+## What it drops into play when beaten (shown floating in its core until then).
+@export var drop: BossDrop.Kind = BossDrop.Kind.SKULL
+## How hard the drop pops out.
 @export var release_impulse: float = 1.5
+## Touching a ball while its belly is empty (no drop) swallows it: it
+## becomes the drop, so the ball's back in play only once the boss is beaten.
+@export var swallows_ball: bool = false
+## Shut in a pen (BossPen3D) until it's let out: nobody can reach it, so
+## bots leave it be.
+var penned: bool = false
 ## Hits tint the slime this bright for a moment.
 const HIT_FLASH_TIME := 0.15
 ## Hits move it this fraction as far as they'd shove a loose object.
@@ -133,6 +169,9 @@ var _poise_broken: bool = false
 
 ## Don't start acting until the match has had a moment to settle.
 @export var start_delay: float = 3.0
+## Sleep (no countdown, no health bar) until wake() is called, e.g. by a
+## BossTrigger3D when the first player walks into its arena, or by a hit.
+@export var wait_for_players: bool = false
 
 @onready var visual: Node3D = $Visual
 @onready var body_mesh: MeshInstance3D = $Visual/MeshInstance3D
@@ -155,7 +194,10 @@ var _state_time: float = 0.0
 var _rest_time: float = 0.5
 var _stomp_cooldown: float = 0.0
 var _kick_cooldown: float = 0.0
-var _bump_cooldowns: Dictionary[Node, float] = {}
+var _lunge_cooldown: float = 0.0
+var _swell_cooldown: float = 0.0
+## Players the current lunge has already hit.
+var _lunge_hits: Array[PlayerClass3D] = []
 var _shove: Vector3 = Vector3.ZERO
 var _move_dir: Vector3 = Vector3.ZERO
 var _stomp_target: Vector3 = Vector3.ZERO
@@ -174,10 +216,8 @@ var _squash: float = 1.0
 var _squash_vel: float = 0.0
 var _wobble_time: float = 0.0
 
-## Clients: the server's recent updates, played back smoothly.
-var _net_motion: NetInterpolator = null
-var _last_sent_transform: Transform3D
-var _last_sent_msec: int = 0
+## Online: the server sends where it is; clients play it back.
+var _motion := NetMotion.new()
 
 
 func _ready() -> void:
@@ -187,18 +227,17 @@ func _ready() -> void:
 	telegraph.visible = false
 	var ring: CylinderMesh = telegraph.mesh as CylinderMesh
 	if ring:
-		ring.top_radius = stomp_radius
-		ring.bottom_radius = stomp_radius
+		ring.top_radius = 1.0  # Scaled to each attack's reach (see _update_telegraph)
+		ring.bottom_radius = 1.0
 	_stomp_cooldown = stomp_cooldown * 0.5
+	_lunge_cooldown = lunge_cooldown * 0.5
 	_spit_cooldown = spit_cooldown * 0.6
 	hp = max_hp
-	core.visible = drops_ball
-	if Net.in_session() and not Net.is_server:
-		_net_motion = NetInterpolator.new()
+	_dress_core()
 
 
 func _physics_process(delta: float) -> void:
-	if not _simulates():
+	if not Net.decides():
 		return
 	if not is_awake or is_defeated:
 		_apply_gravity(delta)
@@ -210,11 +249,9 @@ func _physics_process(delta: float) -> void:
 	_stomp_cooldown = max(_stomp_cooldown - delta, 0.0)
 	_spit_cooldown = max(_spit_cooldown - delta, 0.0)
 	_kick_cooldown = max(_kick_cooldown - delta, 0.0)
+	_lunge_cooldown = max(_lunge_cooldown - delta, 0.0)
+	_swell_cooldown = max(_swell_cooldown - delta, 0.0)
 	_update_poise(delta)
-	for key: Node in _bump_cooldowns.keys():
-		_bump_cooldowns[key] -= delta
-		if _bump_cooldowns[key] <= 0.0 or not is_instance_valid(key):
-			_bump_cooldowns.erase(key)
 
 	match state:
 		State.IDLE: _state_idle()
@@ -227,23 +264,24 @@ func _physics_process(delta: float) -> void:
 		State.RECOVER: _state_recover()
 		State.STAGGERED: _state_staggered()
 		State.SPIT_WINDUP: _state_spit_windup()
+		State.LUNGE_WINDUP: _state_lunge_windup()
+		State.LUNGE: _state_lunge(delta)
+		State.SWELL_WINDUP: _state_swell_windup()
+		State.SWELL: _state_swell()
 
-	_bump_players()
 	_touch_ball()
 	_send_state()
 
 
 func _process(delta: float) -> void:
 	# Every machine counts down itself, so everyone's health bar appears together
-	if not is_awake:
+	if not is_awake and not wait_for_players:
 		start_delay -= delta
 		if start_delay <= 0.0:
 			is_awake = true
 			awakened.emit()
-	if _net_motion:
-		var sample: Array = _net_motion.sample(delta)
-		if not sample.is_empty():
-			global_transform = sample[0]
+	if not Net.decides():
+		_motion.play(self, delta)
 		_state_time += delta  # Clients don't run the states, but the visuals time them
 	elif state == State.DEAD:
 		_state_time += delta  # Physics has stopped, but the fade-out times itself
@@ -273,13 +311,20 @@ func _on_state_entered(new_state: State) -> void:
 		State.IDLE:
 			_squash_vel -= 5.0  # Splat on landing
 		State.RECOVER:
-			_squash_vel -= 12.0
+			_squash_vel -= 12.0  # Landed a stomp
+			Sfx.play(&"boss_stomp", global_position)
+			CameraShake.add(CameraShake.HEAVY, global_position)
 		State.STAGGERED:
 			_squash_vel -= 10.0
 		State.DEAD:
 			_squash_vel -= 6.0
 		State.SPIT_WINDUP:
 			_squash_vel += 2.0
+		State.LUNGE:
+			_squash_vel += 6.0
+		State.SWELL:
+			_squash_vel += 6.0
+			Sfx.play(&"hit_slime", global_position)
 
 
 func _state_idle() -> void:
@@ -372,6 +417,50 @@ func _state_spit_windup() -> void:
 		_set_state(State.IDLE)
 
 
+func _state_lunge_windup() -> void:
+	_slide_shove()
+	var target: Node3D = _target_player()
+	if target and _state_time < LUNGE_WINDUP_TIME - LUNGE_AIM_LOCK:
+		var to_target: Vector3 = _flat(target.global_position - global_position)
+		if to_target.length() > 0.01:
+			_move_dir = to_target.normalized()
+	if _state_time >= LUNGE_WINDUP_TIME:
+		# Carry it a little past where the target stood, up to lunge_distance
+		var reach: float = lunge_distance
+		if target:
+			reach = min(reach, _flat(target.global_position - global_position).length() + 2.0)
+		velocity = _move_dir * reach / LUNGE_AIR_TIME + Vector3.UP * _gravity() * LUNGE_AIR_TIME * 0.5
+		_lunge_hits.clear()
+		_set_state(State.LUNGE)
+
+
+func _state_lunge(delta: float) -> void:
+	_apply_gravity(delta)
+	move_and_slide()
+	_lunge_strike()
+	if is_on_floor() and _state_time > 0.05:
+		velocity = Vector3.ZERO
+		_ground_y = global_position.y
+		_lunge_cooldown = lunge_cooldown
+		_rest_time = LUNGE_RECOVER_TIME
+		_set_state(State.IDLE)
+
+
+func _state_swell_windup() -> void:
+	_slide_shove()
+	if _state_time >= SWELL_WINDUP_TIME:
+		_swell_burst()
+		_swell_cooldown = swell_cooldown
+		_set_state(State.SWELL)
+
+
+func _state_swell() -> void:
+	_slide_shove()
+	if _state_time >= SWELL_TIME:
+		_rest_time = hop_rest_max
+		_set_state(State.IDLE)
+
+
 ## Count down to poise recovering, and stagger once it's broken and grounded.
 func _update_poise(delta: float) -> void:
 	if _poise_reset_wait > 0.0:
@@ -379,7 +468,8 @@ func _update_poise(delta: float) -> void:
 		if _poise_reset_wait <= 0.0:
 			_poise_damage = 0.0
 	# A stagger cuts a spit short: hitting it hard enough stops the minions coming
-	if _poise_broken and state in [State.IDLE, State.HOP_PREP, State.STOMP_WINDUP, State.RECOVER, State.SPIT_WINDUP]:
+	if _poise_broken and state in [State.IDLE, State.HOP_PREP, State.STOMP_WINDUP, State.RECOVER,
+			State.SPIT_WINDUP, State.LUNGE_WINDUP, State.SWELL_WINDUP]:
 		_poise_broken = false
 		_poise_damage = 0.0
 		velocity = Vector3.ZERO
@@ -395,8 +485,9 @@ func _land() -> void:
 
 # ===== DECISIONS =====
 
-## On the ground and rested: dribble the ball if it's close, otherwise go
-## after its target (see _target_player), stomping them if they're in range.
+## On the ground and rested: dribble the ball if it's close, burst if it's
+## being crowded, otherwise go after its target (see _target_player),
+## stomping or lunging at them if they're in range.
 func _choose_action() -> void:
 	var ball: Ball3D = _free_ball()
 	if ball and _flat(ball.global_position - global_position).length() < ball_interest_range:
@@ -409,6 +500,9 @@ func _choose_action() -> void:
 		_rest_time = hop_rest_max
 		_state_time = 0.0
 		return
+	if _swell_cooldown <= 0.0 and _players_within(swell_trigger_range):
+		_set_state(State.SWELL_WINDUP)
+		return
 	_forget_dead_minions()
 	if _spit_cooldown <= 0.0 and _minions.size() < max_minions and minion_scene:
 		_set_state(State.SPIT_WINDUP)
@@ -419,6 +513,9 @@ func _choose_action() -> void:
 		_set_state(State.STOMP_WINDUP)
 		return
 	_move_dir = to_target.normalized()
+	if _lunge_cooldown <= 0.0 and to_target.length() < lunge_trigger_range:
+		_set_state(State.LUNGE_WINDUP)
+		return
 	# A little randomness so it doesn't beeline like a robot
 	_move_dir = _move_dir.rotated(Vector3.UP, randf_range(-0.35, 0.35))
 	_set_state(State.HOP_PREP)
@@ -445,26 +542,38 @@ func _dribble_direction(ball: Ball3D) -> Vector3:
 
 # ===== ATTACKS =====
 
-## Anyone overlapping the slime gets bowled over.
-func _bump_players() -> void:
-	if state == State.STOMP_FALL:
-		return  # The landing shockwave deals with whoever's underneath
-	if state == State.STAGGERED:
-		return  # Dazed: safe to crowd around
+## Mid-lunge: bowl over anyone it runs into (once each), flinging them
+## along the lunge and out to the side they were on.
+func _lunge_strike() -> void:
 	for player: PlayerClass3D in _players():
-		if _bump_cooldowns.has(player):
+		if player.is_dead() or _lunge_hits.has(player):
 			continue
 		var offset: Vector3 = player.global_position - global_position
 		if offset.y < -1.0 or offset.y > HEIGHT:
 			continue
 		var flat: Vector3 = _flat(offset)
-		if flat.length() > RADIUS + PLAYER_RADIUS + 0.1:
+		if flat.length() > RADIUS + PLAYER_RADIUS + 0.3:
 			continue
-		_bump_cooldowns[player] = BUMP_COOLDOWN
-		var dir: Vector3 = flat if flat.length() > 0.01 else _move_dir
-		# Falling on someone hurts more than walking into them
-		var dmg: float = bump_damage * (1.5 if velocity.y < -1.0 else 1.0)
-		Combat.strike(player, dir, dmg, bump_knockback, bump_pop)
+		_lunge_hits.append(player)
+		var side: Vector3 = flat.normalized() if flat.length() > 0.01 else Vector3.ZERO
+		Combat.strike(player, _move_dir + side * 0.5, lunge_damage, lunge_knockback, lunge_pop)
+
+
+## Burst outward: everyone near enough gets blasted away, harder the closer
+## they are. Players in the air above it are clear.
+func _swell_burst() -> void:
+	for player: PlayerClass3D in _players():
+		if player.is_dead():
+			continue
+		var offset: Vector3 = player.global_position - global_position
+		if offset.y < -1.0 or offset.y > HEIGHT * SWELL_SCALE:
+			continue
+		var dist: float = _flat(offset).length()
+		if dist > swell_radius:
+			continue
+		var falloff: float = 1.0 - 0.4 * dist / swell_radius
+		Combat.strike(player, _flat(offset), swell_damage * falloff,
+				swell_knockback * falloff, swell_pop)
 
 
 func _stomp_shockwave() -> void:
@@ -476,7 +585,6 @@ func _stomp_shockwave() -> void:
 		if dist > stomp_radius:
 			continue
 		var falloff: float = 1.0 - 0.5 * dist / stomp_radius
-		_bump_cooldowns[player] = BUMP_COOLDOWN
 		Combat.strike(player, _flat(offset), stomp_damage * falloff,
 				stomp_knockback * falloff, stomp_pop)
 	var ball: Ball3D = _free_ball()
@@ -515,10 +623,7 @@ func _spit() -> void:
 		_minions_made += 1
 		names.append("%s_Minion%d" % [name, _minions_made])
 		launches.append(dir * spit_speed * randf_range(0.7, 1.2) + Vector3.UP * spit_lift)
-	if Net.in_session():
-		_net_spit.rpc(names, launches)
-	else:
-		_net_spit(names, launches)
+	Net.everywhere(_net_spit, names, launches)
 
 
 ## Spawn the spat-out minions, on every machine, beside the boss in the
@@ -526,19 +631,21 @@ func _spit() -> void:
 @rpc("authority", "call_local", "reliable")
 func _net_spit(names: PackedStringArray, launches: PackedVector3Array) -> void:
 	_squash_vel -= 8.0  # Deflates as they fly out
+	Sfx.play(&"boss_spit", global_position)
 	var mouth: Vector3 = global_position + Vector3.UP * HEIGHT
 	for i in names.size():
 		var minion: SlimeMinion3D = minion_scene.instantiate()
 		minion.name = names[i]
 		minion.position = mouth
 		get_parent().add_child(minion)
-		if _simulates():
+		if Net.decides():
 			minion.launch(launches[i])
 		_minions.append(minion)
 
 
-## Touching the ball knocks it toward the nearest goal, as long as the slime
-## is behind it (otherwise it just bounces off).
+## Touching the ball swallows it (see swallows_ball), or knocks it toward
+## the nearest goal, as long as the slime is behind it (otherwise it just
+## bounces off).
 func _touch_ball() -> void:
 	if _kick_cooldown > 0.0:
 		return
@@ -551,11 +658,31 @@ func _touch_ball() -> void:
 	var flat: Vector3 = _flat(offset)
 	if flat.length() > RADIUS + BALL_RADIUS + 0.3:
 		return
+	if swallows_ball and drop == BossDrop.Kind.NONE and not ball is Skull3D:
+		Net.everywhere(_net_swallow, String(ball.name))
+		return
 	var goal_dir: Vector3 = _flat(_goal_aim(ball) - ball.global_position).normalized()
 	if flat.normalized().dot(goal_dir) < 0.0:
 		return
 	_kick_cooldown = KICK_COOLDOWN
 	Combat.push(ball, goal_dir * kick_impulse + Vector3.UP * kick_lift)
+
+
+## On every machine: gulp `ball_name` down. It floats in the core and
+## comes back out when the boss is beaten.
+@rpc("authority", "call_local", "reliable")
+func _net_swallow(ball_name: String) -> void:
+	var game: Game3D_Class = Global.Game3D
+	var ball: Ball3D = game.get_node_or_null(ball_name) as Ball3D if game else null
+	if not ball or is_defeated:
+		return
+	game._remove_ball(ball)
+	drop = BossDrop.Kind.BALL
+	core.visible = true
+	_squash_vel += 6.0  # Bulges as it goes down
+	Sfx.play(&"boss_spit", global_position)
+	game.scoreboard.announce("%s swallowed the ball! Beat it to get it back" % display_name, Color(0.6, 1.0, 0.5))
+	game._update_phase()
 
 
 ## Called by Combat.strike for every attack that lands on the boss.
@@ -564,10 +691,13 @@ func _touch_ball() -> void:
 func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
 	if is_defeated:
 		return false
-	if not _simulates():
+	wake()
+	if not Net.decides():
 		if Net.match_synced:
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
 		return true
+	Sfx.play_everywhere(&"hit_slime", global_position)
+	Vfx.play_everywhere(&"hit", global_position, knockback_velocity)  # Its dir is lost when passed to the server
 	receive_impulse(knockback_velocity * HIT_SHOVE_RATIO)
 	if state == State.STAGGERED:
 		damage *= staggered_damage_multiplier
@@ -578,11 +708,13 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 	_set_hp(hp - damage)
 	if hp <= 0.0:
 		var killer: String = String(attacker.name) if attacker is PlayerClass3D else ""
-		if Net.in_session():
-			_net_defeated.rpc(killer)
-		else:
-			_defeat(killer)
+		Net.everywhere(_net_defeated, killer)
 	return true
+
+
+## Start the start_delay countdown if it was waiting for players.
+func wake() -> void:
+	wait_for_players = false
 
 
 func _set_hp(value: float) -> void:
@@ -608,13 +740,11 @@ func _defeat(killer_name: String) -> void:
 	for minion: SlimeMinion3D in _minions:
 		minion.die()
 	_minions.clear()
-	if drops_ball and Global.Game3D:
+	if drop != BossDrop.Kind.NONE and Global.Game3D:
 		core.visible = false
 		var dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
-		Global.Game3D.spawn_ball(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse)
-	var killer: PlayerClass3D = null
-	if Global.Game3D and killer_name != "":
-		killer = Global.Game3D.get_node_or_null(killer_name) as PlayerClass3D
+		Global.Game3D.spawn_ball(core.global_position, (Vector3.UP * 2.0 + dir) * release_impulse, drop)
+	var killer: PlayerClass3D = Global.Game3D.player_named(killer_name) if Global.Game3D else null
 	defeated.emit(killer)
 	await get_tree().create_timer(DEATH_TIME).timeout
 	queue_free()
@@ -623,7 +753,7 @@ func _defeat(killer_name: String) -> void:
 ## Hit by a punch, sword or thrown weapon (see Combat.push). It's heavy, so
 ## it only slides a little.
 func receive_impulse(impulse: Vector3) -> void:
-	if not _simulates():
+	if not Net.decides():
 		_request_push.rpc_id(Net.SERVER_ID, impulse)
 		return
 	_shove = (_shove + _flat(impulse) * SHOVE_RESISTANCE).limit_length(SHOVE_MAX)
@@ -641,10 +771,6 @@ func _slide_shove() -> void:
 
 # ===== HELPERS =====
 
-func _simulates() -> bool:
-	return not Net.in_session() or Net.is_server
-
-
 func _gravity() -> float:
 	return get_gravity().length() * gravity_scale
 
@@ -656,6 +782,14 @@ func _apply_gravity(delta: float) -> void:
 
 func _flat(v: Vector3) -> Vector3:
 	return Vector3(v.x, 0.0, v.z)
+
+
+## Whether any living player is within `range_` of its center.
+func _players_within(range_: float) -> bool:
+	for player: PlayerClass3D in _players():
+		if not player.is_dead() and _flat(player.global_position - global_position).length() < range_:
+			return true
+	return false
 
 
 func _clamp_stomp_target(pos: Vector3) -> Vector3:
@@ -703,7 +837,7 @@ func _free_ball() -> Ball3D:
 	var best: Ball3D = null
 	var best_dist: float = INF
 	for ball: Ball3D in Global.Game3D.balls:
-		if not is_instance_valid(ball) or not ball.is_inside_tree() or ball.holder:
+		if not is_instance_valid(ball) or not ball.is_inside_tree():
 			continue
 		var dist: float = global_position.distance_to(ball.global_position)
 		if dist < best_dist:
@@ -755,16 +889,60 @@ func _update_squash(delta: float) -> void:
 			# Swell up taller and taller, gurgling faster as it goes
 			var t: float = clamp(_state_time / SPIT_WINDUP_TIME, 0.0, 1.0)
 			target = lerp(1.05, 1.35, t) + 0.04 * sin(_wobble_time * lerp(15.0, 45.0, t))
+		State.LUNGE_WINDUP:
+			var t: float = clamp(_state_time / LUNGE_WINDUP_TIME, 0.0, 1.0)
+			target = lerp(0.95, 0.75, t) + 0.03 * sin(_wobble_time * 40.0)
+		State.LUNGE:
+			target = 0.85  # Stretched long and low
+		State.SWELL_WINDUP:
+			var t: float = clamp(_state_time / SWELL_WINDUP_TIME, 0.0, 1.0)
+			target = lerp(0.95, 0.7, t) + 0.04 * sin(_wobble_time * lerp(25.0, 70.0, t))
 		State.DEAD:
 			target = 0.15
 	_squash_vel += (target - _squash) * SQUASH_STIFFNESS * delta
 	_squash_vel *= max(1.0 - SQUASH_DAMPING * delta, 0.0)
 	_squash = clamp(_squash + _squash_vel * delta, 0.4, 1.6)
 	var side: float = 1.0 / sqrt(_squash)
-	visual.scale = Vector3(side, _squash, side)
+	visual.scale = Vector3(side, _squash, side) * _puff()
+	visual.position = _lean()
 
 
-## The ball floating inside: stays round however the slime squashes, and
+## Uniform swelling on top of the squash: a little while winding up a
+## burst, then a quick puff out and back for the burst itself.
+func _puff() -> float:
+	match state:
+		State.SWELL_WINDUP:
+			return lerp(1.0, 1.1, clamp(_state_time / SWELL_WINDUP_TIME, 0.0, 1.0))
+		State.SWELL:
+			var t: float = clamp(_state_time / SWELL_TIME, 0.0, 1.0)
+			if t < 0.2:
+				return lerp(1.1, SWELL_SCALE, t / 0.2)
+			return lerp(SWELL_SCALE, 1.0, (t - 0.2) / 0.8)
+	return 1.0
+
+
+## Rearing back away from a lunge's aim, then thrown forward into it.
+func _lean() -> Vector3:
+	match state:
+		State.LUNGE_WINDUP:
+			var t: float = clamp(_state_time / LUNGE_WINDUP_TIME, 0.0, 1.0)
+			return -_move_dir * LUNGE_LEAN * ease(t, 0.5)
+		State.LUNGE:
+			return _move_dir * LUNGE_LEAN * 0.5
+	return Vector3.ZERO
+
+
+## Show the drop in the core: the ball mesh it has already, or the drop's
+## own model in its place.
+func _dress_core() -> void:
+	core.visible = drop != BossDrop.Kind.NONE
+	var model: PackedScene = BossDrop.model_of(drop)
+	if model:
+		core.mesh = null
+		core.add_child(model.instantiate())
+
+
+## The drop floating inside: stays round however the slime squashes, and
 ## drifts lazily around the middle.
 func _update_core() -> void:
 	if not core.visible:
@@ -792,40 +970,37 @@ func _update_color(delta: float) -> void:
 	_body_material.albedo_color = color
 
 
-## The danger zone on the ground while a stomp is coming.
+## The danger zone on the ground while a stomp or burst is coming.
 func _update_telegraph() -> void:
-	var showing: bool = state in [State.STOMP_WINDUP, State.STOMP_RISE, State.STOMP_HANG, State.STOMP_FALL]
-	telegraph.visible = showing
-	if not showing:
+	var stomping: bool = state in [State.STOMP_WINDUP, State.STOMP_RISE, State.STOMP_HANG, State.STOMP_FALL]
+	var swelling: bool = state == State.SWELL_WINDUP
+	telegraph.visible = stomping or swelling
+	if not telegraph.visible:
 		return
 	var center: Vector3 = _stomp_target if state == State.STOMP_WINDUP else global_position
 	telegraph.global_position = Vector3(center.x, _ground_y + 0.05, center.z)
+	var reach: float = swell_radius if swelling else stomp_radius
+	telegraph.scale = Vector3(reach, 1.0, reach)
 	var mat: StandardMaterial3D = telegraph.get_surface_override_material(0) as StandardMaterial3D
 	if mat:
 		# Pulse faster the closer it is to landing
-		var speed: float = 25.0 if state == State.STOMP_FALL else 10.0
+		var speed: float = 25.0 if state in [State.STOMP_FALL, State.SWELL_WINDUP] else 10.0
 		mat.albedo_color.a = 0.25 + 0.2 * sin(_wobble_time * speed)
 
 
 # ===== NETWORK =====
 
 func _send_state() -> void:
-	if not Net.in_session() or not Net.is_server or not Net.match_synced:
-		return
-	var now_msec: int = Time.get_ticks_msec()
-	if global_transform.is_equal_approx(_last_sent_transform) \
-			and now_msec - _last_sent_msec < NetInterpolator.RESEND_IDLE_MSEC:
-		return
-	_last_sent_transform = global_transform
-	_last_sent_msec = now_msec
-	_net_state.rpc(NetInterpolator.now(), global_transform, _stomp_target, _ground_y)
+	if Net.in_session() and Net.is_server and Net.match_synced and _motion.should_send(global_transform):
+		_net_state.rpc(NetInterpolator.now(), global_transform, _stomp_target, _ground_y, _move_dir)
 
 
 @rpc("authority", "unreliable_ordered")
-func _net_state(time: float, xform: Transform3D, stomp_target: Vector3, ground_y: float) -> void:
-	_net_motion.push(time, xform)
+func _net_state(time: float, xform: Transform3D, stomp_target: Vector3, ground_y: float, aim: Vector3) -> void:
+	_motion.push(time, xform)
 	_stomp_target = stomp_target
 	_ground_y = ground_y
+	_move_dir = aim  # For the lunge's lean
 
 
 @rpc("authority", "reliable")
@@ -851,7 +1026,7 @@ func _net_defeated(killer_name: String) -> void:
 @rpc("any_peer", "reliable")
 func _request_hit(damage: float, knockback_velocity: Vector3) -> void:
 	if Net.is_server:
-		var attacker: PlayerClass3D = Global.Game3D.player_of_peer(multiplayer.get_remote_sender_id())
+		var attacker: PlayerClass3D = Global.Game3D.rpc_sender()
 		receive_hit(Vector3.ZERO, damage, knockback_velocity, attacker)
 
 

@@ -1,12 +1,13 @@
 class_name Game3D_Class extends Node3D
-## The match: the first team to `kills_to_win` player kills wins. Around
-## that it runs in rounds: a boss fight, then soccer with the ball the boss
-## drops, then (once every ball is scored and no boss is left) an
-## intermission where each player picks a perk at their altar, then the
-## next, tougher boss.
+## The match: the first team to `kills_to_win` player kills wins (or, in
+## modes that set goals_to_win, the first to that many goals). Around
+## that it runs in rounds: a boss fight, then a scramble for what the boss
+## drops (see BossDrop): a skull to knock home to your altar for a reward,
+## or a ball to score in a goal. Once every drop is dealt with and no boss
+## is left, there's an intermission where each player picks a perk at their
+## altar, then the next, tougher boss.
 ## A goal is a comeback tool: a team behind on kills takes one back from
-## the leader; otherwise it earns a bounty shield that soaks the next
-## killing blow on one of its players.
+## the leader.
 
 signal set_camera_active(TorF: bool)
 ## A point was just awarded to `team`. On every machine.
@@ -18,8 +19,6 @@ signal player_killed(victim: PlayerClass3D, killer: PlayerClass3D)
 ## Someone reached kills_to_win. On every machine.
 signal match_won(team: int)
 
-## Matches Players.TEAM_COLORS.
-const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 const BOT_INPUT := preload("res://3D/Entities/Handlers/bot_input_handler_3d.gd")
 ## Which side of the arena each team starts on and defends (its goal and
 ## altar): Blue left, Red right, Green nearest the camera, Yellow far.
@@ -27,7 +26,7 @@ const TEAM_SIDES: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.BACK, V
 
 enum Phase {
 	BOSS,          ## A boss is alive
-	SOCCER,        ## No boss, but a ball is in play
+	SOCCER,        ## No boss, but a drop (ball, skull...) is in play
 	INTERMISSION,  ## Everything's scored: players pick perks at their altars
 }
 
@@ -39,9 +38,21 @@ enum Phase {
 @export var spawn_distance: float = 8.0
 ## Gap between teammates' starting spots.
 @export var spawn_spacing: float = 6.0
+## How far out in front of their own goal a team starts (when the level has
+## no SpawnPoint3D for it).
+@export var goal_spawn_distance: float = 8.0
+## The level's background loop (an Sfx.AMBIENCES id). Empty = none.
+@export var ambience: StringName = &""
+## Music between boss fights (an Sfx.MUSIC id). Empty = none.
+@export var music: StringName = &"lava_dungeon"
+## Music while a boss is awake.
+@export var boss_music: StringName = &"boss"
 ## Floor for two teams (a goal at each end) and for four (one per side).
 @export var field_2p: Texture2D = preload("res://Assets/Textures/soccer field.png")
 @export var field_4p: Texture2D = preload("res://Assets/Textures/soccer field 4P.png")
+## Most teams this level is laid out for; a bigger match format is cut down
+## to this (e.g. the dungeon only has two sides).
+@export_range(2, 4) var max_team_count: int = 4
 
 @export var ball_scene: PackedScene = preload("res://3D/ball_3d.tscn")
 ## Where "Reset Ball" (pause menu) puts every ball.
@@ -53,15 +64,32 @@ enum Phase {
 ## (0.25 = +25%), to keep up with the players' perks.
 @export var boss_hp_growth: float = 0.25
 
+## Between rounds, everyone walks home to pick a perk (see PerkDirector).
+## Off for modes with no rounds, like the race.
+@export var intermissions: bool = true
+
 @export_group("Kills")
+## Whether reaching kills_to_win wins the match. Off for modes won some
+## other way (the race); kills are still counted and announced.
+@export var kills_win: bool = true
 ## Player kills a team needs to win the match.
 @export_range(1, 20) var kills_to_win: int = 5
 ## Seconds a killed player sits out before respawning.
 @export var respawn_delay: float = 4.0
-## Bounty shields a team can bank at once.
-@export_range(0, 5) var max_bounty_shields: int = 1
+## A killed player is knocked out where they fell and gets back up there,
+## instead of respawning at their team's spawn point.
+@export var knockouts: bool = false
+## Knockouts: each knockout adds this many seconds to the next one's wait
+## (respawn_delay for the first).
+@export var knockout_delay_growth: float = 3.0
 ## Offline: seconds after the win before the match restarts.
 @export var restart_delay: float = 6.0
+@export_group("Goals")
+## Goals a team needs to win the match (0 = goals don't win). The
+## scoreboard shows goals instead of kills when this is set.
+@export_range(0, 20) var goals_to_win: int = 0
+## A goal by a team behind on kills takes one back from the leader.
+@export var goals_take_kills: bool = true
 @export_group("")
 
 @onready var HUD: HUD3D = $HUD
@@ -70,13 +98,11 @@ enum Phase {
 @onready var boss_health_bar: BossHealthBar3D = $BossHealthBar
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var game_camera: Camera3D = $Camera3D
-@onready var floor_mesh: MeshInstance3D = $Walls/Floor/CollisionShape3D/MeshInstance3D
-
-## Souls-like third-person camera, while that control scheme is on (Tab).
-var souls_camera: SoulsCamera3D = null
+## The painted soccer field, in levels that have one.
+@onready var floor_mesh: MeshInstance3D = get_node_or_null("Walls/Floor/CollisionShape3D/MeshInstance3D")
 
 var phase: Phase = Phase.BOSS
-## Balls in play (bosses drop them; scoring removes them).
+## Boss drops in play: balls, skulls... (scoring or delivering removes them).
 var balls: Array[Ball3D] = []
 ## Bosses still fighting.
 var bosses: Array[Boss3D] = []
@@ -87,32 +113,47 @@ var _balls_made: int = 0
 var _bosses_made: int = 0
 
 var players: Array[PlayerClass3D] = []
+## Everyone in the match (including remote players and bots), in seat order.
+var match_slots: Array[PlayerSlot] = []
 ## Each player's HUD, so it can go when an online player leaves.
 var huds: Dictionary[PlayerClass3D, HUD3D] = {}
 ## Goals per team, for every team that has a goal to attack.
 var scores: Dictionary[int, int] = {}
 ## Player kills per team, for every team in the match. Decides the winner.
 var kills: Dictionary[int, int] = {}
-## Bounty shields each team has banked (see try_use_shield).
-var shields: Dictionary[int, int] = {}
 var match_over: bool = false
 ## First player, kept for code that only knows about one.
 var Player: PlayerClass3D:
 	get: return players[0] if not players.is_empty() else null
 
-func _enter_tree() -> void: Global.Game3D = self
+func _enter_tree() -> void:
+	Global.Game3D = self
+	# Before the level's bosses are ready, so they show the right drop
+	_set_boss_drops(self)
+
+func _exit_tree() -> void:
+	Sfx.play_ambience(&"")
+	Sfx.play_music(&"")
+
 
 func _ready() -> void:
+	if Players.team_count > max_team_count:
+		Players.set_team_count(max_team_count)
 	_setup_arena()
+	Sfx.play_ambience(ambience)
+	Sfx.play_music(music)
 	if Net.in_session():
 		_spawn_online_players()
 	else:
 		if Players.slots.is_empty():
 			Players.join_default_devices(default_player_count)
-		if Players.fill_with_bots:
-			Players.fill_bots()
-		for slot: PlayerSlot in Players.slots:
+		Players.fill_bots()
+		match_slots = Players.slots.duplicate()
+		for slot: PlayerSlot in match_slots:
 			_spawn_player(slot)
+	HUD.visible = huds.values().has(HUD)  # No local humans: no HUD
+	if not Net.is_server:
+		add_child(OffscreenIndicator3D.new())
 	_setup_scores()
 	for child: Node in get_children():
 		if child is Boss3D:
@@ -120,16 +161,15 @@ func _ready() -> void:
 	perks.intermission_started.connect(_on_intermission_started)
 	perks.intermission_finished.connect(_on_intermission_finished)
 	_update_phase()
-	# Solo/online starts in the souls-like view; Tab switches to top-down
-	if not Net.is_server:
-		toggle_control_scheme()
 
 	await get_tree().create_timer(3.0).timeout
 	set_camera_active.emit(true)
 
 
 ## Online: one player per session seat, named the same on every machine so
-## their synchronizers line up. Only our own seat reads local input.
+## their synchronizers line up. Only our own seat reads local input. Each
+## wears the team and character its player picked in the lobby. Bots take
+## the seats after the players' and are run by the server.
 func _spawn_online_players() -> void:
 	var my_seat: int = Net.local_seat()
 	for seat in Net.peers.size():
@@ -137,11 +177,23 @@ func _spawn_online_players() -> void:
 		if seat == my_seat and not Players.slots.is_empty():
 			slot = Players.slots[0]
 		else:
+			var loadout: Array = Net.loadout_of(Net.peers[seat])
 			slot = PlayerSlot.new()
 			slot.index = seat
-			slot.team = Players.team_for_seat(seat)
-			slot.color = Players.team_color(slot.team)
-		_spawn_player(slot, Net.peers[seat])
+			Players.set_team(slot, loadout[0])
+			slot.character = loadout[1]
+		match_slots.append(slot)
+	for bot: Array in Net.bots:
+		var slot := PlayerSlot.new()
+		slot.index = match_slots.size()
+		slot.device = PlayerSlot.BOT
+		slot.is_bot = true
+		Players.set_team(slot, bot[0])
+		slot.character = bot[1]
+		match_slots.append(slot)
+	for seat in match_slots.size():
+		var peer_id: int = Net.peers[seat] if seat < Net.peers.size() else Net.SERVER_ID
+		_spawn_player(match_slots[seat], peer_id)
 	for weapon: Weapon3D in weapons():
 		weapon.setup_network()
 	Net.all_loaded.connect(_on_net_all_loaded)
@@ -163,27 +215,59 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 	if peer_id and not player.is_multiplayer_authority():
 		player.set_remote()
 	players.append(player)
+	player.make_kit()
 
-	# The scene's HUD serves the first player; the rest get copies.
-	var hud: HUD3D = HUD if players.size() == 1 else HUD.duplicate()
+	# Only humans on this machine get a HUD: the first takes the scene's
+	# (top-left), local co-op players get copies in the other corners.
+	if slot.is_bot or (peer_id and peer_id != multiplayer.get_unique_id()):
+		return
+	var hud: HUD3D = HUD if huds.is_empty() else HUD.duplicate()
 	if hud != HUD:
 		add_child(hud)
-	hud.setup(player, slot)
+	hud.setup(player, slot, huds.size())
 	huds[player] = hud
 
 
-## Where `slot` starts: on its team's side, spread out from its teammates.
+## Where `slot` starts (and respawns): its team's SpawnPoint3D if the level
+## has one, else just in front of the goal it defends, else
+## spawn_distance out towards its team's side. Teammates spread out from there.
 func _spawn_position(slot: PlayerSlot) -> Vector3:
 	var side: Vector3 = TEAM_SIDES[slot.team % TEAM_SIDES.size()]
-	var seat_count: int = Net.peers.size() if Net.in_session() else Players.slots.size()
-	var team_size: int = 0
-	for seat: int in maxi(seat_count, slot.index + 1):
-		if Players.team_for_seat(seat) == slot.team:
-			team_size += 1
-	@warning_ignore("integer_division")
-	var rank: int = slot.index / Players.team_count  # Seats take turns between teams
+	var center: Vector3 = side * spawn_distance
 	var across: Vector3 = side.cross(Vector3.UP)
-	return side * spawn_distance + across * (rank - (team_size - 1) / 2.0) * spawn_spacing + Vector3.UP
+	var goal: Goal3D = _goal_of_team(slot.team)
+	var spawn_point: SpawnPoint3D = _spawn_point_of_team(slot.team)
+	if spawn_point:
+		center = spawn_point.global_position
+		across = spawn_point.global_basis.x.normalized()
+	elif goal:
+		var goal_pos: Vector3 = Vector3(goal.global_position.x, 0.0, goal.global_position.z)
+		var inward: Vector3 = -goal_pos.normalized() if goal_pos.length() > 0.01 else -side
+		center = goal_pos + inward * goal_spawn_distance
+		across = inward.cross(Vector3.UP)
+	# Teammates stand side by side, in seat order
+	var teammates: Array[int] = []
+	for other: PlayerSlot in match_slots:
+		if other.team == slot.team:
+			teammates.append(other.index)
+	teammates.sort()
+	var rank: int = maxi(teammates.find(slot.index), 0)
+	return center + across * (rank - (teammates.size() - 1) / 2.0) * spawn_spacing + Vector3.UP
+
+
+func _spawn_point_of_team(team: int) -> SpawnPoint3D:
+	for node: Node in get_tree().get_nodes_in_group("SpawnPoint"):
+		if node is SpawnPoint3D and node.team == team:
+			return node
+	return null
+
+
+## The goal `team` defends (on its side of the arena).
+func _goal_of_team(team: int) -> Goal3D:
+	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		if goal.owner_team == team:
+			return goal
+	return null
 
 
 ## Lay the arena out for Players.team_count: two teams get the 2P field and
@@ -192,7 +276,7 @@ func _spawn_position(slot: PlayerSlot) -> Vector3:
 ## Goals and altars for teams not in the match are removed.
 func _setup_arena() -> void:
 	var team_count: int = Players.team_count
-	var field_material: StandardMaterial3D = floor_mesh.get_active_material(0) as StandardMaterial3D
+	var field_material: StandardMaterial3D = floor_mesh.get_active_material(0) as StandardMaterial3D if floor_mesh else null
 	if field_material:
 		field_material.albedo_texture = field_4p if team_count > 2 else field_2p
 	var team_nodes: Array[Node] = get_tree().get_nodes_in_group("Goal")
@@ -207,40 +291,10 @@ func _setup_arena() -> void:
 			node.scoring_team = Goal3D.LAST_TOUCH
 
 
-## Tab: swap between souls-like third-person controls (the default) and the
-## shared top-down camera. Only with a single local player (single-player or
-## online); local co-op shares one screen, so it keeps the top-down camera.
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_controls") and not event.is_echo():
-		toggle_control_scheme()
-		get_viewport().set_input_as_handled()
-
-
-func toggle_control_scheme() -> void:
-	var local_players: Array[PlayerClass3D] = []
-	for p: PlayerClass3D in players:
-		if is_instance_valid(p) and not p.is_remote and not (p.slot and p.slot.is_bot):
-			local_players.append(p)
-	if local_players.size() != 1:
-		return
-	var player: PlayerClass3D = local_players[0]
-	if souls_camera:
-		souls_camera.queue_free()
-		souls_camera = null
-		player.set_souls_camera(null)
-		game_camera.make_current()
-	else:
-		souls_camera = SoulsCamera3D.new()
-		souls_camera.name = "SoulsCamera"
-		souls_camera.player = player
-		add_child(souls_camera)
-		player.set_souls_camera(souls_camera)
-		souls_camera.camera.make_current()
-
-
 func _on_net_all_loaded() -> void:
 	for player: PlayerClass3D in players:
 		player.start_network_sync()
+	_check_forfeit()  # Someone may have left while everyone was loading
 
 
 ## Loose and held weapons in the arena.
@@ -266,24 +320,52 @@ func player_of_peer(peer_id: int) -> PlayerClass3D:
 	return null
 
 
-## An online player left mid-match: remove their player and HUD, dropping
-## whatever they held. Every machine does this for itself.
+## Server, inside an RPC a player sent: that player.
+func rpc_sender() -> PlayerClass3D:
+	return player_of_peer(multiplayer.get_remote_sender_id())
+
+
+## The player named `player_name` (as names are sent in RPCs), if any.
+func player_named(player_name: String) -> PlayerClass3D:
+	return get_node_or_null(player_name) as PlayerClass3D if player_name != "" else null
+
+
+## An online player left mid-match: remove their player and HUD (their
+## weapons go back to the server). Every machine does this for itself.
 func _on_net_peers_changed() -> void:
 	for weapon: Weapon3D in weapons():
 		weapon.forget_departed_owner()
 	for player: PlayerClass3D in players.duplicate():
-		if Net.peers.has(player.get_multiplayer_authority()):
-			continue
-		for ball: Ball3D in balls:
-			if ball.holder == player:
-				ball.release(Vector3.ZERO)
+		var peer_id: int = player.get_multiplayer_authority()
+		if Net.peers.has(peer_id) or peer_id == Net.SERVER_ID:
+			continue  # Still here, or a bot
 		perks.forget_player(player)
 		players.erase(player)
 		_refresh_leader()
-		if huds.get(player) != HUD:
+		if huds.has(player) and huds[player] != HUD:
 			huds[player].queue_free()
 		huds.erase(player)
 		player.queue_free()
+	_check_forfeit()
+
+
+## Server: once everyone left in the match is on one team, that team wins,
+## since there's nobody left for it to kill.
+func _check_forfeit() -> void:
+	if not Net.is_server or not Net.match_synced or match_over:
+		return
+	var teams: Array[int] = []
+	for player: PlayerClass3D in players:
+		if not teams.has(_team_of(player)):
+			teams.append(_team_of(player))
+	if teams.size() == 1:
+		Net.everywhere(_forfeit_win, teams[0])
+
+
+@rpc("authority", "call_local", "reliable")
+func _forfeit_win(team: int) -> void:
+	if not match_over:
+		_win(team, "Everyone else left")
 
 
 ## Every team with a goal to attack or a player in the match.
@@ -301,8 +383,10 @@ func _setup_scores() -> void:
 	teams.sort()
 	for team: int in teams:
 		kills[team] = 0
-		shields[team] = 0
-	scoreboard.setup(teams, kills_to_win)
+	if goals_to_win > 0:
+		scoreboard.setup(teams, "First to %d goals" % goals_to_win)
+	else:
+		scoreboard.setup(teams, "First to %d kills" % kills_to_win)
 
 
 ## Server/offline: `scored_ball` went into a goal attacked by `team`. Award
@@ -313,12 +397,9 @@ func score_goal(team: int, scored_ball: Ball3D) -> void:
 	if not balls.has(scored_ball):
 		return  # Already counted
 	var new_score: int = scores.get(team, 0) + 1
-	# Behind on kills: take one back from the leader. Otherwise bank a shield.
-	var erased_team: int = _top_team_ahead_of(team)
-	if Net.in_session():
-		_goal_scored.rpc(team, new_score, scored_ball.name, erased_team)
-	else:
-		_goal_scored(team, new_score, scored_ball.name, erased_team)
+	# Behind on kills: take one back from the leader
+	var erased_team: int = _top_team_ahead_of(team) if goals_take_kills else -1
+	Net.everywhere(_goal_scored, team, new_score, scored_ball.name, erased_team)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -330,16 +411,17 @@ func _goal_scored(team: int, new_score: int, ball_name: String, erased_team: int
 	var color: Color = _team_color(team)
 	if erased_team >= 0 and not match_over:
 		_set_kills(erased_team, kills[erased_team] - 1)
-		scoreboard.announce("%s scores! A kill taken back from %s" % [_team_name(team), _team_name(erased_team)], color)
-	elif shields.get(team, 0) < max_bounty_shields and not match_over:
-		_set_shields(team, shields.get(team, 0) + 1)
-		scoreboard.announce("%s scores! Bounty shield earned" % _team_name(team), color)
+		scoreboard.announce("Goal for the %s! A kill taken back from the %s" % [_team_name(team), _team_name(erased_team)], color)
 	else:
-		scoreboard.announce("%s scores!" % _team_name(team), color)
+		scoreboard.announce("Goal for the %s!" % _team_name(team), color)
 	perks.record_goal(team)
+	if goals_to_win > 0:
+		scoreboard.set_score(team, new_score)
 	goal_scored.emit(team)
+	if goals_to_win > 0 and new_score >= goals_to_win and not match_over:
+		_win(team)
 	_update_phase()
-	_check_round_over()
+	check_round_over()
 
 
 ## The team with the most kills among those with more than `team`, or -1
@@ -352,13 +434,39 @@ func _top_team_ahead_of(team: int) -> int:
 	return best
 
 
+## Server/offline: `skull` reached `team`'s altar (see Skull3D). Take it
+## out of play and have the altar start turning it into a reward, everywhere.
+func deliver_skull(team: int, skull: Ball3D) -> void:
+	if Net.in_session() and not (Net.is_server and Net.match_synced):
+		return
+	var altar: Altar3D = altar_of_team(team)
+	if not balls.has(skull) or not altar:
+		return
+	var roll: PackedInt32Array = altar.roll_reward()
+	Net.everywhere(_skull_delivered, team, skull.name, roll)
+
+
+@rpc("authority", "call_local", "reliable")
+func _skull_delivered(team: int, skull_name: String, roll: PackedInt32Array) -> void:
+	var skull: Ball3D = get_node_or_null(skull_name) as Ball3D
+	if skull:
+		_remove_ball(skull)
+	var altar: Altar3D = altar_of_team(team)
+	if altar:
+		altar.start_reward(roll)
+	scoreboard.announce("%s brought the skull home! Their altar stirs... (%ds)" % [_team_name(team), roll[3]], _team_color(team))
+	perks.record_goal(team)
+	_update_phase()
+	check_round_over()
+
+
 # ===== KILLS =====
 
 ## Called by a player's owner the moment they die. `killer_name` is the
 ## opponent who gets the kill ("" = nobody). The server (or offline game)
 ## decides the result and tells everyone.
 func report_death(victim: PlayerClass3D, killer_name: String) -> void:
-	if not Net.in_session() or Net.is_server:
+	if Net.decides():
 		_resolve_death(victim.name, killer_name)
 	elif Net.match_synced:
 		_request_death.rpc_id(Net.SERVER_ID, killer_name)
@@ -368,37 +476,28 @@ func report_death(victim: PlayerClass3D, killer_name: String) -> void:
 func _request_death(killer_name: String) -> void:
 	if not Net.is_server:
 		return
-	var victim: PlayerClass3D = player_of_peer(multiplayer.get_remote_sender_id())
+	var victim: PlayerClass3D = rpc_sender()
 	if victim:
 		_resolve_death(victim.name, killer_name)
 
 
 func _resolve_death(victim_name: String, killer_name: String) -> void:
-	var victim: PlayerClass3D = get_node_or_null(victim_name) as PlayerClass3D
-	var killer: PlayerClass3D = get_node_or_null(killer_name) as PlayerClass3D if killer_name != "" else null
+	var victim: PlayerClass3D = player_named(victim_name)
+	var killer: PlayerClass3D = player_named(killer_name)
 	if not victim:
 		return
 	# No credit for team kills or once the match is decided
 	if killer and (match_over or killer == victim or _team_of(killer) == _team_of(victim)):
 		killer = null
-	var new_kills: int = -1
-	var bounty: bool = false
-	if killer:
-		var team: int = _team_of(killer)
-		new_kills = kills.get(team, 0) + 1
-		# Headhunter: killing the leader banks a shield
-		bounty = killer.perk_stat(&"leader_bounty") > 1.0 and _leading_team() == _team_of(victim)
+	var new_kills: int = kills.get(_team_of(killer), 0) + 1 if killer else -1
 	var sent_killer: String = String(killer.name) if killer else ""
-	if Net.in_session():
-		_player_died.rpc(victim_name, sent_killer, new_kills, bounty)
-	else:
-		_player_died(victim_name, sent_killer, new_kills, bounty)
+	Net.everywhere(_player_died, victim_name, sent_killer, new_kills)
 
 
 @rpc("authority", "call_local", "reliable")
-func _player_died(victim_name: String, killer_name: String, new_kills: int, bounty: bool) -> void:
-	var victim: PlayerClass3D = get_node_or_null(victim_name) as PlayerClass3D
-	var killer: PlayerClass3D = get_node_or_null(killer_name) as PlayerClass3D if killer_name != "" else null
+func _player_died(victim_name: String, killer_name: String, new_kills: int) -> void:
+	var victim: PlayerClass3D = player_named(victim_name)
+	var killer: PlayerClass3D = player_named(killer_name)
 	if not victim:
 		return
 	victim.die()
@@ -408,19 +507,21 @@ func _player_died(victim_name: String, killer_name: String, new_kills: int, boun
 		return
 	var team: int = _team_of(killer)
 	_set_kills(team, new_kills)
-	if bounty and shields.get(team, 0) < max_bounty_shields:
-		_set_shields(team, shields.get(team, 0) + 1)
 	killer.on_kill()
 	perks.record_kill(killer)
 	scoreboard.announce("%s killed %s" % [_player_label(killer), _player_label(victim)], _team_color(team))
 	player_killed.emit(victim, killer)
-	if new_kills >= kills_to_win and not match_over:
+	if kills_win and new_kills >= kills_to_win and not match_over:
 		_win(team)
 
 
-func _win(team: int) -> void:
+## `team` won the match. `reason` is shown under the winner, if given.
+func _win(team: int, reason: String = "") -> void:
 	match_over = true
-	scoreboard.show_winner("%s wins!" % _team_name(team), _team_color(team))
+	var text: String = "The %s win!" % _team_name(team)
+	if reason != "":
+		text += "\n" + reason
+	scoreboard.show_winner(text, _team_color(team))
 	match_won.emit(team)
 	if Net.in_session():
 		return  # Online the pause menu leaves the match
@@ -428,48 +529,34 @@ func _win(team: int) -> void:
 	get_tree().reload_current_scene()
 
 
-## Owner of `player`, on a hit that would give an opponent the kill: if
-## their team has a bounty shield, use it up and return true (they live).
-func try_use_shield(player: PlayerClass3D) -> bool:
-	var team: int = _team_of(player)
-	if shields.get(team, 0) <= 0:
-		return false
-	# Spent here at once, so a second hit before the server replies can't reuse it
-	shields[team] -= 1
-	if not Net.in_session() or Net.is_server:
-		_shield_used(team, shields[team], player.name)
-	elif Net.match_synced:
-		_request_use_shield.rpc_id(Net.SERVER_ID)
-	return true
+## Where a bot should be heading when nothing's in its face: a boss to
+## fight or a place to reach (null = no set route; bots fight whatever is
+## nearest). Modes with a route to follow (e.g. a race) override this.
+func bot_goal(_player: PlayerClass3D) -> Node3D:
+	return null
 
 
-@rpc("any_peer", "reliable")
-func _request_use_shield() -> void:
-	if not Net.is_server:
-		return
-	var player: PlayerClass3D = player_of_peer(multiplayer.get_remote_sender_id())
-	if player:
-		var team: int = _team_of(player)
-		_shield_used.rpc(team, max(shields.get(team, 0) - 1, 0), player.name)
+## How lucky `player`'s next item box (ItemBox3D) should be, from 0 (the
+## leader's odds: tamer items) to 1 (whoever's furthest behind: the wild
+## ones). Modes with a sense of who's ahead override it.
+func item_luck(_player: PlayerClass3D) -> float:
+	return 0.5
 
 
-@rpc("authority", "call_local", "reliable")
-func _shield_used(team: int, left: int, player_name: String) -> void:
-	_set_shields(team, left)
-	var player: PlayerClass3D = get_node_or_null(player_name) as PlayerClass3D
-	if player:
-		scoreboard.announce("%s's bounty shield broke!" % _player_label(player), _team_color(team))
+## Seconds `player` sits out after dying for the `deaths`th time (counting
+## from 1). With knockouts each one takes longer than the last.
+func revive_delay(player: PlayerClass3D, deaths: int) -> float:
+	var delay: float = respawn_delay
+	if knockouts:
+		delay += knockout_delay_growth * maxi(deaths - 1, 0)
+	return delay * player.perk_stat(&"respawn_time")
 
 
 func _set_kills(team: int, value: int) -> void:
 	kills[team] = max(value, 0)
-	scoreboard.set_kills(team, kills[team])
+	if goals_to_win <= 0:
+		scoreboard.set_score(team, kills[team])
 	_refresh_leader()
-
-
-func _set_shields(team: int, value: int) -> void:
-	shields[team] = max(value, 0)
-	scoreboard.set_shields(team, shields[team])
 
 
 ## The team with strictly the most kills, or -1 when nobody leads.
@@ -505,6 +592,39 @@ func leader_players() -> Array[PlayerClass3D]:
 	return found
 
 
+## `team`'s altar, if it has one in this match.
+func altar_of_team(team: int) -> Altar3D:
+	for child: Node in get_children():
+		if child is Altar3D and child.owner_team == team:
+			return child
+	return null
+
+
+## The nearest goal that scores for `player`'s team, if any.
+func goal_to_attack(player: PlayerClass3D) -> Goal3D:
+	var team: int = _team_of(player)
+	var best: Goal3D = null
+	var best_dist: float = INF
+	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		var ours: bool = goal.scoring_team == team \
+			or (goal.scoring_team == Goal3D.LAST_TOUCH and goal.owner_team != team)
+		var offset: Vector3 = goal.global_position - player.global_position
+		var dist: float = Vector2(offset.x, offset.z).length()
+		if ours and dist < best_dist:
+			best = goal
+			best_dist = dist
+	return best
+
+
+## Where `player` takes `ball`: the net they attack, or their altar with a
+## skull (see PlayerClass3D.shoot_ball). Null when there's neither.
+func shot_target(player: PlayerClass3D, ball: Ball3D) -> Node3D:
+	if ball is Skull3D:
+		return altar_of_team(_team_of(player))
+	var goal: Goal3D = goal_to_attack(player)
+	return goal.net if goal else null
+
+
 func _team_of(player: PlayerClass3D) -> int:
 	return player.slot.team if player.slot else 0
 
@@ -515,7 +635,7 @@ func _team_color(team: int) -> Color:
 
 
 func _team_name(team: int) -> String:
-	return TEAM_NAMES[team % TEAM_NAMES.size()]
+	return Players.team_name(team)
 
 
 func _player_label(player: PlayerClass3D) -> String:
@@ -524,12 +644,16 @@ func _player_label(player: PlayerClass3D) -> String:
 
 # ===== BALLS =====
 
-## A new ball enters play at `pos`, launched with `impulse` (by whoever
-## simulates it). Call on every machine, in the same order (e.g. from a
-## boss's defeat), so the balls get the same names everywhere.
-func spawn_ball(pos: Vector3, impulse: Vector3) -> Ball3D:
+## A new boss drop of `kind` (a ball by default) enters play at `pos`,
+## launched with `impulse` (by whoever simulates it). Call on every machine,
+## in the same order (e.g. from a boss's defeat), so the drops get the same
+## names everywhere.
+func spawn_ball(pos: Vector3, impulse: Vector3, kind: BossDrop.Kind = BossDrop.Kind.BALL) -> Ball3D:
+	var scene: PackedScene = ball_scene if kind == BossDrop.Kind.BALL else BossDrop.scene_of(kind)
+	if not scene:
+		return null
 	_balls_made += 1
-	var new_ball: Ball3D = ball_scene.instantiate()
+	var new_ball: Ball3D = scene.instantiate()
 	new_ball.name = "Ball%d" % _balls_made
 	new_ball.position = pos
 	balls.append(new_ball)
@@ -543,13 +667,11 @@ func _add_ball(new_ball: Ball3D, impulse: Vector3) -> void:
 	add_child(new_ball)
 	if Net.in_session():
 		new_ball.setup_network()
-	if not Net.in_session() or Net.is_server:
+	if Net.decides():
 		new_ball.apply_central_impulse(impulse)
 
 
 func _remove_ball(old_ball: Ball3D) -> void:
-	if old_ball.holder:
-		old_ball.release(Vector3.ZERO)
 	balls.erase(old_ball)
 	old_ball.queue_free()
 
@@ -562,10 +684,21 @@ func return_ball(ball: Ball3D) -> void:
 	ball.last_team = -1
 	# Called from the net's physics callback, so move it once the step is done
 	_move_ball_to_middle.call_deferred(ball)
-	if Net.in_session():
-		_ball_returned.rpc()
-	else:
-		_ball_returned()
+	Net.everywhere(_ball_returned)
+
+
+## Server/offline: `ball` escaped the level (squeezed through a wall and
+## fell): back to the middle with it.
+func ball_fell(ball: Ball3D) -> void:
+	if not balls.has(ball):
+		return
+	_move_ball_to_middle.call_deferred(ball)
+	Net.everywhere(_ball_out)
+
+
+@rpc("authority", "call_local", "reliable")
+func _ball_out() -> void:
+	scoreboard.announce("Ball out! Back to the middle", Color.WHITE)
 
 
 func _move_ball_to_middle(ball: Ball3D) -> void:
@@ -581,11 +714,9 @@ func _ball_returned() -> void:
 	scoreboard.announce("No goal! Ball back to the middle", Color.WHITE)
 
 
-## Put every ball back in the middle, taking them from whoever holds them.
+## Put every ball back in the middle.
 func reset_ball() -> void:
 	for ball: Ball3D in balls:
-		if ball.holder:
-			ball.holder.drop_ball()
 		ball.global_position = ball_reset_point
 		ball.linear_velocity = Vector3.ZERO
 		ball.angular_velocity = Vector3.ZERO
@@ -593,26 +724,61 @@ func reset_ball() -> void:
 
 # ===== BOSSES & ROUNDS =====
 
+## Every boss placed in the level drops what the lobby picked.
+func _set_boss_drops(node: Node) -> void:
+	for child: Node in node.get_children():
+		if child is Boss3D:
+			child.drop = Players.boss_drop
+		_set_boss_drops(child)
+
+
 func _track_boss(boss: Boss3D) -> void:
 	bosses.append(boss)
 	boss.defeated.connect(_on_boss_defeated.bind(boss))
-	boss_health_bar.bind(boss)
+	boss.awakened.connect(_update_music)
+	# The bar follows whichever boss woke last (a level can have several
+	# asleep at once, each waiting for players to reach its room).
+	boss.awakened.connect(boss_health_bar.bind.bind(boss))
+	if not boss.wait_for_players:
+		boss_health_bar.bind(boss)
+	_update_music()
 
 
 func _on_boss_defeated(killer: PlayerClass3D, boss: Boss3D) -> void:
 	bosses.erase(boss)
-	perks.record_boss_kill(killer)
+	_update_music()
+	_reward_boss_kill(killer)
 	_update_phase()
-	_check_round_over()
+	check_round_over()
 
 
-## Server/offline: once no boss is left and every ball has been scored,
-## it's time to pick perks.
-func _check_round_over() -> void:
-	if Net.in_session() and not Net.is_server:
+## On every machine: what slaying a boss earns. By default the killer's
+## perk hand waits at their altar, and everyone gets a card next intermission.
+func _reward_boss_kill(killer: PlayerClass3D) -> void:
+	perks.record_boss_kill(killer)
+
+
+## Boss music while any boss is awake, the level's music otherwise.
+func _update_music() -> void:
+	var fighting: bool = bosses.any(func(b: Boss3D) -> bool: return b.is_awake and not b.is_defeated)
+	Sfx.play_music(boss_music if fighting else music)
+
+
+## Server/offline: once no boss is left, every ball has been scored and
+## every skull's altar reward has been claimed, it's time to pick perks.
+func check_round_over() -> void:
+	if not Net.decides() or not intermissions:
 		return
-	if phase != Phase.INTERMISSION and bosses.is_empty() and balls.is_empty():
+	if phase != Phase.INTERMISSION and bosses.is_empty() and balls.is_empty() and not _rewards_waiting():
 		perks.begin_intermission()
+
+
+## Some altar still has a skull's reward charging or unclaimed.
+func _rewards_waiting() -> bool:
+	for child: Node in get_children():
+		if child is Altar3D and child.reward != Altar3D.Reward.NONE:
+			return true
+	return false
 
 
 func _on_intermission_started() -> void:
@@ -622,17 +788,14 @@ func _on_intermission_started() -> void:
 ## Everyone has picked: bring on the next boss.
 func _on_intermission_finished() -> void:
 	boss_round += 1
-	if Net.in_session() and not Net.is_server:
+	if not Net.decides():
 		return
 	_bosses_made += 1
 	var boss_name: String = "Boss_%d" % _bosses_made
 	var probe: Boss3D = boss_scene.instantiate()
 	var hp: float = probe.max_hp * pow(1.0 + boss_hp_growth, boss_round - 1)
 	probe.free()
-	if Net.in_session():
-		_spawn_boss.rpc(boss_name, hp)
-	else:
-		_spawn_boss(boss_name, hp)
+	Net.everywhere(_spawn_boss, boss_name, hp)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -640,6 +803,7 @@ func _spawn_boss(boss_name: String, max_hp: float) -> void:
 	var boss: Boss3D = boss_scene.instantiate()
 	boss.name = boss_name
 	boss.max_hp = max_hp
+	boss.drop = Players.boss_drop
 	boss.position = boss_spawn_point
 	add_child(boss)
 	_track_boss(boss)

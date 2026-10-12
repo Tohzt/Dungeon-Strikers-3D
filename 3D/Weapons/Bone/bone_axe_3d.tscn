@@ -1,0 +1,50 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
+[ext_resource type="PackedScene" uid="uid://ca4e1tode6dmr" path="res://Assets/Skeleton/Props/Skeleton_Axe.glb" id="model"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_chop.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_boomerang.tres" id="mv_heavy"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.9, 1.0, 0.25)
+
+[node name="BoneAxe_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 1.3
+script = ExtResource("1_script")
+swing_sound = &"swing_axe"
+combo_family = &"heavy"
+vertical_swing = true
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+swing_clip = &"CombatMelee/Melee_1H_Attack_Chop"
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
+weapon_name = "Bone Axe"
+base_damage = 50.0
+knockback_force = 11.0
+ball_power = 1.1
+ball_lift = 0.25
+ball_curve = 14.0
+
+[node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]
+weapon_name = "Bone Axe"
+throw_force = 16.0
+throw_spin_speed = 10.0
+durability_scale = 0.7
+swing_duration = 0.24
+swing_windup = 0.1
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

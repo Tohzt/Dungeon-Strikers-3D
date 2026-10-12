@@ -8,13 +8,30 @@ enum Tier { COMMON, UNCOMMON, RARE, LEGENDARY }
 const NAMES: Array[String] = ["Common", "Uncommon", "Rare", "Legendary"]
 ## Uses before breaking (hits landed, blocks, shots), before the weapon's
 ## own WeaponProperties3D.durability_scale.
-const DURABILITY: Array[int] = [5, 9, 14, 24]
+const DURABILITY: Array[int] = [10, 18, 28, 48]
 const COLORS: Array[Color] = [
 	Color(1, 1, 1, 0),  # No glow
 	Color(0.2, 0.9, 0.3, 0.3),
 	Color(0.25, 0.5, 1.0, 0.35),
 	Color(1.0, 0.65, 0.1, 0.4),
 ]
+
+
+## How far a rarer weapon's effects lean toward its tier's color.
+const EFFECT_TINT := 0.65
+
+
+## `base` (an effect's own color) leaned toward `tier`'s color; commons keep it.
+static func tint(tier: int, base: Color) -> Color:
+	if tier <= Tier.COMMON:
+		return base
+	return Color(base.lerp(COLORS[tier], EFFECT_TINT), base.a)
+
+
+## `tier`'s color, opaque, to recolor an effect with (see Vfx.play); clear
+## (= as made) for a common.
+static func effect_color(tier: int) -> Color:
+	return Color.TRANSPARENT if tier <= Tier.COMMON else Color(COLORS[tier], 1.0)
 
 
 ## A tier picked at random, weighted by `weights` (one per tier; missing

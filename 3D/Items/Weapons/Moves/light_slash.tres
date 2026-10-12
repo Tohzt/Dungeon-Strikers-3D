@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+
+[sub_resource type="Resource" id="wave_0"]
+script = ExtResource("2_wave")
+shape = 0
+width = 2.6
+length = 0.7
+speed = 18.0
+reach = 3.0
+start_offset = 0.7
+delay = 0.05
+damage_scale = 0.6
+knockback_scale = 0.8
+color = Color(0.8, 0.92, 1.0, 0.85)
+
+[resource]
+script = ExtResource("1_move")
+waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])
