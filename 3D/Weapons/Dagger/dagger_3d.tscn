@@ -4,8 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
 [ext_resource type="PackedScene" uid="uid://cjj1p4qbtpw3l" path="res://Assets/Weapons/dagger_A.glb" id="model"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/flurry.tres" id="combo"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_double_jab.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_stabs.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_orbit.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.44, 1.03, 0.15)
@@ -19,13 +19,13 @@ axis_lock_angular_z = true
 mass = 0.6
 script = ExtResource("1_script")
 swing_sound = &"swing_dagger"
-alt_attack = ExtResource("alt")
-pair_combo = ExtResource("combo")
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 grip = 2
 swing_clip = &"CombatMelee/Melee_1H_Attack_Stab"
 offhand_swing_clip = &"CombatMelee/Melee_Dualwield_Attack_Stab"
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 ball_power = 2.5

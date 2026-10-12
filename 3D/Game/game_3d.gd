@@ -1,5 +1,6 @@
 class_name Game3D_Class extends Node3D
-## The match: the first team to `kills_to_win` player kills wins. Around
+## The match: the first team to `kills_to_win` player kills wins (or, in
+## modes that set goals_to_win, the first to that many goals). Around
 ## that it runs in rounds: a boss fight, then a scramble for what the boss
 ## drops (see BossDrop): a skull to knock home to your altar for a reward,
 ## or a ball to score in a goal. Once every drop is dealt with and no boss
@@ -80,6 +81,12 @@ enum Phase {
 @export var knockout_delay_growth: float = 3.0
 ## Offline: seconds after the win before the match restarts.
 @export var restart_delay: float = 6.0
+@export_group("Goals")
+## Goals a team needs to win the match (0 = goals don't win). The
+## scoreboard shows goals instead of kills when this is set.
+@export_range(0, 20) var goals_to_win: int = 0
+## A goal by a team behind on kills takes one back from the leader.
+@export var goals_take_kills: bool = true
 @export_group("")
 
 @onready var HUD: HUD3D = $HUD
@@ -90,9 +97,6 @@ enum Phase {
 @onready var game_camera: Camera3D = $Camera3D
 ## The painted soccer field, in levels that have one.
 @onready var floor_mesh: MeshInstance3D = get_node_or_null("Walls/Floor/CollisionShape3D/MeshInstance3D")
-
-## Souls-like third-person camera, while that control scheme is on (Tab).
-var souls_camera: SoulsCamera3D = null
 
 var phase: Phase = Phase.BOSS
 ## Boss drops in play: balls, skulls... (scoring or delivering removes them).
@@ -144,6 +148,7 @@ func _ready() -> void:
 		match_slots = Players.slots.duplicate()
 		for slot: PlayerSlot in match_slots:
 			_spawn_player(slot)
+	HUD.visible = huds.values().has(HUD)  # No local humans: no HUD
 	_setup_scores()
 	for child: Node in get_children():
 		if child is Boss3D:
@@ -151,9 +156,6 @@ func _ready() -> void:
 	perks.intermission_started.connect(_on_intermission_started)
 	perks.intermission_finished.connect(_on_intermission_finished)
 	_update_phase()
-	# The view the host picked (see MatchMap.View)
-	if not Net.is_server and Players.view == MatchMap.View.THIRD_PERSON:
-		toggle_control_scheme()
 
 	await get_tree().create_timer(3.0).timeout
 	set_camera_active.emit(true)
@@ -208,12 +210,16 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 	if peer_id and not player.is_multiplayer_authority():
 		player.set_remote()
 	players.append(player)
+	player.make_kit()
 
-	# The scene's HUD serves the first player; the rest get copies.
-	var hud: HUD3D = HUD if players.size() == 1 else HUD.duplicate()
+	# Only humans on this machine get a HUD: the first takes the scene's
+	# (top-left), local co-op players get copies in the other corners.
+	if slot.is_bot or (peer_id and peer_id != multiplayer.get_unique_id()):
+		return
+	var hud: HUD3D = HUD if huds.is_empty() else HUD.duplicate()
 	if hud != HUD:
 		add_child(hud)
-	hud.setup(player, slot)
+	hud.setup(player, slot, huds.size())
 	huds[player] = hud
 
 
@@ -279,32 +285,6 @@ func _setup_arena() -> void:
 			node.scoring_team = Goal3D.LAST_TOUCH
 
 
-## Swap between souls-like third-person controls and the shared top-down
-## camera. Only with a single local player (single-player or online); local
-## co-op shares one screen, so it keeps the top-down camera. The host picks
-## which one a match uses (Players.view); there's no switching mid-match.
-func toggle_control_scheme() -> void:
-	var local_players: Array[PlayerClass3D] = []
-	for p: PlayerClass3D in players:
-		if is_instance_valid(p) and not p.is_remote and not (p.slot and p.slot.is_bot):
-			local_players.append(p)
-	if local_players.size() != 1:
-		return
-	var player: PlayerClass3D = local_players[0]
-	if souls_camera:
-		souls_camera.queue_free()
-		souls_camera = null
-		player.set_souls_camera(null)
-		game_camera.make_current()
-	else:
-		souls_camera = SoulsCamera3D.new()
-		souls_camera.name = "SoulsCamera"
-		souls_camera.player = player
-		add_child(souls_camera)
-		player.set_souls_camera(souls_camera)
-		souls_camera.camera.make_current()
-
-
 func _on_net_all_loaded() -> void:
 	for player: PlayerClass3D in players:
 		player.start_network_sync()
@@ -356,7 +336,7 @@ func _on_net_peers_changed() -> void:
 		perks.forget_player(player)
 		players.erase(player)
 		_refresh_leader()
-		if huds.get(player) != HUD:
+		if huds.has(player) and huds[player] != HUD:
 			huds[player].queue_free()
 		huds.erase(player)
 		player.queue_free()
@@ -397,7 +377,10 @@ func _setup_scores() -> void:
 	teams.sort()
 	for team: int in teams:
 		kills[team] = 0
-	scoreboard.setup(teams, kills_to_win)
+	if goals_to_win > 0:
+		scoreboard.setup(teams, "First to %d goals" % goals_to_win)
+	else:
+		scoreboard.setup(teams, "First to %d kills" % kills_to_win)
 
 
 ## Server/offline: `scored_ball` went into a goal attacked by `team`. Award
@@ -409,7 +392,7 @@ func score_goal(team: int, scored_ball: Ball3D) -> void:
 		return  # Already counted
 	var new_score: int = scores.get(team, 0) + 1
 	# Behind on kills: take one back from the leader
-	var erased_team: int = _top_team_ahead_of(team)
+	var erased_team: int = _top_team_ahead_of(team) if goals_take_kills else -1
 	Net.everywhere(_goal_scored, team, new_score, scored_ball.name, erased_team)
 
 
@@ -422,11 +405,15 @@ func _goal_scored(team: int, new_score: int, ball_name: String, erased_team: int
 	var color: Color = _team_color(team)
 	if erased_team >= 0 and not match_over:
 		_set_kills(erased_team, kills[erased_team] - 1)
-		scoreboard.announce("%s scores! A kill taken back from %s" % [_team_name(team), _team_name(erased_team)], color)
+		scoreboard.announce("Goal for the %s! A kill taken back from the %s" % [_team_name(team), _team_name(erased_team)], color)
 	else:
-		scoreboard.announce("%s scores!" % _team_name(team), color)
+		scoreboard.announce("Goal for the %s!" % _team_name(team), color)
 	perks.record_goal(team)
+	if goals_to_win > 0:
+		scoreboard.set_score(team, new_score)
 	goal_scored.emit(team)
+	if goals_to_win > 0 and new_score >= goals_to_win and not match_over:
+		_win(team)
 	_update_phase()
 	check_round_over()
 
@@ -525,7 +512,7 @@ func _player_died(victim_name: String, killer_name: String, new_kills: int) -> v
 ## `team` won the match. `reason` is shown under the winner, if given.
 func _win(team: int, reason: String = "") -> void:
 	match_over = true
-	var text: String = "%s wins!" % _team_name(team)
+	var text: String = "The %s win!" % _team_name(team)
 	if reason != "":
 		text += "\n" + reason
 	scoreboard.show_winner(text, _team_color(team))
@@ -561,7 +548,8 @@ func revive_delay(player: PlayerClass3D, deaths: int) -> float:
 
 func _set_kills(team: int, value: int) -> void:
 	kills[team] = max(value, 0)
-	scoreboard.set_kills(team, kills[team])
+	if goals_to_win <= 0:
+		scoreboard.set_score(team, kills[team])
 	_refresh_leader()
 
 
@@ -666,6 +654,20 @@ func return_ball(ball: Ball3D) -> void:
 	# Called from the net's physics callback, so move it once the step is done
 	_move_ball_to_middle.call_deferred(ball)
 	Net.everywhere(_ball_returned)
+
+
+## Server/offline: `ball` escaped the level (squeezed through a wall and
+## fell): back to the middle with it.
+func ball_fell(ball: Ball3D) -> void:
+	if not balls.has(ball):
+		return
+	_move_ball_to_middle.call_deferred(ball)
+	Net.everywhere(_ball_out)
+
+
+@rpc("authority", "call_local", "reliable")
+func _ball_out() -> void:
+	scoreboard.announce("Ball out! Back to the middle", Color.WHITE)
 
 
 func _move_ball_to_middle(ball: Ball3D) -> void:

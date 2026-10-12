@@ -30,16 +30,40 @@ func attack(aim_direction: Vector3) -> void:
 	wear()  # Each shot is a use
 
 
+## A heavy attack's big shot (see WeaponMove3D.Action.SHOT): `move` says how
+## much bigger, harder and faster, and whether it pierces.
+func fire_heavy(aim_direction: Vector3, move: WeaponMove3D) -> void:
+	if not arrow_scene or not wielder:
+		return
+	var muzzle: Vector3 = global_position \
+		+ aim_direction.normalized() * muzzle_forward_offset \
+		+ Vector3.UP * muzzle_height_offset
+	_fire_arrow(muzzle, aim_direction, true, move)
+	if Net.match_synced:
+		_net_fire_heavy.rpc(muzzle, aim_direction)
+	wear()
+
+
 ## `real` arrows hit things; online, everyone else's copy of a shot is just
-## for show, since the shooter's machine decides what it hit.
-func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
+## for show, since the shooter's machine decides what it hit. With `heavy`,
+## it's that move's big shot.
+func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool, heavy: WeaponMove3D = null) -> void:
 	var arrow: Arrow3D = arrow_scene.instantiate()
 	arrow.deals_damage = real
+	var speed: float = arrow_speed
+	if heavy:
+		arrow.damage *= heavy.shot_damage_scale
+		arrow.knockback *= heavy.shot_damage_scale
+		arrow.impact_impulse *= heavy.shot_damage_scale
+		arrow.ball_redirect_speed *= heavy.shot_speed_scale
+		arrow.pierce = heavy.shot_pierce
+		arrow.enlarge(heavy.shot_scale)
+		speed *= heavy.shot_speed_scale
 	# The shot that breaks it is the big one (see Weapon3D.is_last_use)
 	if is_last_use():
 		arrow.damage *= FINAL_DAMAGE_MULTIPLIER
 		arrow.knockback *= FINAL_KNOCKBACK_MULTIPLIER
-		arrow.scale = Vector3.ONE * 1.6
+		arrow.enlarge(1.6)
 		if Properties:
 			arrow.set_burst(Properties.break_burst_radius, Properties.break_burst_damage,
 				Properties.break_burst_knockback, shatter_color())
@@ -49,7 +73,7 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
 	arrow.exclude_body(wielder)
 	arrow.shooter = wielder
 	arrow.exclude_body(self)
-	arrow.fire(aim_direction, arrow_speed)
+	arrow.fire(aim_direction, speed)
 	Sfx.play(fire_sound, muzzle)
 
 
@@ -57,3 +81,9 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool) -> void:
 func _net_fire(muzzle: Vector3, aim_direction: Vector3) -> void:
 	if _is_from_owner() and arrow_scene and wielder:
 		_fire_arrow(muzzle, aim_direction, false)
+
+
+@rpc("any_peer", "reliable")
+func _net_fire_heavy(muzzle: Vector3, aim_direction: Vector3) -> void:
+	if _is_from_owner() and arrow_scene and wielder and heavy_move:
+		_fire_arrow(muzzle, aim_direction, false, heavy_move)

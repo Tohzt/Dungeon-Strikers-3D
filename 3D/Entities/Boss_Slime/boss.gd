@@ -6,6 +6,8 @@ class_name Boss3D extends CharacterBody3D
 ## it's nearest, so it's a threat to both teams. Every so often it swells
 ## up and spits out little minion slimes (SlimeMinion3D) that chase players.
 ## Its drop (see `drop`) floats in its core; beating it drops that into play.
+## With `swallows_ball` it gulps down a ball it touches instead of kicking
+## it, and only gives it back when beaten.
 ## Online the server runs it and streams where it is (like the ball);
 ## everyone else just plays that back.
 
@@ -137,6 +139,12 @@ const DRIBBLE_SETUP_OFFSET := RADIUS + BALL_RADIUS + 0.5
 @export var drop: BossDrop.Kind = BossDrop.Kind.SKULL
 ## How hard the drop pops out.
 @export var release_impulse: float = 1.5
+## Touching a ball while its belly is empty (no drop) swallows it: it
+## becomes the drop, so the ball's back in play only once the boss is beaten.
+@export var swallows_ball: bool = false
+## Shut in a pen (BossPen3D) until it's let out: nobody can reach it, so
+## bots leave it be.
+var penned: bool = false
 ## Hits tint the slime this bright for a moment.
 const HIT_FLASH_TIME := 0.15
 ## Hits move it this fraction as far as they'd shove a loose object.
@@ -635,8 +643,9 @@ func _net_spit(names: PackedStringArray, launches: PackedVector3Array) -> void:
 		_minions.append(minion)
 
 
-## Touching the ball knocks it toward the nearest goal, as long as the slime
-## is behind it (otherwise it just bounces off).
+## Touching the ball swallows it (see swallows_ball), or knocks it toward
+## the nearest goal, as long as the slime is behind it (otherwise it just
+## bounces off).
 func _touch_ball() -> void:
 	if _kick_cooldown > 0.0:
 		return
@@ -649,11 +658,31 @@ func _touch_ball() -> void:
 	var flat: Vector3 = _flat(offset)
 	if flat.length() > RADIUS + BALL_RADIUS + 0.3:
 		return
+	if swallows_ball and drop == BossDrop.Kind.NONE and not ball is Skull3D:
+		Net.everywhere(_net_swallow, String(ball.name))
+		return
 	var goal_dir: Vector3 = _flat(_goal_aim(ball) - ball.global_position).normalized()
 	if flat.normalized().dot(goal_dir) < 0.0:
 		return
 	_kick_cooldown = KICK_COOLDOWN
 	Combat.push(ball, goal_dir * kick_impulse + Vector3.UP * kick_lift)
+
+
+## On every machine: gulp `ball_name` down. It floats in the core and
+## comes back out when the boss is beaten.
+@rpc("authority", "call_local", "reliable")
+func _net_swallow(ball_name: String) -> void:
+	var game: Game3D_Class = Global.Game3D
+	var ball: Ball3D = game.get_node_or_null(ball_name) as Ball3D if game else null
+	if not ball or is_defeated:
+		return
+	game._remove_ball(ball)
+	drop = BossDrop.Kind.BALL
+	core.visible = true
+	_squash_vel += 6.0  # Bulges as it goes down
+	Sfx.play(&"boss_spit", global_position)
+	game.scoreboard.announce("%s swallowed the ball! Beat it to get it back" % display_name, Color(0.6, 1.0, 0.5))
+	game._update_phase()
 
 
 ## Called by Combat.strike for every attack that lands on the boss.

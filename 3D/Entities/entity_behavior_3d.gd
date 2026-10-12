@@ -61,7 +61,6 @@ var stamina: float:
 # ===== COMBAT & MOVEMENT =====
 var atk_pwr: float = 400.0  
 var def_base: float = 100.0
-var target: Node3D = null
 
 # ===== STATE VARIABLES =====
 var name_display: String

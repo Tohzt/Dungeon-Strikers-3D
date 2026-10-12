@@ -1,8 +1,8 @@
 class_name PlayerCombo3D extends RefCounted
-## Plays out a player's dual-wield special or alt attack (see WeaponCombo3D)
-## once PlayerClass3D._start_special has paid for it: strikes each beat as
-## it comes due, and turns the body through a spinning one. It stops if
-## either weapon leaves its hand.
+## Plays out a move's beats (see WeaponMove3D.combo) once
+## PlayerClass3D._start_move has started it: strikes each beat as it comes
+## due, and turns the body through a spinning one. It stops if either
+## weapon leaves its hand.
 
 var _player: PlayerClass3D
 ## The beats still to come, and the time to the next.

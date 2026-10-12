@@ -138,7 +138,7 @@ func _apply(player: PlayerClass3D, item: int, weapon_pick: int, is_left: bool) -
 		WildItem.Kind.INSTANT:
 			if item == WildItem.SNACK and owned:
 				player.Entity.hp = player.Entity.hp_max
-				player.add_boost(PlayerClass3D.BOOST_MAX)
+				player.Entity.stamina = player.Entity.stamina_max
 			elif item == WildItem.THUNDERCLAP:
 				_thunderclap(player, owned)
 

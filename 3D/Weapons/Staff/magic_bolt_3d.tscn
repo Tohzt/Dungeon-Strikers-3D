@@ -17,7 +17,7 @@ radial_segments = 12
 rings = 6
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_bolt"]
-radius = 0.25
+radius = 0.4
 
 [node name="MagicBolt_3D" type="RigidBody3D"]
 collision_layer = 0
@@ -27,7 +27,9 @@ script = ExtResource("1_arrow")
 damage = 22.0
 impact_impulse = 5.0
 knockback = 9.0
-ball_redirect_speed = 14.0
+ball_redirect_speed = 20.0
+ball_redirect_boost = 6.0
+ball_redirect_lift = 3.0
 max_lifetime = 3.0
 wall_sound = &"spell_impact"
 body_sound = &"spell_impact"

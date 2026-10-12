@@ -4,7 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://exm48fj6lnc8" path="res://Assets/Weapons/halberd.glb" id="model"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_2h_poke.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_halberd.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_sweep.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(1.29, 1.82, 0.29)
@@ -18,12 +19,13 @@ axis_lock_angular_z = true
 mass = 2.2
 script = ExtResource("script")
 swing_sound = &"swing_halberd"
-alt_attack = ExtResource("alt")
 vertical_swing = true
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 grip = 3
 swing_clip = &"CombatMelee/Melee_2H_Attack_Chop"
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." unique_id=1501511482 instance=ExtResource("behavior")]
 weapon_name = "Halberd"

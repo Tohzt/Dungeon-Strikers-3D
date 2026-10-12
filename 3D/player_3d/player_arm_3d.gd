@@ -31,7 +31,7 @@ const WINDUP_LERP_SPEED := 6.0
 const WINDUP_SHOWN := 0.02
 
 
-## A button working this arm (its attack, or simple controls' throw).
+## One of the player's attack buttons (see PlayerClass3D's BUTTONS).
 class Press:
 	## Held this frame, and last frame.
 	var held: bool = false
@@ -39,9 +39,8 @@ class Press:
 	## When the current press began (seconds, see PlayerArm3D.now()).
 	var press_time: float = 0.0
 	## A release only acts if its press was seen by the attack logic. Presses
-	## made while blocking are swallowed, so e.g. Alt+click (which is both
-	## heavy and plain attack) doesn't throw the shield when the button comes
-	## back up.
+	## made while busy (rolling, staggered) are swallowed, so letting go
+	## afterwards does nothing.
 	var armed: bool = false
 
 	func just_pressed() -> bool:
@@ -59,8 +58,6 @@ var is_left: bool
 ## What this hand holds (a two-handed weapon is the right arm's; see
 ## PlayerClass3D._holds_two_handed).
 var weapon: Weapon3D = null
-var attack := Press.new()
-var throw := Press.new()
 
 # The current swing: time left out of swing_duration, and the phase its
 # clip started from (see QUICK_SWING_PHASE).
@@ -96,6 +93,21 @@ var punch_hits: Array[Node] = []
 ## Wound back for a throw, 0-1 (see update_windup).
 var windup: float = 0.0
 
+# A heavy attack being charged (its button held, see
+# PlayerClass3D._handle_heavy_button): wound back over the charge with
+# charge_clip, then held there, `charged`, until the button's let go.
+var charging: bool = false
+var charge: float = 0.0
+var charge_start: float = 0.0
+var charge_clip: StringName = &""
+var charged: bool = false
+## The light or heavy move (see WeaponMove3D) this arm's strikes are part
+## of; null for a plain swing, special or alt attack.
+var move: WeaponMove3D = null
+var move_heavy: bool = false
+## Share of the wind-up a full charge holds the arm at.
+const CHARGE_POSE := 0.95
+
 
 func _init(left: bool) -> void:
 	is_left = left
@@ -115,12 +127,6 @@ func is_swinging() -> bool:
 
 func is_drawing() -> bool:
 	return draw_time > 0.0
-
-
-## Drawing a heavy swing back, or in the strike half of any swing: no
-## rolling out of it. The follow-through can be rolled out of.
-func is_committed() -> bool:
-	return is_drawing() or swing_time > swing_duration * 0.5
 
 
 ## Start a swing `duration` seconds long, its clip from phase `from`.
@@ -191,8 +197,24 @@ func start_contact(solid: bool) -> void:
 	punching = false
 
 
+## Start winding back for a heavy, with `clip`.
+func begin_charge(clip: StringName) -> void:
+	charging = true
+	charge = 0.0
+	charge_start = now()
+	charge_clip = clip
+	charged = false
+
+
+func end_charge() -> void:
+	charging = false
+	charge = 0.0
+	charged = false
+
+
 ## Stop any punch or swing from hitting anything more.
 func cancel() -> void:
+	end_charge()
 	punching = false
 	draw_time = 0.0
 	draw_weapon = null
@@ -243,6 +265,8 @@ func action() -> Vector2:
 		return Vector2(PlayerClass3D.ArmAction.SWING, swing_phase())
 	if is_drawing():
 		return Vector2(PlayerClass3D.ArmAction.SWING, draw_progress())
+	if charging:
+		return Vector2(PlayerClass3D.ArmAction.SWING, CHARGE_POSE * (1.0 - (1.0 - charge) * (1.0 - charge)))
 	if shot_time > 0.0:
 		return Vector2(PlayerClass3D.ArmAction.SWING, 3.0 - 2.0 * shot_time / SHOT_ANIM_DURATION)
 	if release_time > 0.0:
@@ -257,6 +281,8 @@ func action() -> Vector2:
 ## The clip for arm_anim: a combo beat's, while it swings (-1 = the
 ## weapon's usual one).
 func clip_index() -> float:
+	if charging and swing_time <= 0.0 and not is_drawing():
+		return PlayerVisual3D.clip_index(charge_clip)
 	if swing_time <= 0.0 and rebound <= 0.0:
 		return -1.0
 	return PlayerVisual3D.clip_index(swing_clip)

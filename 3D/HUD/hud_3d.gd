@@ -4,8 +4,8 @@ class_name HUD3D extends CanvasLayer
 @onready var panel:       PanelContainer = $Panel
 @onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
 @onready var stamina_bar: ProgressBar    = $Panel/Row/Bars/StaminaBar
-## The blue bar: the player's boost meter (see PlayerClass3D.boost).
-@onready var boost_bar:   ProgressBar    = $Panel/Row/Bars/ManaBar
+## The blue bar: the player's carry meter (see PlayerClass3D.carry).
+@onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
 @onready var player_icon: TextureRect    = $Panel/Row/PlayerIcon
 
 ## Gap between the HUD panel and the screen edges.
@@ -16,14 +16,15 @@ var signals_connected: bool = false
 var _down_label: Label
 
 
-## Binds this HUD to a player and moves it to that player's corner:
-## P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right. Anchored, so
-## it stays in the corner whatever shape the window is.
-func setup(p: PlayerClass3D, slot: PlayerSlot) -> void:
+## Binds this HUD to a player and moves it to `corner` (the player's place
+## among this machine's humans): top-left, top-right, bottom-left,
+## bottom-right. Anchored, so it stays in the corner whatever shape the
+## window is.
+func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
 	player = p
 	var corners: Array[Control.LayoutPreset] = [Control.PRESET_TOP_LEFT, Control.PRESET_TOP_RIGHT,
 		Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]
-	panel.set_anchors_and_offsets_preset(corners[slot.index % corners.size()], Control.PRESET_MODE_MINSIZE, MARGIN)
+	panel.set_anchors_and_offsets_preset(corners[corner % corners.size()], Control.PRESET_MODE_MINSIZE, MARGIN)
 	player_icon.modulate = slot.color
 	if not _down_label:
 		_down_label = Label.new()
@@ -40,14 +41,14 @@ func _process(_delta: float) -> void:
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)
-		player.boost_changed.connect(_on_boost_changed)
-		_on_boost_changed(player.boost, PlayerClass3D.BOOST_MAX)
 
 func _connect_signals(eb: Node) -> void:
 	# eb should be EntityBehavior3D, but using Node type to avoid class loading issues
 	if not eb:
 		return
 	eb.hp_changed.connect(_on_hp_changed)
+	player.carry_changed.connect(_on_carry_changed)
+	_on_carry_changed(player.carry, PlayerClass3D.CARRY_MAX)
 	eb.stamina_changed.connect(_on_stamina_changed)
 
 	# Get initial values immediately after connecting
@@ -58,10 +59,10 @@ func _on_hp_changed(new_hp: float, max_hp: float) -> void:
 	health_bar.max_value = max_hp
 	health_bar.value = new_hp
 
-func _on_boost_changed(new_boost: float, max_boost: float) -> void:
-	boost_bar.max_value = max_boost
-	boost_bar.value = new_boost
-
 func _on_stamina_changed(new_stamina: float, max_stamina: float) -> void:
 	stamina_bar.max_value = max_stamina
 	stamina_bar.value = new_stamina
+
+func _on_carry_changed(new_carry: float, max_carry: float) -> void:
+	carry_bar.max_value = max_carry
+	carry_bar.value = new_carry

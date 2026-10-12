@@ -16,7 +16,6 @@
 [ext_resource type="Script" uid="uid://ckfkkyu27xi51" path="res://3D/Game/Level/boss_trigger.gd" id="15_ne6ha"]
 [ext_resource type="Script" uid="uid://b0d37x1lanq1f" path="res://3D/Game/Level/spawn_point.gd" id="16_xn8s7"]
 [ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://3D/Weapons/Sword/sword_3d.tscn" id="18_gr3ut"]
-[ext_resource type="PackedScene" path="res://3D/Items/Boost/boost_orb.tscn" id="24_qcq50"]
 [ext_resource type="PackedScene" uid="uid://bfxkjqagjl318" path="res://3D/Weapons/Chest/chest.tscn" id="25_cgqqt"]
 [ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://3D/Weapons/Altar.tscn" id="26_k31i0"]
 [ext_resource type="PackedScene" uid="uid://dq1toy2g128vu" path="res://3D/Entities/Boss_Slime/boss.tscn" id="27_le4n0"]
@@ -109,8 +108,8 @@ size = Vector3(38, 6, 30)
 script = ExtResource("1_ddysq")
 player_scene = ExtResource("2_0jqmx")
 spawn_distance = 30.0
-max_team_count = 2
 ambience = &"cave"
+max_team_count = 2
 
 [node name="Tools" type="Node" parent="." unique_id=7709918]
 script = ExtResource("3_ae7db")
@@ -653,54 +652,6 @@ transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 75, 
 script = ExtResource("16_xn8s7")
 team = 1
 
-[node name="BoostOrbs" type="Node3D" parent="." unique_id=1473308528]
-
-[node name="BigOrb1" parent="BoostOrbs" unique_id=604502658 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -76, 0, 20)
-amount = 100.0
-respawn_time = 10.0
-
-[node name="BigOrb2" parent="BoostOrbs" unique_id=40938562 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76, 0, 20)
-amount = 100.0
-respawn_time = 10.0
-
-[node name="Orb3" parent="BoostOrbs" unique_id=721260521 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 0, -12)
-
-[node name="Orb4" parent="BoostOrbs" unique_id=217724668 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0, -12)
-
-[node name="Orb5" parent="BoostOrbs" unique_id=1855789337 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 0, 12)
-
-[node name="Orb6" parent="BoostOrbs" unique_id=1172851306 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0, 12)
-
-[node name="Orb7" parent="BoostOrbs" unique_id=280588621 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0, -20)
-
-[node name="Orb8" parent="BoostOrbs" unique_id=466667502 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, -20)
-
-[node name="Orb9" parent="BoostOrbs" unique_id=1938193518 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0, 20)
-
-[node name="Orb10" parent="BoostOrbs" unique_id=1145425819 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, 20)
-
-[node name="Orb11" parent="BoostOrbs" unique_id=1443420100 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, -11)
-
-[node name="Orb12" parent="BoostOrbs" unique_id=1546842102 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -11)
-
-[node name="Orb13" parent="BoostOrbs" unique_id=1106405101 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 11)
-
-[node name="Orb14" parent="BoostOrbs" unique_id=261686205 instance=ExtResource("24_qcq50")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 11)
-
 [node name="ArmorPickups" type="Node3D" parent="." unique_id=1471835506]
 
 [node name="Armor_Blue" parent="ArmorPickups" unique_id=1370636487 instance=ExtResource("40_armor")]
@@ -783,16 +734,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 0, 22)
 
 [node name="Altar" parent="." unique_id=2138990566 groups=["dungeon_nav"] instance=ExtResource("26_k31i0")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -81, 0, 0)
-reward_time_min = null
-reward_time_max = null
 relic_hand_size = 3
 weapon_scene = ExtResource("18_gr3ut")
 
 [node name="Altar2" parent="." unique_id=466792934 groups=["dungeon_nav"] instance=ExtResource("26_k31i0")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 81, 0, 0)
 owner_team = 1
-reward_time_min = null
-reward_time_max = null
 relic_hand_size = 3
 weapon_scene = ExtResource("18_gr3ut")
 

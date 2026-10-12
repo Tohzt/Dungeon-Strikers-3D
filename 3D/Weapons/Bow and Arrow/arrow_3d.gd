@@ -19,6 +19,11 @@ class_name Arrow3D extends RigidBody3D
 ## Above 0, hitting the ball turns it to fly the way this was going, at
 ## least this fast (m/s), instead of just shoving it (the staff's bolt).
 @export var ball_redirect_speed: float = 0.0
+## With ball_redirect_speed: added to the ball's speed, so a bolt always
+## speeds it up, even when it's already flying.
+@export var ball_redirect_boost: float = 0.0
+## With ball_redirect_speed: pops the ball up at least this fast (m/s).
+@export var ball_redirect_lift: float = 0.0
 ## Safety net: an arrow that somehow never hits anything is removed after this.
 @export var max_lifetime: float = 5.0
 ## What hitting a wall or the floor sounds like (an Sfx.SOUNDS id).
@@ -35,6 +40,10 @@ const WORLD_MASK := 0b1
 
 ## False for online copies of someone else's shot, which only show it.
 var deals_damage: bool = true
+## Flies on through whoever it hits (a heavy shot), hitting each once; only
+## a wall stops it.
+var pierce: bool = false
+var _pierced: Array[Node] = []
 
 ## The shot that breaks its weapon bursts where it lands, wall or body, in
 ## the weapon's break burst (see CrossbowClass3D). 0 = an ordinary shot.
@@ -138,9 +147,20 @@ func _align_to_velocity(velocity: Vector3) -> void:
 	rotation.x = asin(clamp(dir.y, -1.0, 1.0))
 
 
+## Everything about it this many times bigger (not the body itself: physics
+## bodies mustn't be scaled).
+func enlarge(factor: float) -> void:
+	for child: Node in get_children():
+		if child is Node3D:
+			(child as Node3D).scale *= factor
+
+
 func _on_body_entered(body: Node) -> void:
-	if not is_flying or body in _excluded_bodies: return
-	is_flying = false
+	if not is_flying or body in _excluded_bodies or body in _pierced: return
+	if pierce:
+		_pierced.append(body)
+	else:
+		is_flying = false
 	if body_sound != &"":
 		Sfx.play(body_sound, global_position)
 
@@ -152,10 +172,14 @@ func _on_body_entered(body: Node) -> void:
 	# (the ball, a placeholder dummy) just get shoved - same as every attack.
 	if deals_damage:
 		if body is Ball3D and ball_redirect_speed > 0.0:
-			body.redirect(travel_dir, ball_redirect_speed)
+			var power: float = shooter.perk_stat(&"ball_power") if shooter is PlayerClass3D else 1.0
+			body.redirect(travel_dir, ball_redirect_speed * power, ball_redirect_boost * power, ball_redirect_lift)
 			body.touched_by(shooter)
+			Sfx.play_everywhere(&"hit_ball", body.global_position)
 		else:
 			Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
+	if pierce:
+		return
 	_burst(body)
 
 	queue_free()

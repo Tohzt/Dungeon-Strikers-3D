@@ -1,22 +1,12 @@
 class_name PlayerVisual3D extends Node3D
-## The player's skinned KayKit body. It plays locomotion, dodge, stagger,
-## hit and spawn clips from the player's state, and each arm's attack, throw
-## or hold clip on top; wears the team ring and flashes red during iframes. Held
+## The player's skinned KayKit body. It plays locomotion, dodge, slide,
+## stagger, knockdown, hit and spawn clips from the player's state, and each arm's attack, throw
+## or hold clip on top; wears the team ring, flashes red during iframes and
+## sees stars while knocked down. Held
 ## weapons ride its hand bones. It reads only state that's synced online
-## (velocity, anim_pose, body_tilt, arm_anim, iframes, what's in each hand),
+## (velocity, anim_pose, arm_anim, iframes, what's in each hand),
 ## so remote copies animate the same as the owner without any extra sync.
 
-## The bodies players pick from in the menus (PlayerSlot.character).
-const CHARACTERS: Array[PackedScene] = [
-	preload("res://Assets/Characters/Adventurers/Knight.glb"),
-	preload("res://Assets/Characters/Adventurers/Barbarian.glb"),
-	preload("res://Assets/Characters/Adventurers/Mage.glb"),
-	preload("res://Assets/Characters/Adventurers/Rogue.glb"),
-	preload("res://Assets/Characters/Adventurers/Ranger.glb"),
-	preload("res://Assets/Characters/Adventurers/Rogue_Hooded.glb"),
-]
-## Matches CHARACTERS.
-const CHARACTER_NAMES: Array[String] = ["Knight", "Barbarian", "Mage", "Rogue", "Ranger", "Hooded Rogue"]
 ## Rig_Medium clips, by library name (clips are referred to as "Library/Clip").
 const LIBRARIES: Dictionary[StringName, AnimationLibrary] = {
 	&"General": preload("res://Assets/Characters/Animations/Rig_Medium/Rig_Medium_General.glb"),
@@ -25,18 +15,45 @@ const LIBRARIES: Dictionary[StringName, AnimationLibrary] = {
 	&"CombatMelee": preload("res://Assets/Characters/Animations/Rig_Medium/Rig_Medium_CombatMelee.glb"),
 	&"CombatRanged": preload("res://Assets/Characters/Animations/Rig_Medium/Rig_Medium_CombatRanged.glb"),
 	&"Tools": preload("res://Assets/Characters/Animations/Rig_Medium/Rig_Medium_Tools.glb"),
+	&"Simulation": preload("res://Assets/Characters/Animations/Rig_Medium/Rig_Medium_Simulation.glb"),
 }
 const SKELETON_PATH := "Rig_Medium/Skeleton3D"
-## Each character's headgear and cape, by mesh name minus the model prefix
-## (e.g. Knight_Helmet). Hidden until the player picks up armor (see
+## Each character's headgear and cape, by the last part of the mesh name
+## (e.g. Knight_Helmet, Skeleton_Warrior_Helmet). Hidden until the player picks up armor (see
 ## PlayerClass3D.armored). The Ranger's quiver isn't armor, so it stays.
 const ARMOR_MESHES: Array[String] = ["Helmet", "HelmetVisor", "Hat", "BearHat", "Mask", "Cape"]
 
 const IDLE_CLIP := &"General/Idle_A"
 const WALK_CLIP := &"MovementBasic/Walking_A"
 const RUN_CLIP := &"MovementBasic/Running_A"
-const ROLL_CLIP := &"MovementAdvanced/Dodge_Forward"
+## A dodge roll dives (this lunge, pitched forward until nearly flat), then
+## tucks (crouched) and rolls over: the body flips through a full turn on
+## top of the clips (see _roll_flip), as the rig has no roll of its own.
+const DIVE_CLIP := &"MovementAdvanced/Dodge_Forward"
+const TUCK_CLIP := &"MovementAdvanced/Crouching"
+## Share of the roll spent diving; the rest is the tucked roll.
+const DIVE_SHARE := 0.35
+const DIVE_PITCH := deg_to_rad(80)
+## Top of the dive's arc, above the floor.
+const DIVE_HEIGHT := 0.45
+## How high up the body (from the feet) it turns around while flipping.
+const ROLL_PIVOT_HEIGHT := 0.55
 const BACKSTEP_CLIP := &"MovementAdvanced/Dodge_Backward"
+## A slide tackle: sat on the floor, legs out front, leaning back a little.
+const SLIDE_CLIP := &"Simulation/Sit_Floor_Idle"
+const SLIDE_LEAN := deg_to_rad(-12)
+## Slide-tackled: thrown on our back, then back up by playing the fall in
+## reverse.
+const KNOCKDOWN_CLIP := &"General/Death_A"
+## Seeing stars while knocked down: a ring of them circling over the head.
+const STAR_COUNT := 5
+const STAR_RING_RADIUS := 0.4
+const STAR_SIZE := 0.13
+## Above the head bone (which sits at the bottom of the head).
+const STAR_HEIGHT := 0.75
+const STAR_ORBIT_SPEED := 4.0  # Radians per second
+const STAR_BOB := 0.06
+const STAR_COLOR := Color(1.0, 0.88, 0.2)
 const STAGGER_CLIP := &"General/Hit_B"
 const HIT_CLIP := &"General/Hit_A"
 const SPAWN_CLIP := &"General/Spawn_Ground"
@@ -44,7 +61,7 @@ const SPAWN_CLIP := &"General/Spawn_Ground"
 const DOWN_CLIP := &"General/Death_A"
 
 ## Ground speeds (m/s) the locomotion blend puts each clip at. Above
-## RUN_SPEED (sprint, boost) the run cycle speeds up instead.
+## RUN_SPEED (sprinting, sliding) the run cycle speeds up instead.
 const WALK_SPEED := 2.0
 const RUN_SPEED := 6.5
 const MAX_RUN_TIME_SCALE := 2.0
@@ -142,6 +159,14 @@ var _iframe_flash: bool = false
 var _iframe_time: float = 0.0
 var _flash_material: StandardMaterial3D = null
 var _armored: bool = false
+## Where the body sits when nothing moves it (a dodge roll lifts and pivots it).
+var _body_rest_position := Vector3.ZERO
+## Seconds into the current dodge roll, for the flip.
+var _roll_elapsed: float = 0.0
+## The ring of stars (see STAR_COUNT) and the bone it follows.
+var _stars: Node3D = null
+var _head_bone: int = -1
+var _stars_time: float = 0.0
 
 ## Follow the handslot bones, which is where weapons are held (see hand()).
 var _hand_left := Node3D.new()
@@ -198,10 +223,10 @@ func setup(owner_player: PlayerClass3D) -> void:
 	add_child(_hand_right)
 	# Each player tints its own ring
 	team_ring.material_override = team_ring.material_override.duplicate()
+	_make_stars()
 	var scene: PackedScene = character
 	if not scene:
-		var index: int = player.slot.character if player.slot else 0
-		scene = CHARACTERS[posmod(index, CHARACTERS.size())]
+		scene = Roster.model_of(player.slot.character if player.slot else 0)
 	_set_character(scene)
 
 
@@ -213,7 +238,9 @@ func _set_character(scene: PackedScene) -> void:
 	new_body.name = "Character"
 	add_child(new_body)
 	body = new_body
+	_body_rest_position = body.position
 	skeleton = body.get_node(SKELETON_PATH) as Skeleton3D
+	_head_bone = skeleton.find_bone("head")
 	_hand_bone_left = skeleton.find_bone("handslot.l")
 	_hand_bone_right = skeleton.find_bone("handslot.r")
 	skeleton.skeleton_updated.connect(_on_skeleton_updated)
@@ -230,25 +257,37 @@ func _build_tree() -> void:
 		tree.add_animation_library(library_name, LIBRARIES[library_name])
 
 	var states := AnimationNodeStateMachine.new()
+	var roll: float = PlayerClass3D.ROLL_DURATION
 	states.add_node(&"Move", _locomotion())
-	states.add_node(&"Roll", _clip(ROLL_CLIP, PlayerClass3D.ROLL_DURATION))
+	states.add_node(&"Dive", _clip(DIVE_CLIP, roll * DIVE_SHARE))
+	states.add_node(&"Tuck", _clip(TUCK_CLIP, roll * (1.0 - DIVE_SHARE)))
 	states.add_node(&"Backstep", _clip(BACKSTEP_CLIP, PlayerClass3D.BACKSTEP_DURATION))
+	states.add_node(&"Slide", _clip(SLIDE_CLIP, PlayerClass3D.SLIDE_DURATION))
 	states.add_node(&"Stagger", _clip(STAGGER_CLIP, PlayerClass3D.STAGGER_DURATION))
+	states.add_node(&"Knockdown", _clip(KNOCKDOWN_CLIP))  # Holds its last frame, lying down
+	states.add_node(&"GetUp", _clip(KNOCKDOWN_CLIP, PlayerClass3D.GETUP_DURATION, true))
 	states.add_node(&"Spawn", _clip(SPAWN_CLIP))
 	states.add_node(&"Down", _clip(DOWN_CLIP))  # Holds its last frame, lying down
 	states.add_transition(&"Start", &"Move", _transition(0.0, true))
-	var one_shots: Array[StringName] = [&"Roll", &"Backstep", &"Stagger", &"Spawn"]
+	# Where each one goes on its own once it's finished (the dive tucks into
+	# the roll); Knockdown waits for GetUp.
+	var then: Dictionary[StringName, StringName] = {
+		&"Dive": &"Tuck", &"Tuck": &"Move", &"Backstep": &"Move", &"Slide": &"Move",
+		&"Stagger": &"Move", &"GetUp": &"Move", &"Spawn": &"Move",
+	}
+	var one_shots: Array[StringName] = [&"Dive", &"Tuck", &"Backstep", &"Slide",
+			&"Stagger", &"Knockdown", &"GetUp", &"Spawn"]
 	for from: StringName in one_shots:
 		states.add_transition(&"Move", from, _transition(STATE_XFADE))
-		# Finished: back to moving on its own
-		var back := _transition(RETURN_XFADE, true)
-		back.switch_mode = AnimationNodeStateMachineTransition.SWITCH_MODE_AT_END
-		states.add_transition(from, &"Move", back)
+		if then.has(from):
+			var next := _transition(RETURN_XFADE if then[from] == &"Move" else 0.05, true)
+			next.switch_mode = AnimationNodeStateMachineTransition.SWITCH_MODE_AT_END
+			states.add_transition(from, then[from], next)
 		for to: StringName in one_shots:
-			if to != from:
+			if to != from and then.get(from) != to:
 				states.add_transition(from, to, _transition(STATE_XFADE))
 	# Down from anything; only getting back up (Spawn) leaves it
-	for from: StringName in [&"Move", &"Roll", &"Backstep", &"Stagger"]:
+	for from: StringName in [&"Move", &"Dive", &"Tuck", &"Backstep", &"Slide", &"Stagger", &"Knockdown", &"GetUp"]:
 		states.add_transition(from, &"Down", _transition(STATE_XFADE))
 	states.add_transition(&"Down", &"Spawn", _transition(STATE_XFADE))
 
@@ -326,10 +365,13 @@ func _locomotion() -> AnimationNodeBlendTree:
 
 
 ## A clip, stretched to last `duration` seconds if given (so e.g. a dodge
-## lasts exactly as long as the roll it shows).
-func _clip(clip: StringName, duration: float = 0.0) -> AnimationNodeAnimation:
+## lasts exactly as long as the roll it shows), and played in reverse if
+## `backward`.
+func _clip(clip: StringName, duration: float = 0.0, backward: bool = false) -> AnimationNodeAnimation:
 	var node := AnimationNodeAnimation.new()
 	node.animation = clip
+	if backward:
+		node.play_mode = AnimationNodeAnimation.PLAY_MODE_BACKWARD
 	if duration > 0.0:
 		node.use_custom_timeline = true
 		node.timeline_length = duration
@@ -356,11 +398,19 @@ func _process(delta: float) -> void:
 	if pose != _last_pose and not player.is_dead():  # Knocked out bodies stay down
 		match pose:
 			PlayerClass3D.Pose.ROLL:
-				_go(&"Roll")
+				_go(&"Dive")
+				_roll_elapsed = 0.0
 				Sfx.play(&"roll", player.global_position)
 			PlayerClass3D.Pose.BACKSTEP:
 				_go(&"Backstep")
 				Sfx.play(&"roll", player.global_position)
+			PlayerClass3D.Pose.SLIDE:
+				_go(&"Slide")
+				Sfx.play(&"roll", player.global_position)
+			PlayerClass3D.Pose.KNOCKDOWN:
+				_go(&"Knockdown")
+				Sfx.play(&"land", player.global_position)
+			PlayerClass3D.Pose.GETUP: _go(&"GetUp")
 			PlayerClass3D.Pose.STAGGER: _go(&"Stagger")
 		_last_pose = pose
 
@@ -372,10 +422,35 @@ func _process(delta: float) -> void:
 	_update_torso(delta)
 	_update_sweep(delta)
 	_update_iframe_flash(delta)
-	# Leaning into a boost, pivoting at the feet, sweeping into attacks and
-	# spinning through a spin combo
-	body.rotation.x = player.body_tilt + _sweep_pitch
+	_update_stars(delta)
+	# Leaning back into a slide, pivoting at the feet, sweeping into attacks and
+	# spinning through a spin combo; or flipping through a dodge roll, turning
+	# round the middle of the body instead
+	var flip: Vector2 = _roll_flip(delta)
+	var lean: float = SLIDE_LEAN if player.anim_pose == PlayerClass3D.Pose.SLIDE else 0.0
+	body.rotation.x = _sweep_pitch + lean + flip.x
 	body.rotation.y = _sweep_yaw + player.arm_anim[6]
+	var body_position: Vector3 = _body_rest_position
+	if flip != Vector2.ZERO:
+		var pivot := Vector3(0.0, ROLL_PIVOT_HEIGHT, 0.0)
+		body_position += pivot - Basis.from_euler(body.rotation) * pivot + Vector3.UP * flip.y
+	body.position = body_position
+
+
+## The dodge roll's flip right now: (forward pitch, lift), both 0 when not
+## rolling. Diving, the body tips forward to nearly flat and arcs up off
+## the floor and back down onto its hands; then it rolls the rest of the
+## way over, ending upright just as the roll does.
+func _roll_flip(delta: float) -> Vector2:
+	if player.anim_pose != PlayerClass3D.Pose.ROLL or player.is_dead():
+		return Vector2.ZERO
+	_roll_elapsed += delta
+	var t: float = clampf(_roll_elapsed / PlayerClass3D.ROLL_DURATION, 0.0, 1.0)
+	if t < DIVE_SHARE:
+		var dive: float = t / DIVE_SHARE
+		return Vector2(DIVE_PITCH * sin(dive * PI * 0.5), DIVE_HEIGHT * sin(dive * PI))
+	var over: float = (t - DIVE_SHARE) / (1.0 - DIVE_SHARE)
+	return Vector2(lerpf(DIVE_PITCH, TAU, smoothstep(0.0, 1.0, over)), 0.0)
 
 
 ## Whoosh as an arm's swing passes into its strike: its weapon's swing
@@ -620,8 +695,8 @@ func play_down() -> void:
 		_go(&"Down")
 
 
-## Flinch from a hit. Rolling, staggered or spawning bodies already have
-## their own clip going, so they don't.
+## Flinch from a hit. Rolling, sliding, staggered, knocked down or spawning
+## bodies already have their own clip going, so they don't.
 func play_hit() -> void:
 	if not tree or player.anim_pose != PlayerClass3D.Pose.NONE \
 			or _playback.get_current_node() == &"Spawn":
@@ -639,7 +714,7 @@ func set_team_color(color: Color) -> void:
 func set_armored(on: bool) -> void:
 	_armored = on
 	for mesh: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):
-		if String(mesh.name).get_slice("_", 1) in ARMOR_MESHES:
+		if String(mesh.name).rsplit("_", true, 1)[-1] in ARMOR_MESHES:
 			mesh.visible = on
 
 
@@ -655,6 +730,65 @@ func set_iframe_fade(on: bool) -> void:
 		_flash_material.albedo_color = Color(1.0, 0.1, 0.1, IFRAME_FLASH_ALPHA)
 	for mesh: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):
 		mesh.material_overlay = _flash_material if on else null
+
+
+## The stars: small flat five-pointed ones, always facing the camera,
+## spaced round a ring that's hidden until we're knocked down.
+func _make_stars() -> void:
+	var points := PackedVector3Array()
+	for i in 10:
+		var angle: float = PI * 0.5 + TAU * i / 10.0
+		var radius: float = STAR_SIZE if i % 2 == 0 else STAR_SIZE * 0.45
+		points.append(Vector3(cos(angle), sin(angle), 0.0) * radius)
+	var vertices := PackedVector3Array()
+	for i in 10:
+		vertices.append_array([Vector3.ZERO, points[i], points[(i + 1) % 10]])
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.billboard_keep_scale = true
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_color = STAR_COLOR
+	mesh.surface_set_material(0, material)
+	_stars = Node3D.new()
+	_stars.name = "Stars"
+	_stars.visible = false
+	add_child(_stars)
+	for i in STAR_COUNT:
+		var star := MeshInstance3D.new()
+		star.mesh = mesh
+		star.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_stars.add_child(star)
+
+
+## Knocked down (and getting up): the stars circle over the head, wherever
+## the fall has put it, each bobbing as it goes.
+func _update_stars(delta: float) -> void:
+	var pose: int = player.anim_pose
+	var on: bool = (pose == PlayerClass3D.Pose.KNOCKDOWN or pose == PlayerClass3D.Pose.GETUP) \
+			and not player.is_dead() and _head_bone >= 0
+	if on and not _stars.visible:
+		_stars_time = 0.0
+	_stars.visible = on
+	if not on:
+		return
+	_stars_time += delta
+	var head: Vector3 = (skeleton.global_transform * skeleton.get_bone_global_pose(_head_bone)).origin
+	_stars.global_position = head + Vector3.UP * STAR_HEIGHT
+	# Pop in rather than appear all at once
+	var grow: float = minf(_stars_time / 0.2, 1.0)
+	var count: int = _stars.get_child_count()
+	for i in count:
+		var star := _stars.get_child(i) as MeshInstance3D
+		var angle: float = _stars_time * STAR_ORBIT_SPEED + TAU * i / count
+		star.position = Vector3(cos(angle) * STAR_RING_RADIUS,
+				sin(_stars_time * 5.0 + i * 1.7) * STAR_BOB, sin(angle) * STAR_RING_RADIUS)
+		star.scale = Vector3.ONE * grow
 
 
 func _update_iframe_flash(delta: float) -> void:

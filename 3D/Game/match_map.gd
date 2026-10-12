@@ -7,30 +7,35 @@ enum Map {
 	ARENA,    ## The open soccer field: goals and altars for up to 4 teams
 	DUNGEON,  ## Two mirrored bases around a central arena; altars, no goals
 	RACE,     ## Up to 4 teams race through a dungeon to an altar (RaceGame3D)
+	PITCH,    ## Soccer with hazards and a penned boss; first to N goals (PitchGame3D)
 }
 
 ## In the order the lobby's Map button cycles through them.
-const MAPS: Array[Map] = [Map.DUNGEON, Map.ARENA, Map.RACE]
+const MAPS: Array[Map] = [Map.PITCH, Map.DUNGEON, Map.ARENA, Map.RACE]
 const SCENES: Dictionary[Map, String] = {
 	Map.ARENA: "res://3D/Game/Game3D.tscn",
 	Map.DUNGEON: "res://3D/Game/DungeonArena.tscn",
 	Map.RACE: "res://3D/Game/RaceDungeon.tscn",
+	Map.PITCH: "res://3D/Game/Pitch/Pitch.tscn",
 }
 const NAMES: Dictionary[Map, String] = {
 	Map.ARENA: "Arena",
 	Map.DUNGEON: "Dungeon",
 	Map.RACE: "Race",
+	Map.PITCH: "Pitch",
 }
 ## Most teams each level is laid out for (matches Game3D.max_team_count).
 const MAX_TEAMS: Dictionary[Map, int] = {
 	Map.ARENA: 4,
 	Map.DUNGEON: 2,
 	Map.RACE: 4,
+	Map.PITCH: 2,
 }
 ## Levels with goals to score a ball in.
-const HAS_GOALS: Array[Map] = [Map.ARENA]
-## Levels whose bosses drop nothing (they unlock doors), so any drop setting fits.
-const NO_DROPS: Array[Map] = [Map.RACE]
+const HAS_GOALS: Array[Map] = [Map.ARENA, Map.PITCH]
+## Levels whose bosses drop nothing (they unlock doors, or swallow the
+## ball), so any drop setting fits.
+const NO_DROPS: Array[Map] = [Map.RACE, Map.PITCH]
 
 ## Drops the host can pick, in the order the lobby's Boss button cycles.
 ## Each will get its own boss later; for now the one boss drops any of them.
@@ -40,18 +45,6 @@ const DROP_NAMES: Dictionary[BossDrop.Kind, String] = {
 	BossDrop.Kind.SKULL: "Skull",
 	BossDrop.Kind.BALL: "Soccer Ball",
 }
-
-## How the match is seen (Players.view): the shared top-down camera, or the
-## souls-like third-person camera behind the player. Third-person needs a
-## screen of one's own, so local co-op always plays top-down.
-enum View { TOP_DOWN, THIRD_PERSON }
-## In the order the lobby's View button cycles.
-const VIEWS: Array[View] = [View.THIRD_PERSON, View.TOP_DOWN]
-const VIEW_NAMES: Dictionary[View, String] = {
-	View.TOP_DOWN: "Top-Down",
-	View.THIRD_PERSON: "Third-Person",
-}
-
 
 static func scene_of(map: Map) -> String:
 	return SCENES[map]
@@ -63,10 +56,6 @@ static func name_of(map: Map) -> String:
 
 static func drop_name(kind: BossDrop.Kind) -> String:
 	return DROP_NAMES.get(kind, "?")
-
-
-static func view_name(view: View) -> String:
-	return VIEW_NAMES.get(view, "?")
 
 
 static func max_teams(map: Map) -> int:

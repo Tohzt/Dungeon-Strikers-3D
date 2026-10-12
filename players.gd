@@ -8,10 +8,13 @@ extends Node
 ##
 ## The menus call join()/leave() and let each player pick their team and
 ## character (set_team, cycle_team, cycle_character); Game3D only seats
-## players automatically when nothing has been joined yet.
+## players automatically when nothing has been joined yet. Teams are sides:
+## Humans against Skeletons, and each side has its own characters (see
+## Roster), so changing team changes character too.
 ##
 ## team_count picks the match format: 2 teams play end to end on the 2P
-## field, 4 teams get a goal on every side (4P field). New seats start out
+## field, 4 teams get a goal on every side (4P field; hidden for now, see
+## TEAM_COUNTS). New seats start out
 ## spread across the teams in order (see team_for_seat), and bots join
 ## whichever team is smallest. The format also picks the level (map) and
 ## what every boss drops (boss_drop); see MatchMap for which go together.
@@ -22,7 +25,8 @@ signal slot_left(slot: PlayerSlot)
 ## layout (Simple/Advanced).
 signal slot_changed(slot: PlayerSlot)
 
-const MAX_PLAYERS := 4
+## 4v4.
+const MAX_PLAYERS := 8
 ## What device_of() returns for input that can't pick a device (e.g. mouse motion).
 const NO_DEVICE := -2
 const TEAM_COLORS: Array[Color] = [
@@ -31,11 +35,13 @@ const TEAM_COLORS: Array[Color] = [
 	Color(0.1, 0.8, 0.2),   # Green
 	Color(1, 0.85, 0.1),    # Yellow
 ]
-## Matches TEAM_COLORS.
-const TEAM_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
+## Matches TEAM_COLORS. The first two are the sides (see Roster).
+const TEAM_NAMES: Array[String] = ["Humans", "Skeletons", "Green", "Yellow"]
 
-## Team counts a match can be played with (see team_count).
-const TEAM_COUNTS: Array[int] = [2, 4]
+## Team counts a match can be played with (see team_count). Humans vs
+## Skeletons is two teams; the 4-team format still works but is hidden
+## until it has sides of its own: add 4 back here to offer it.
+const TEAM_COUNTS: Array[int] = [2]
 
 var slots: Array[PlayerSlot] = []
 ## Teams in the next match. Online, the leader's choice is sent to everyone
@@ -45,12 +51,10 @@ var team_count: int = TEAM_COUNTS[0]
 var map: MatchMap.Map = MatchMap.MAPS[0]
 ## What every boss drops in the next match.
 var boss_drop: BossDrop.Kind = MatchMap.DROPS[0]
-## Camera for the next match (see MatchMap.View). Online, sent with the
-## match start like team_count.
-var view: MatchMap.View = MatchMap.VIEWS[0]
 ## Offline: seat bots until the match has this many players (0 = no bots).
 ## Always a whole number of players per team; see bot_fill_options().
-var bot_fill_count: int = 0
+## Starts at a full 4v4.
+var bot_fill_count: int = MAX_PLAYERS
 
 ## Project actions captured before any per-slot copies are added.
 var _base_actions: Array[StringName] = []
@@ -71,7 +75,7 @@ func join(device: int, team: int = -1, index: int = -1, character: int = -1) -> 
 	slot.index = index if index >= 0 else _next_free_index()
 	slot.device = device
 	_assign_team(slot, team if team >= 0 else team_for_seat(slot.index))
-	slot.character = character if character >= 0 else default_character(slot.index)
+	slot.character = Roster.for_team(character if character >= 0 else default_character(slot.index), slot.team)
 	slots.append(slot)
 	_register_actions(slot)
 	slot_joined.emit(slot)
@@ -87,7 +91,7 @@ func add_bot() -> PlayerSlot:
 	slot.device = PlayerSlot.BOT
 	slot.is_bot = true
 	_assign_team(slot, smallest_team(slot_teams()))
-	slot.character = unused_character()
+	slot.character = unused_character(slot.team)
 	slots.append(slot)
 	slot_joined.emit(slot)
 	return slot
@@ -152,9 +156,11 @@ func team_name(team: int) -> String:
 	return TEAM_NAMES[team % TEAM_NAMES.size()]
 
 
-## Put `slot` on `team` (wrapping around the teams in play).
+## Put `slot` on `team` (wrapping around the teams in play), switching to
+## that side's character in the same place on its list.
 func set_team(slot: PlayerSlot, team: int) -> void:
 	_assign_team(slot, team)
+	slot.character = Roster.for_team(slot.character, slot.team)
 	slot_changed.emit(slot)
 
 
@@ -203,29 +209,40 @@ func teams_with_bots(total: int, seated: Array[int]) -> Array[int]:
 # ===== CHARACTERS =====
 
 func character_count() -> int:
-	return PlayerVisual3D.CHARACTERS.size()
+	return Roster.count()
 
 
 func character_name(character: int) -> String:
-	return PlayerVisual3D.CHARACTER_NAMES[posmod(character, character_count())]
+	return Roster.name_of(character)
 
 
 ## Seats start on different characters so players don't all look alike.
+## Not yet fitted to a team (see Roster.for_team).
 func default_character(index: int) -> int:
 	return index % character_count()
 
 
-## The first character nobody seated is playing (the first one if all are).
-func unused_character() -> int:
-	for character: int in character_count():
+## The first of `team`'s characters nobody seated is playing (bots spread
+## out over the roster), or one at random if all are taken.
+func unused_character(team: int) -> int:
+	var choices: Array[int] = Roster.characters_of_team(team)
+	for character: int in choices:
 		if not slots.any(func(s: PlayerSlot) -> bool: return s.character == character):
 			return character
-	return 0
+	return choices.pick_random()
 
 
-## Switch `slot` to the next (step 1) or previous (step -1) character.
+## Switch `slot` to `character`, if its team can play it.
+func set_character(slot: PlayerSlot, character: int) -> void:
+	if Roster.fits_team(character, slot.team):
+		slot.character = character
+		slot_changed.emit(slot)
+
+
+## Switch `slot` to the next (step 1) or previous (step -1) character on
+## its team.
 func cycle_character(slot: PlayerSlot, step: int) -> void:
-	slot.character = posmod(slot.character + step, character_count())
+	slot.character = Roster.step(slot.character, slot.team, step)
 	slot_changed.emit(slot)
 
 
@@ -242,6 +259,7 @@ func set_team_count(count: int) -> void:
 		bot_fill_count = bot_fill_options()[-1]
 	for slot: PlayerSlot in slots:
 		_assign_team(slot, slot.team)
+		slot.character = Roster.for_team(slot.character, slot.team)
 		slot_changed.emit(slot)
 
 
@@ -286,10 +304,6 @@ func next_map() -> MatchMap.Map:
 
 func next_boss_drop() -> BossDrop.Kind:
 	return MatchMap.DROPS[(MatchMap.DROPS.find(boss_drop) + 1) % MatchMap.DROPS.size()]
-
-
-func next_view() -> MatchMap.View:
-	return MatchMap.VIEWS[(MatchMap.VIEWS.find(view) + 1) % MatchMap.VIEWS.size()]
 
 
 ## "2 (2v1)"-style label for the current format with players on `teams`.

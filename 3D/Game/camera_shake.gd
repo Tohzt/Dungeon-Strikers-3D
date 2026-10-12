@@ -1,12 +1,11 @@
 class_name CameraShake
-## Screen shake, shared by whichever camera is in use (GameCamera or
-## SoulsCamera3D). Anything can add() trauma; the camera calls apply() each
+## Screen shake for the GameCamera. Anything can add() trauma; the camera
+## calls apply() each
 ## frame, which shakes it by trauma squared (so small knocks stay subtle and
 ## big ones kick) and lets the trauma drain away.
 ##
-## The shake moves the camera's h_offset/v_offset (and rolls the souls
-## camera a touch) rather than its transform, so it never feeds back into
-## the cameras' own easing.
+## The shake moves the camera's h_offset/v_offset rather than its
+## transform, so it never feeds back into the camera's own easing.
 ##
 ## Each machine shakes for what it sees: call add() wherever the event
 ## already plays out on every machine (a stomp, a sound), or only where it
@@ -22,8 +21,6 @@ static var focus: Vector3 = Vector3.ZERO
 const DECAY := 1.6
 ## Most the view moves at full trauma, as a share of half the screen height.
 const MAX_OFFSET := 0.12
-## Most the souls camera rolls at full trauma.
-const MAX_ROLL_DEG := 3.0
 ## Noise scroll speed: higher shakes faster.
 const FREQUENCY := 28.0
 ## Positioned shakes are full strength within NEAR of the focus, gone by FAR.
@@ -51,9 +48,8 @@ static func add(amount: float, at: Variant = null) -> void:
 
 ## Shake `camera` for this frame and drain the trauma. `depth` is roughly
 ## how far away what it's looking at is, so the shake moves the picture by
-## the same share of the screen at any distance or zoom. `roll` also tilts
-## it (only for cameras whose own rotation nothing else sets).
-static func apply(camera: Camera3D, delta: float, depth: float, look_point: Vector3, roll: bool = false) -> void:
+## the same share of the screen at any distance or zoom.
+static func apply(camera: Camera3D, delta: float, depth: float, look_point: Vector3) -> void:
 	if not camera.is_current():
 		return
 	focus = look_point
@@ -62,8 +58,6 @@ static func apply(camera: Camera3D, delta: float, depth: float, look_point: Vect
 	if shake <= 0.0:
 		camera.h_offset = 0.0
 		camera.v_offset = 0.0
-		if roll:
-			camera.rotation.z = 0.0
 		return
 	if not _noise:
 		_noise = FastNoiseLite.new()
@@ -73,6 +67,4 @@ static func apply(camera: Camera3D, delta: float, depth: float, look_point: Vect
 	var reach: float = MAX_OFFSET * depth * tan(deg_to_rad(camera.fov) * 0.5) * shake
 	camera.h_offset = _noise.get_noise_2d(t, 0.0) * reach
 	camera.v_offset = _noise.get_noise_2d(t, 100.0) * reach
-	if roll:
-		camera.rotation.z = deg_to_rad(MAX_ROLL_DEG) * shake * _noise.get_noise_2d(t, 200.0)
 

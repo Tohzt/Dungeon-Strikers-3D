@@ -10,12 +10,17 @@ class_name PerkDirector extends Node
 ## Every player walks back to their altar on their own (see
 ## PlayerClass3D._walk_to_altar) and picks there, all at the same time, each
 ## seeing only their own cards; the next boss comes once everyone has.
+## A mode can also open with a draft (begin_draft): everyone is dealt a
+## hand at once and takes several cards from it, one at a time, before play
+## starts.
 ## Online the server deals and approves picks; every machine applies them.
 
 signal intermission_started
 ## Everyone has picked. On every machine.
 signal intermission_finished
 signal perk_taken(player: PlayerClass3D, perk: Perk)
+## Everyone has finished drafting. On every machine.
+signal draft_finished
 
 const OFFER_SIZE := 3
 ## Online: don't ask the server to open the cards again this soon.
@@ -25,6 +30,10 @@ const OPEN_RETRY_MSEC := 500
 @export var picker: PerkPicker3D
 
 var in_intermission: bool = false
+## A draft is on: everyone stands still until it's done.
+var in_draft: bool = false
+## Draft: cards each player (by name) still takes from their hand.
+var _draft_left: Dictionary[String, int] = {}
 ## Player name -> the hands of catalog indices they have yet to pick from,
 ## oldest first (a boss-kill hand can still be waiting at the intermission).
 var offers: Dictionary[String, Array] = {}
@@ -198,6 +207,58 @@ func _finish_intermission() -> void:
 	intermission_finished.emit()
 
 
+# ===== DRAFT =====
+
+## Server/offline: deal every player `hand_size` cards (no relics) and have
+## them take `picks` of them, one at a time.
+func begin_draft(hand_size: int, picks: int) -> void:
+	if in_draft or not Net.decides():
+		return
+	var choices: Array[int] = []
+	for i in catalog.perks.size():
+		if catalog.perks[i].category != Perk.Category.RELIC:
+			choices.append(i)
+	var dealt: Dictionary = {}
+	for player: PlayerClass3D in _players():
+		choices.shuffle()
+		dealt[player.name] = PackedInt32Array(choices.slice(0, hand_size))
+	Net.everywhere(_start_draft, dealt, picks)
+
+
+@rpc("authority", "call_local", "reliable")
+func _start_draft(dealt: Dictionary, picks: int) -> void:
+	in_draft = true
+	for player_name: String in dealt:
+		var hand: PackedInt32Array = dealt[player_name]
+		if hand.is_empty():
+			continue
+		_add_hand(player_name, hand)
+		_draft_left[player_name] = mini(picks, hand.size())
+	picker.set_full_screen(true)
+	_update_waiting()
+	for player: PlayerClass3D in _players():
+		_open_own(player)
+	if offers.is_empty():
+		_finish_draft()
+
+
+func _finish_draft() -> void:
+	in_draft = false
+	_draft_left.clear()
+	picker.set_full_screen(false)
+	picker.show_waiting([])
+	draft_finished.emit()
+
+
+## Show `player` their cards, if this machine controls them and they're
+## not a bot (bots take theirs on their own; see BotInputHandler3D).
+func _open_own(player: PlayerClass3D) -> void:
+	if player.slot and player.slot.is_bot:
+		return
+	if not Net.in_session() or player.is_multiplayer_authority():
+		open_for(player)
+
+
 # ===== PICKING =====
 
 ## Whether `player` has cards waiting and isn't looking at them already.
@@ -292,15 +353,27 @@ func _apply_pick(player_name: String, catalog_index: int) -> void:
 	var perk: Perk = catalog.perks[catalog_index]
 	if player:
 		player.add_perk(perk)
-	if offers.has(player_name):
+	var drafting: bool = _draft_left.get(player_name, 0) > 1
+	if drafting:
+		# More to take from the same hand, minus this card
+		_draft_left[player_name] -= 1
+		var rest: Array = Array(offers[player_name][0])
+		rest.erase(catalog_index)
+		offers[player_name][0] = PackedInt32Array(rest)
+	elif offers.has(player_name):
+		_draft_left.erase(player_name)
 		offers[player_name].pop_front()
 		if offers[player_name].is_empty():
 			offers.erase(player_name)
 	_end_pick(player_name)
 	if player:
 		perk_taken.emit(player, perk)
+		if drafting:
+			_open_own(player)
 	if in_intermission and offers.is_empty():
 		_finish_intermission()
+	if in_draft and offers.is_empty():
+		_finish_draft()
 
 
 func _end_pick(player_name: String) -> void:
@@ -317,26 +390,30 @@ func _end_pick(player_name: String) -> void:
 ## An online player left: they no longer hold anyone up.
 func forget_player(player: PlayerClass3D) -> void:
 	offers.erase(player.name)
+	_draft_left.erase(player.name)
 	_boss_rewards.erase(player.name)
 	_goal_rewards.erase(player.name)
 	_round_kills.erase(player.name)
 	if picking.has(player.name):
 		_end_pick(player.name)
-	elif in_intermission:
+	elif in_intermission or in_draft:
 		_update_waiting()
 	if in_intermission and offers.is_empty():
 		_finish_intermission()
+	if in_draft and offers.is_empty():
+		_finish_draft()
 
 
 # ===== HELPERS =====
 
 func _update_waiting() -> void:
 	var waiting: Array[PlayerClass3D] = []
-	if in_intermission:
+	if in_intermission or in_draft:
 		for player: PlayerClass3D in _players():
 			if offers.has(player.name):
 				waiting.append(player)
-	picker.show_waiting(waiting)
+	var heading: String = "Choose your perks" if in_draft else "Choose a perk at your altar"
+	picker.show_waiting(waiting, heading)
 
 
 func _players() -> Array[PlayerClass3D]:

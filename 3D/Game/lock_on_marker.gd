@@ -1,9 +1,9 @@
 class_name LockOnMarker3D extends Node3D
-## Shows what `player` is locked on to (player.Entity.target, set by
-## SoulsCamera3D): a ring of bracket arcs turning on the floor under the
-## target and a spinning arrow over its head. Both are real 3D shapes, so
-## they read from the third-person camera (a down-arrow and a ring around
-## the feet) and from the top-down one (a spinning diamond inside a ring).
+## Shows what a player is locked on to (PlayerInputHandler3D.lock_target):
+## a ring of bracket arcs turning on the floor under the target and a
+## spinning arrow over its head, in the player's color. Both are real 3D
+## shapes, so they read from any camera angle (from the top-down one, a
+## spinning diamond inside a ring).
 ##
 ## Built in code; top_level, so it can live under whatever owns the lock.
 
@@ -19,8 +19,8 @@ class_name LockOnMarker3D extends Node3D
 ## How far the floor is looked for under a target in the air.
 @export var floor_search: float = 8.0
 
-## Set before adding to the tree.
-var player: PlayerClass3D
+## Set before adding to the tree: whose lock this shows.
+var handler: PlayerInputHandler3D
 
 const ARC_COUNT := 4
 const ARC_FILL := 0.6  # Share of each quarter the bracket covers
@@ -65,8 +65,8 @@ func _init() -> void:
 
 func _process(delta: float) -> void:
 	var target: Node3D = null
-	if is_instance_valid(player) and player.Entity and is_instance_valid(player.Entity.target):
-		target = player.Entity.target
+	if is_instance_valid(handler) and is_instance_valid(handler.lock_target):
+		target = handler.lock_target
 	if target != _target:
 		_target = target
 		_pop = 0.0

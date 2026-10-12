@@ -12,7 +12,6 @@ const MAIN_MENU := "res://Menus/MainMenu/main_menu.tscn"
 @onready var resume_button: Button = %Resume
 
 var device_buttons: Dictionary[PlayerSlot, Button] = {}
-var controls_buttons: Dictionary[PlayerSlot, Button] = {}
 ## Everything _build_device_rows added, so it can be cleared.
 var device_rows: Array[Control] = []
 ## The slot waiting for a device press, if any.
@@ -79,7 +78,6 @@ func _build_device_rows() -> void:
 		node.queue_free()
 	device_rows.clear()
 	device_buttons.clear()
-	controls_buttons.clear()
 
 	var slots: Array[PlayerSlot] = Players.human_slots()
 	slots.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.index < b.index)
@@ -98,14 +96,9 @@ func _build_device_rows() -> void:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(_start_rebinding.bind(slot))
 		row.add_child(button)
-		var controls := _make_row_button(slot)
-		controls.custom_minimum_size.x = 210
-		controls.pressed.connect(_toggle_controls.bind(slot))
-		row.add_child(controls)
 		resume_button.get_parent().add_child(row)
 		resume_button.get_parent().move_child(row, at)
 		device_buttons[slot] = button
-		controls_buttons[slot] = controls
 		device_rows.append(row)
 	caption.visible = not slots.is_empty()
 	_refresh_device_rows()
@@ -123,16 +116,6 @@ func _refresh_device_rows() -> void:
 	for slot: PlayerSlot in device_buttons:
 		device_buttons[slot].text = "P%d: %s" % [slot.index + 1,
 			"Press A or Enter on new device..." if slot == rebinding else Players.device_name(slot.device)]
-		controls_buttons[slot].text = "Controls: %s" % ("Advanced" if slot.advanced_controls else "Simple")
-		controls_buttons[slot].tooltip_text = "Advanced: tap Attack / Off-hand to swing, hold to throw; guard buttons block" \
-			if slot.advanced_controls else "Simple: Attack swings your weapon, hold Off-hand to block; Throw + a button throws"
-
-
-## Simple <-> Advanced. Tells the slot's input handler, which lets go of
-## anything held under the old layout.
-func _toggle_controls(slot: PlayerSlot) -> void:
-	slot.advanced_controls = not slot.advanced_controls
-	Players.slot_changed.emit(slot)
 
 
 func _on_slot_changed(_slot: PlayerSlot) -> void:

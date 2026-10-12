@@ -4,8 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" uid="uid://danww4xldad2r" path="res://Assets/Weapons/fistweapon_A.glb" id="model"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/one_two.tres" id="combo"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_hammer_fist.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_jab.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_haymaker.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.23, 0.15, 0.32)
@@ -19,13 +19,13 @@ axis_lock_angular_z = true
 mass = 0.6
 script = ExtResource("script")
 swing_sound = &"swing_fist"
-alt_attack = ExtResource("alt")
-pair_combo = ExtResource("combo")
 grip = 2
 swing_clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"
 offhand_swing_clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
 weapon_name = "Knuckles"

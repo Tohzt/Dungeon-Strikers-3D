@@ -3,6 +3,8 @@
 [ext_resource type="Script" uid="uid://c1ybujcli5ex2" path="res://3D/HUD/hud_3d.gd" id="1_hbyoa"]
 [ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Entities/Player/Assets/Skribble Character_Inner.png" id="4_u5h0k"]
 
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_nobox"]
+
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hbyoa")
 
@@ -13,7 +15,7 @@ offset_top = 16.0
 offset_right = 280.0
 offset_bottom = 104.0
 mouse_filter = 2
-theme_type_variation = &"PlankPanel"
+theme_override_styles/panel = SubResource("StyleBoxEmpty_nobox")
 
 [node name="Row" type="HBoxContainer" parent="Panel"]
 layout_mode = 2
@@ -56,12 +58,12 @@ step = 0.01
 value = 45.0
 show_percentage = false
 
-[node name="ManaBar" type="ProgressBar" parent="Panel/Row/Bars"]
+[node name="CarryBar" type="ProgressBar" parent="Panel/Row/Bars"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"BoostBar"
 step = 0.01
-value = 45.0
+value = 100.0
 show_percentage = false

@@ -15,8 +15,8 @@ class_name Weapon3D extends RigidBody3D
 
 ## Which hand can hold it. The right hand is the main hand: the KayKit
 ## one-handed clips all swing with it. The left is the off hand, and swings
-## with the left arm of the dual-wield clips. A one-handed weapon in each
-## hand turns the Off-hand button into a special (see WeaponCombo3D).
+## with the left arm of the dual-wield clips. A compatible pair (see
+## is_compatible_with) is dual wielded: they take turns on light attacks.
 enum Grip {
 	MAIN_HAND,  ## One-handed: the right hand first, the left if that's taken
 	OFF_HAND,  ## Left hand only (shield)
@@ -48,16 +48,22 @@ enum Grip {
 ## What its swing sounds like (an Sfx.SOUNDS id). Played by PlayerVisual3D
 ## as the swing strikes, so every machine hears it.
 @export var swing_sound: StringName = &"swing_sword"
-@export_group("Specials")
+@export_group("Moves")
+## The light attack button (see WeaponMove3D). Empty = a plain swing or shot.
+@export var light_move: WeaponMove3D
+## Charged by holding the heavy attack button, done on letting go once it's
+## fully charged (see PlayerClass3D's BUTTONS). Empty = no heavy.
+@export var heavy_move: WeaponMove3D
+@export_group("Dual Wielding")
 ## Weapons of the same family (e.g. "blade" for sword and scimitar) pair up
 ## like two of the same weapon. Empty = it only pairs with itself.
 @export var combo_family: StringName = &""
-## The special (Off-hand button) with a compatible weapon in the other hand
-## (see WeaponCombo3D.find_for). Empty = both swing at once.
-@export var pair_combo: WeaponCombo3D
-## The Off-hand button's attack while the other hand is empty (or this is
-## two-handed). Empty = the same as the Attack button.
-@export var alt_attack: WeaponCombo3D
+## Also pairs with a weapon of this family or weapon_name (e.g. the rapier
+## with the dagger), using pair_heavy_move as the pair's heavy.
+@export var pairs_with: StringName = &""
+## The heavy for this and a `pairs_with` weapon in the other hand. Empty =
+## this weapon's own heavy.
+@export var pair_heavy_move: WeaponMove3D
 @export_group("")
 
 var wielder: Node3D = null
@@ -72,6 +78,18 @@ var can_pickup_cd: float = 0.0
 var can_pickup_dur_in_sec: float = 1.0
 
 var throw_spin_direction: float = 1.0
+
+# Signature kit (see Roster): the weapons a character always has. A kit
+# weapon never wears out and only its owner can hold it. It's put away
+# (holstered: hidden and out of the physics world) while its owner holds
+# anything else, and comes back to them on its own a moment after it
+# leaves their hand (thrown or dropped). Durability is for everything else.
+## Seconds a kit weapon stays loose before it returns to its owner.
+const KIT_RETURN_TIME := 1.5
+## The player whose kit this is; null for any other weapon.
+var kit_owner: Node3D = null
+var holstered: bool = false
+var _loose_time: float = 0.0
 
 # Durability: each use (a swing or throw that hits a player, boss or
 # minion, a block, a shot) wears it by one; at 0 it breaks. How many uses it gets
@@ -119,6 +137,14 @@ var swing_time_left: float = 0.0
 var _swing_damage_scale: float = 1.0
 var thrower: Node3D = null  # Who threw it, so it can't hit them mid-flight
 var _hit_this_action: Array[Node] = []
+## Sent flying by a heavy (see WeaponPhantom3D): still in the hand, but
+## hidden and unable to swing until it comes back.
+var away: bool = false
+## A heavy attack is fully charged and ready to let go (see set_charged).
+var charged: bool = false
+var _charge_glow: StandardMaterial3D = null
+const CHARGED_COLOR := Color(1.0, 0.85, 0.3, 0.7)
+const CHARGED_PULSE_SPEED := 12.0
 
 # A swing knocks things the way the blade is moving (not just away from the
 # wielder), harder the faster it's going: SWING_REFERENCE_SPEED hits for the
@@ -178,6 +204,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_worn_glow()
+	_update_charge_glow()
 	_handle_pickup_cooldown(delta)
 	_send_pose()
 	follow_net_pose(delta)
@@ -188,6 +215,7 @@ func _physics_process(delta: float) -> void:
 		return
 	# The wielder may have moved since the hand's last pose
 	follow_hand()
+	_update_kit_return(delta)
 	_update_landing(delta)
 	_handle_thrown_settle()
 	_update_hits(delta)
@@ -305,15 +333,65 @@ func start_swing(duration: float, damage_scale: float = 1.0) -> void:
 	swing_time_left = duration
 	_swing_damage_scale = damage_scale
 	_swing_reference_speed = SWING_REFERENCE_SPEED * REFERENCE_SWING_DURATION / max(duration, 0.01)
-	_hit_this_action.clear()
-	_worn_this_action = false
+	begin_action()
 	_blade_tracked = false
 	_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
+
+
+## A new attack starts: nothing's been hit by it yet, and it hasn't worn
+## the weapon.
+func begin_action() -> void:
+	_hit_this_action.clear()
+	_worn_this_action = false
+
+
+## What the current attack has hit so far. Its waves (see AttackWave3D)
+## share the list, so nobody is hit twice by the blade and its wave.
+func hits_this_action() -> Array[Node]:
+	return _hit_this_action
+
+
+## One use's wear for the current attack, however many times it lands.
+func wear_once() -> void:
+	if not _worn_this_action:
+		_worn_this_action = true
+		wear()
 
 
 ## The wielder rolled away or got staggered: this swing hits nothing more.
 func cancel_swing() -> void:
 	swing_time_left = 0.0
+
+
+## Off flying (see WeaponPhantom3D), or back. On every machine.
+func set_away(value: bool) -> void:
+	away = value
+	visible = not value and not holstered
+	if value:
+		swing_time_left = 0.0
+
+
+## Glow while a heavy is charged and ready (see PlayerClass3D). On every machine.
+func set_charged(value: bool) -> void:
+	charged = value
+	if not value and _charge_glow:
+		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
+			(mesh as MeshInstance3D).material_overlay = _worn_glow
+		_charge_glow = null
+
+
+func _update_charge_glow() -> void:
+	if not charged:
+		return
+	if not _charge_glow:
+		_charge_glow = StandardMaterial3D.new()
+		_charge_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_charge_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_charge_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
+			(mesh as MeshInstance3D).material_overlay = _charge_glow
+	var pulse: float = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 1000.0 * CHARGED_PULSE_SPEED)
+	_charge_glow.albedo_color = Color(CHARGED_COLOR, CHARGED_COLOR.a * pulse)
 
 
 func _update_hits(delta: float) -> void:
@@ -394,9 +472,8 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 	if contact:
 		_swing_contact(solid)
 	# One use per swing or throw, however many it hits
-	if landed and not _worn_this_action:
-		_worn_this_action = true
-		wear()
+	if landed:
+		wear_once()
 
 
 ## Half away from the wielder, half along the blade's travel, so a slash
@@ -411,13 +488,31 @@ func _swing_hit_direction(away: Vector3) -> Vector3:
 
 ## Whether this and `other` pair up for a special (see WeaponCombo3D): the
 ## same weapon, or the same combo_family.
+## Whether this and `other` can be held one in each hand: two one-handed
+## weapons of the same kind (the same weapon, or combo_family), a pair one of
+## them names in pairs_with, or a weapon and a shield.
 func is_compatible_with(other: Weapon3D) -> bool:
+	if grip == Grip.TWO_HANDED or other.grip == Grip.TWO_HANDED:
+		return false
+	var shield: bool = grip == Grip.OFF_HAND
+	if shield or other.grip == Grip.OFF_HAND:
+		return shield != (other.grip == Grip.OFF_HAND)  # Not two shields
+	if pairs_with_weapon(other) or other.pairs_with_weapon(self):
+		return true
 	if combo_family != &"" and combo_family == other.combo_family:
 		return true
 	if not scene_file_path.is_empty():
 		return scene_file_path == other.scene_file_path
-	return Properties != null and other.Properties != null \
-		and Properties.weapon_name == other.Properties.weapon_name
+	return _weapon_name() == other._weapon_name()
+
+
+## Whether `other` is this one's pairs_with partner.
+func pairs_with_weapon(other: Weapon3D) -> bool:
+	return pairs_with != &"" and (pairs_with == other.combo_family or pairs_with == StringName(other._weapon_name()))
+
+
+func _weapon_name() -> String:
+	return Properties.weapon_name if Properties else String(name)
 
 
 ## High-level API: called when a quick tap resolves to an attack rather than a
@@ -520,6 +615,7 @@ func _release_from_hand() -> void:
 
 ## High-level API: called when the weapon is dropped/unequipped.
 func unequip() -> void:
+	set_charged(false)
 	if Behavior:
 		Behavior.unequip()
 
@@ -565,6 +661,7 @@ func throw(direction: Vector3, force: float = -1.0, spin_direction: float = 1.0,
 ## The part of a throw every machine does: out of the wielder's hand and
 ## into the air. Only the simulating machine launches it.
 func _let_go_thrown(spin_direction: float) -> void:
+	set_charged(false)
 	throw_spin_direction = spin_direction
 	thrower = wielder
 	swing_time_left = 0.0
@@ -598,6 +695,9 @@ func _clear_from_wielder() -> void:
 		wielder.held_weapon_left = null
 	if wielder.held_weapon_right == self:
 		wielder.held_weapon_right = null
+	# Their hands may be empty of anything but their kit now (see PlayerClass3D.draw_kit)
+	if wielder.has_method(&"draw_kit"):
+		wielder.draw_kit.call_deferred()
 
 
 # ===== RARITY & DURABILITY =====
@@ -635,7 +735,7 @@ func set_rarity(tier: int) -> void:
 ## One use's worth of wear, on the machine simulating the weapon. Breaks it
 ## (everywhere) at 0.
 func wear(amount: int = 1) -> void:
-	if is_broken or not simulates():
+	if is_broken or kit_owner or not simulates():
 		return
 	var left: int = maxi(durability - amount, 0)
 	if Net.match_synced:
@@ -656,11 +756,11 @@ func _net_durability(value: int) -> void:
 
 ## The next use breaks it.
 func is_last_use() -> bool:
-	return not is_broken and durability <= 1
+	return not is_broken and not kit_owner and durability <= 1
 
 
 func is_worn() -> bool:
-	return durability <= maxi(ceili(max_durability * WORN_RATIO), 1)
+	return not kit_owner and durability <= maxi(ceili(max_durability * WORN_RATIO), 1)
 
 
 ## Nearly broken: pulse red over (in place of) its rarity glow; white-hot,
@@ -673,8 +773,9 @@ func _update_worn_glow() -> void:
 		_worn_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_worn_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_worn_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
-			(mesh as MeshInstance3D).material_overlay = _worn_glow
+		if not _charge_glow:
+			for mesh: Node in find_children("*", "MeshInstance3D", true, false):
+				(mesh as MeshInstance3D).material_overlay = _worn_glow
 	var last: bool = is_last_use()
 	var color: Color = LAST_USE_COLOR if last else WORN_COLOR
 	var speed: float = LAST_USE_PULSE_SPEED if last else WORN_PULSE_SPEED
@@ -756,12 +857,66 @@ func _net_dropped() -> void:
 		unequip()
 
 
+# ===== SIGNATURE KIT =====
+
+## Put away by its owner (on every machine): out of their hand if it's in
+## it, out of sight and out of the physics world until drawn again.
+func holster() -> void:
+	if wielder:
+		unequip()
+	holstered = true
+	away = false
+	set_charged(false)
+	is_thrown = false
+	thrower = null
+	swing_time_left = 0.0
+	_loose_time = 0.0
+	visible = false
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	process_mode = Node.PROCESS_MODE_DISABLED  # Leaves the physics world
+
+
+## Back out of the holster, ready to go in its owner's hand.
+func unholster() -> void:
+	holstered = false
+	visible = true
+	process_mode = Node.PROCESS_MODE_INHERIT
+
+
+## The machine simulating it: a kit weapon left lying (thrown or dropped)
+## goes back to its owner after KIT_RETURN_TIME, on every machine.
+func _update_kit_return(delta: float) -> void:
+	if not kit_owner or wielder or holstered:
+		_loose_time = 0.0
+		return
+	_loose_time += delta
+	if _loose_time < KIT_RETURN_TIME:
+		return
+	_loose_time = 0.0
+	if Net.match_synced:
+		_net_return_to_owner.rpc()
+	else:
+		_net_return_to_owner()
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _net_return_to_owner() -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender != 0 and sender != get_multiplayer_authority():
+		return
+	if is_instance_valid(kit_owner) and kit_owner.has_method(&"take_back_kit"):
+		kit_owner.take_back_kit(self)
+
+
 # ===== NETWORK =====
 
 ## Online, on every machine: the server simulates loose weapons to begin
-## with. Call before the match starts syncing.
+## with; a kit weapon always goes with its owner. Call before the match
+## starts syncing.
 func setup_network() -> void:
-	_set_net_owner(Net.SERVER_ID)
+	_set_net_owner(kit_owner.get_multiplayer_authority() if is_instance_valid(kit_owner) else Net.SERVER_ID)
 
 
 ## Whether this machine runs the weapon's physics (and checks its hits).
@@ -858,7 +1013,7 @@ func _request_equip(is_left: bool) -> void:
 
 ## Server: hand this to `player` if it's still free.
 func _decide_equip(player: PlayerClass3D, is_left: bool) -> void:
-	if not wielder and can_pickup and player and player.can_hold(self, is_left):
+	if not wielder and not kit_owner and can_pickup and player and player.can_hold(self, is_left):
 		_equipped.rpc(player.name, is_left)
 
 

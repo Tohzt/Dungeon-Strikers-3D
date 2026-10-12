@@ -68,7 +68,8 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
 ## Teammates pass through each other's attacks untouched.
-static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null) -> bool:
+## `knock_down` (a slide tackle) knocks a player down if it gets through.
+static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null, knock_down: bool = false) -> bool:
 	if are_teammates(body, attacker):
 		return false
 	dir.y = 0
@@ -86,7 +87,7 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 			if body.Entity and body.Entity.hp < body.Entity.hp_max * WOUNDED_HP_RATIO:
 				damage *= attacker.perk_stat(&"damage_vs_wounded")
 	if body is PlayerClass3D:
-		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker, knock_down)
 	if body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	if body is Ball3D:

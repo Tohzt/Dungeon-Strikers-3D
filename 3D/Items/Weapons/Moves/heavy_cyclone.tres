@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo.gd" id="3_combo"]
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_combo_step.gd" id="4_step"]
+
+[sub_resource type="Resource" id="wave_0"]
+script = ExtResource("2_wave")
+shape = 4
+width = 2.0
+length = 1.2
+speed = 14.0
+reach = 6.0
+delay = 0.1
+damage_scale = 1.2
+knockback_scale = 1.8
+pop = 5.0
+pierce = true
+color = Color(0.8, 0.92, 1.0, 0.85)
+
+[sub_resource type="Resource" id="step_0"]
+script = ExtResource("4_step")
+hand = 1
+delay = 0.0
+main_clip = &"CombatMelee/Melee_2H_Attack_Slice"
+duration_scale = 2.2
+damage_scale = 1.0
+lunge_scale = 0.0
+spin_turns = 2.0
+
+[sub_resource type="Resource" id="combo"]
+script = ExtResource("3_combo")
+steps = Array[ExtResource("4_step")]([SubResource("step_0")])
+
+[resource]
+script = ExtResource("1_move")
+charge_time = 0.8
+stamina_scale = 2.5
+sound = &"swing_greatsword"
+shake = 0.35
+combo = SubResource("combo")
+waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])

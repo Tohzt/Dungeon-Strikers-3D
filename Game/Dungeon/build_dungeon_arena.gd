@@ -440,19 +440,6 @@ func _torch(x: float, z: float, deg: float) -> void:
 		_add(decor, t)
 
 
-func _orb(x: float, z: float, big: bool) -> void:
-	var holder: Node = root.get_node_or_null("BoostOrbs")
-	if holder == null:
-		holder = Node3D.new(); holder.name = "BoostOrbs"; _add(root, holder)
-	for team in 2:
-		var orb: Node3D = _inst("res://3D/Items/Boost/boost_orb.tscn", "%sOrb%d" % ["Big" if big else "", holder.get_child_count() + 1])
-		orb.position = Vector3(_mx(team, x + _dx), 0, z)
-		if big:
-			orb.set("amount", 100.0)
-			orb.set("respawn_time", 10.0)
-		_add(holder, orb)
-
-
 func _armor(x: float, z: float) -> void:
 	var holder: Node = root.get_node_or_null("ArmorPickups")
 	if holder == null:
@@ -549,7 +536,6 @@ func _rooms() -> void:
 	_prop("potionLarge_green", -37.75, 30.75); _prop("potionMedium_red", -38.75, 30.75)
 	_prop("pots", -37.75, 17.75)
 	_torch(-51.1, 29.0, 90.0); _torch(-36.9, 27.5, -90.0)
-	_orb(-44.0, 20.0, true)
 	_dx = 0.0
 
 	_treasure_hall()
@@ -569,7 +555,6 @@ func _rooms() -> void:
 	for z_sign: float in [-1.0, 1.0]:
 		_prop("barrel", -33.25, 15.0 * z_sign - 0.25); _prop("crateDark", -24.25, 9.25 * z_sign)
 		_torch(-28.0, 15.1 * z_sign, 180.0 if z_sign > 0 else 0.0)
-		_orb(-28.0, 12.0 * z_sign, false)
 
 	# --- Flank passages: x (-36, -8), z (-24, -16) and mirror ---
 	for z_sign: float in [-1.0, 1.0]:
@@ -578,7 +563,6 @@ func _rooms() -> void:
 		_model("floorDecoration_shatteredBricks", -24.0, 0.01, 20.0 * z_sign, 40.0)
 		_torch(-22.0, 23.1 * z_sign, 180.0 if z_sign > 0 else 0.0)
 		_torch(-12.0, 23.1 * z_sign, 180.0 if z_sign > 0 else 0.0)
-		_orb(-16.0, 20.0 * z_sign, false)
 
 
 ## x (-68, -36), z (-16, 16): straight ahead from the spawn hall, the way to
@@ -662,7 +646,6 @@ func _arena(_ref: Node, walls_root: Node) -> void:
 		_torch(-16.0, 15.1 * z_sign, 180.0 if z_sign > 0 else 0.0)
 		_torch(-19.1, 6.0 * z_sign, 90.0)
 		_model("banner", -19.2, 3.7, 4.6 * z_sign, 90.0, true)
-		_orb(-8.0, 11.0 * z_sign, false)
 
 	# The boss stays in the arena: a tall invisible cage along the arena
 	# walls that only it collides with (its stomp leap clears the walls).

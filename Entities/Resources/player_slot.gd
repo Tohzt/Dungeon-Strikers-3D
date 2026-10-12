@@ -15,11 +15,6 @@ const BOT := -3
 @export var color: Color = Color.WHITE
 ## Index into PlayerVisual3D.CHARACTERS, chosen in the menus.
 @export var character: int = 0
-## Off (Simple): Attack and Off-hand swing on press, a shield blocks while
-## Off-hand is held, and Throw + a button throws. On (Advanced): a tap swings
-## and a hold throws, with separate guard buttons (see PlayerInputHandler3D).
-## Switchable per player from the pause menu.
-@export var advanced_controls: bool = false
 ## Played by the computer (BotInputHandler3D) instead of a device.
 @export var is_bot: bool = false
 

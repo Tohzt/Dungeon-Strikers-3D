@@ -21,10 +21,14 @@ const RANGED_RANGE := 10.0
 const THREAT_RANGE := 4.0
 ## How far the bot will go for a loose weapon or a stand.
 const WEAPON_SEARCH_RANGE := 30.0
+## With only its signature kit in hand, a bot still grabs a weapon this close.
+const KIT_UPGRADE_RANGE := 8.0
 ## Pause between swings: [min, max] seconds.
 const ATTACK_GAP := Vector2(0.35, 0.8)
+## Share of attacks held to charge the weapon's heavy (see WeaponMove3D).
+const HEAVY_CHANCE := 0.25
 ## Sprint to things further than this.
-const SPRINT_DISTANCE := 18.0
+const SPRINT_DISTANCE := 10.0
 ## Keep this far from teammates so they don't stack up.
 const SPACING := 2.5
 ## Seconds a bot waits before taking its perk, so it doesn't feel instant.
@@ -32,13 +36,6 @@ const PERK_DELAY := 1.0
 ## In the intermission, a bot that hasn't reached its altar after this long
 ## (stuck, or a long way off) picks anyway, so it never holds the game up.
 const INTERMISSION_GIVE_UP := 10.0
-## Below this much boost, a bot with nothing urgent to do grabs an orb this close.
-const BOOST_WANT := 50.0
-const BOOST_SEARCH_RANGE := 12.0
-## Boost toward things further than this, but stop at BOOST_RESERVE so
-## there's some left for a fight.
-const BOOST_DISTANCE := 10.0
-const BOOST_RESERVE := 25.0
 
 var _think_left: float = 0.0
 ## Where we're heading this think (null = stand still).
@@ -46,15 +43,12 @@ var _move_target: Variant = null
 ## What we're facing and swinging at, if anything.
 var _attack_target: Node3D = null
 var _want_attack: bool = false
-var _want_guard: bool = false
 var _want_interact: bool = false
 
 var _attack_gap_left: float = 0.0
 var _attack_press_left: float = 0.0
-## Which hand the current attack press uses, and which went last (a bot
-## dual-wielding alternates).
-var _attack_hand_left: bool = false
-var _last_attack_left: bool = true
+## The current press is the heavy button, held to charge.
+var _attack_heavy: bool = false
 var _interact_gap_left: float = 0.0
 var _perk_wait: float = 0.0
 var _intermission_time: float = 0.0
@@ -74,7 +68,6 @@ func _process(delta: float) -> void:
 	var game: Game3D_Class = Global.Game3D
 	if not player or not game or player.is_dead():
 		release_all()
-		_apply_simple_buttons(false, false, false, false)
 		return
 	_think_left -= delta
 	if _think_left <= 0.0:
@@ -90,7 +83,6 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	_move_target = null
 	_attack_target = null
 	_want_attack = false
-	_want_guard = false
 	_want_interact = false
 
 	if game.phase == Game3D_Class.Phase.INTERMISSION:
@@ -104,6 +96,7 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	var enemy: PlayerClass3D = _nearest_enemy(player, game)
 	var enemy_dist: float = _flat_dist(player, enemy) if enemy else INF
 	var armed: bool = player.held_weapon_left != null or player.held_weapon_right != null
+	var found_weapon: bool = player.holds_found_weapon()
 
 	# Someone's on top of us: deal with them first
 	if enemy and enemy_dist < THREAT_RANGE:
@@ -117,10 +110,8 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 
 	if _go_get_reward(player):
 		return
-	if _go_get_boost(player, enemy_dist):
-		return
 
-	if not armed and _go_get_weapon(player, game):
+	if not found_weapon and _go_get_weapon(player, game, WEAPON_SEARCH_RANGE if not armed else KIT_UPGRADE_RANGE):
 		return
 	var ball: Ball3D = _nearest_ball(game)
 	if ball:
@@ -135,8 +126,8 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if goal:
 		_move_target = goal.global_position
 		return
-	if not game.bosses.is_empty():
-		var boss: Boss3D = _nearest_boss(player, game)
+	var boss: Boss3D = _nearest_boss(player, game)
+	if boss:
 		# Go after a nearby player instead of a far-off boss now and then
 		if enemy and enemy_dist < _flat_dist(player, boss) * 0.5:
 			_fight(player, enemy)
@@ -172,11 +163,6 @@ func _fight(player: PlayerClass3D, target: Node3D) -> void:
 	if dist > reach * 0.8:
 		_move_target = target.global_position
 	_want_attack = dist <= reach
-	# Raise a shield against a swing that's coming
-	if (target is PlayerClass3D or target is SkeletonEnemy3D) and dist < MELEE_RANGE * 1.5 \
-			and target.is_swinging() and _has_shield(player):
-		_want_guard = true
-		_want_attack = false
 	# Hurt and pressed: roll out of it now and then
 	if target is PlayerClass3D and dist < MELEE_RANGE and target.is_swinging() \
 			and player.Entity and player.Entity.hp < player.Entity.hp_max * 0.35 and randf() < 0.3:
@@ -207,26 +193,6 @@ func _go_hit_ball(player: PlayerClass3D, ball: Ball3D) -> void:
 		_move_target = behind if not lined_up else ball.global_position
 
 
-## Low on boost with no enemy close: detour to a nearby orb. Returns
-## false if we don't need one or there's none close.
-func _go_get_boost(player: PlayerClass3D, enemy_dist: float) -> bool:
-	if player.boost >= BOOST_WANT or enemy_dist < THREAT_RANGE * 2.0:
-		return false
-	var best: BoostOrb3D = null
-	var best_dist: float = BOOST_SEARCH_RANGE
-	for orb: BoostOrb3D in get_tree().get_nodes_in_group("BoostOrb"):
-		if not orb.is_ready():
-			continue
-		var dist: float = _flat_dist(player, orb)
-		if dist < best_dist:
-			best = orb
-			best_dist = dist
-	if not best:
-		return false
-	_move_target = best.global_position
-	return true
-
-
 ## A skull's reward is ready on our altar (wherever it is), or on a nearby
 ## enemy altar left unguarded: go take it. Returns false if there's none.
 func _go_get_reward(player: PlayerClass3D) -> bool:
@@ -235,7 +201,8 @@ func _go_get_reward(player: PlayerClass3D) -> bool:
 		var altar := node as Altar3D
 		if not altar or not altar.has_reward_for(player):
 			continue
-		if altar.owner_team != team and _flat_dist(player, altar) > WEAPON_SEARCH_RANGE:
+		if altar.owner_team != team and altar.owner_team != Altar3D.NEUTRAL \
+				and _flat_dist(player, altar) > WEAPON_SEARCH_RANGE:
 			continue
 		_move_target = altar.global_position
 		_want_interact = altar.can_give_to(player)
@@ -245,9 +212,9 @@ func _go_get_reward(player: PlayerClass3D) -> bool:
 
 ## Head for the nearest loose weapon or stocked stand. Returns false if
 ## there's none in range.
-func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class) -> bool:
+func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class, search_range: float = WEAPON_SEARCH_RANGE) -> bool:
 	var best: Node3D = null
-	var best_dist: float = WEAPON_SEARCH_RANGE
+	var best_dist: float = search_range
 	for weapon: Weapon3D in game.weapons():
 		if not player.can_pick_up(weapon):
 			continue
@@ -295,45 +262,29 @@ func _steer(player: PlayerClass3D, _delta: float) -> void:
 	else:
 		look_dir = Vector3.ZERO  # Face where we walk
 
-	# Far off: boost to close the gap
-	boost_held = dist > BOOST_DISTANCE and not move_dir.is_zero_approx() and player.boost > BOOST_RESERVE
-
 
 func _press_buttons(player: PlayerClass3D, delta: float) -> void:
-	# Attack: short taps with a gap between, like a person mashing
+	# Attack: short taps of light with a gap between, like a person mashing,
+	# and now and then the heavy held long enough to let it go
 	_attack_gap_left -= delta
 	_attack_press_left -= delta
 	if _want_attack and _attack_gap_left <= 0.0:
 		_attack_press_left = 0.05
-		_attack_gap_left = randf_range(ATTACK_GAP.x, ATTACK_GAP.y)
-		_attack_hand_left = _pick_attack_hand(player)
-		_last_attack_left = _attack_hand_left
-	var attack: bool = _attack_press_left > 0.0
-	_apply_simple_buttons(attack and _attack_hand_left, attack and not _attack_hand_left, _want_guard, false)
+		_attack_heavy = false
+		var heavy: WeaponMove3D = player.heavy_move()
+		if heavy and randf() < HEAVY_CHANCE:
+			_attack_press_left = heavy.charge_time + 0.1
+			_attack_heavy = true
+		_attack_gap_left = _attack_press_left + randf_range(ATTACK_GAP.x, ATTACK_GAP.y)
+	var pressing: bool = _attack_press_left > 0.0
+	light_held = pressing and not _attack_heavy
+	heavy_held = pressing and _attack_heavy
+	throw_held = false
 
 	_interact_gap_left -= delta
 	if _want_interact and _interact_gap_left <= 0.0:
 		interact = true
 		_interact_gap_left = 0.3
-
-
-## Which hand an attack press uses (true = left). Weapons beat shields (a
-## shield only bashes when it's all we hold); two weapons, or two fists,
-## take turns, skipping an arm that's still mid-swing.
-func _pick_attack_hand(player: PlayerClass3D) -> bool:
-	var left: Weapon3D = player.held_weapon_left
-	var right: Weapon3D = player.held_weapon_right
-	var left_attacks: bool = left != null and not left is ShieldClass3D
-	var right_attacks: bool = right != null and not right is ShieldClass3D
-	if left_attacks != right_attacks:
-		return left_attacks
-	if not left_attacks and (left != null) != (right != null):
-		return left != null  # Just a shield: use it
-	# Both hands alike: take turns, unless the next one is still busy
-	var next_left: bool = not _last_attack_left
-	if player.is_arm_swinging(next_left) and not player.is_arm_swinging(not next_left):
-		next_left = not next_left
-	return next_left
 
 
 ## A push away from teammates who are too close.
@@ -365,7 +316,9 @@ func _nearest_enemy(player: PlayerClass3D, game: Game3D_Class) -> PlayerClass3D:
 func _nearest_boss(player: PlayerClass3D, game: Game3D_Class) -> Boss3D:
 	var best: Boss3D = null
 	for boss: Boss3D in game.bosses:
-		if is_instance_valid(boss) and (not best or _flat_dist(player, boss) < _flat_dist(player, best)):
+		if not is_instance_valid(boss) or boss.penned:
+			continue  # Can't be reached
+		if not best or _flat_dist(player, boss) < _flat_dist(player, best):
 			best = boss
 	return best
 
@@ -399,10 +352,6 @@ func _has_ranged_weapon(player: PlayerClass3D) -> bool:
 		if weapon and not weapon is ShieldClass3D and not weapon.plays_swipe_animation:
 			return true
 	return false
-
-
-func _has_shield(player: PlayerClass3D) -> bool:
-	return player.held_weapon_left is ShieldClass3D or player.held_weapon_right is ShieldClass3D
 
 
 func _flat_dist(player: PlayerClass3D, node: Node3D) -> float:

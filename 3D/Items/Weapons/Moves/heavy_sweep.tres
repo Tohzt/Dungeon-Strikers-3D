@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+
+[sub_resource type="Resource" id="wave_0"]
+script = ExtResource("2_wave")
+shape = 0
+width = 6.0
+length = 1.5
+speed = 20.0
+reach = 7.0
+start_offset = 1.0
+delay = 0.05
+grow = 1.2
+damage_scale = 1.2
+knockback_scale = 2.2
+pop = 5.0
+pierce = true
+color = Color(0.8, 0.92, 1.0, 0.85)
+
+[resource]
+script = ExtResource("1_move")
+charge_time = 0.7
+clip = &"CombatMelee/Melee_2H_Attack_Slice"
+stamina_scale = 2.5
+sound = &"swing_halberd"
+shake = 0.3
+waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])

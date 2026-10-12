@@ -1,51 +1,23 @@
 [gd_resource type="Theme" format=3 uid="uid://cyhledms77imb"]
 
-[ext_resource type="Texture2D" path="res://Assets/UI/button_normal.png" id="1_btn"]
-[ext_resource type="Texture2D" path="res://Assets/UI/button_pressed.png" id="2_btnp"]
-[ext_resource type="Texture2D" path="res://Assets/UI/button_dark.png" id="3_dark"]
-[ext_resource type="Texture2D" path="res://Assets/UI/focus_corners.png" id="4_focus"]
-[ext_resource type="Texture2D" path="res://Assets/UI/panel.png" id="5_panel"]
-[ext_resource type="Texture2D" path="res://Assets/UI/plank.png" id="6_plank"]
-[ext_resource type="Texture2D" path="res://Assets/UI/bar_frame.png" id="7_bar"]
-[ext_resource type="Texture2D" path="res://Assets/UI/bar_fill_red.png" id="8_red"]
-[ext_resource type="Texture2D" path="res://Assets/UI/bar_fill_green.png" id="9_green"]
-[ext_resource type="Texture2D" path="res://Assets/UI/bar_fill_blue.png" id="10_blue"]
-[ext_resource type="Texture2D" path="res://Assets/UI/bar_fill_gold.png" id="11_gold"]
+[ext_resource type="Texture2D" uid="uid://cus5ilrf1bfvq" path="res://Assets/UI/button_normal.png" id="1_btn"]
+[ext_resource type="Texture2D" uid="uid://c2og5cibn18br" path="res://Assets/UI/button_pressed.png" id="2_btnp"]
+[ext_resource type="Texture2D" uid="uid://dxiy425bx07w5" path="res://Assets/UI/button_dark.png" id="3_dark"]
+[ext_resource type="Texture2D" uid="uid://c3amacplosf5e" path="res://Assets/UI/focus_corners.png" id="4_focus"]
+[ext_resource type="Texture2D" uid="uid://c5o4qxoxxmbgd" path="res://Assets/UI/panel.png" id="5_panel"]
+[ext_resource type="Texture2D" uid="uid://dyjowal0m7pt7" path="res://Assets/UI/plank.png" id="6_plank"]
+[ext_resource type="Texture2D" uid="uid://bgpcqir4dqx7n" path="res://Assets/UI/bar_frame.png" id="7_bar"]
+[ext_resource type="Texture2D" uid="uid://cj0ljlcleb6xw" path="res://Assets/UI/bar_fill_red.png" id="8_red"]
+[ext_resource type="Texture2D" uid="uid://bu54iuyl2rwe7" path="res://Assets/UI/bar_fill_green.png" id="9_green"]
+[ext_resource type="Texture2D" uid="uid://xwdkyqt8xj38" path="res://Assets/UI/bar_fill_blue.png" id="10_blue"]
+[ext_resource type="Texture2D" uid="uid://uqo0cylhcrvq" path="res://Assets/UI/bar_fill_gold.png" id="11_gold"]
 
-[sub_resource type="StyleBoxTexture" id="Button_normal"]
-content_margin_left = 18.0
-content_margin_top = 6.0
-content_margin_right = 18.0
-content_margin_bottom = 10.0
-texture = ExtResource("1_btn")
-texture_margin_left = 12.0
-texture_margin_top = 12.0
-texture_margin_right = 12.0
-texture_margin_bottom = 15.0
-
-[sub_resource type="StyleBoxTexture" id="Button_hover"]
-content_margin_left = 18.0
-content_margin_top = 6.0
-content_margin_right = 18.0
-content_margin_bottom = 10.0
-texture = ExtResource("1_btn")
-texture_margin_left = 12.0
-texture_margin_top = 12.0
-texture_margin_right = 12.0
-texture_margin_bottom = 15.0
-modulate_color = Color(1.18, 1.12, 1.05, 1)
-
-[sub_resource type="StyleBoxTexture" id="Button_pressed"]
-content_margin_left = 18.0
-content_margin_top = 9.0
-content_margin_right = 18.0
-content_margin_bottom = 7.0
-texture = ExtResource("2_btnp")
-texture_margin_left = 12.0
-texture_margin_top = 15.0
-texture_margin_right = 12.0
-texture_margin_bottom = 12.0
-modulate_color = Color(0.92, 0.88, 0.85, 1)
+[sub_resource type="StyleBoxTexture" id="Bar_fill_blue"]
+texture = ExtResource("10_blue")
+texture_margin_left = 16.0
+texture_margin_top = 6.0
+texture_margin_right = 16.0
+texture_margin_bottom = 6.0
 
 [sub_resource type="StyleBoxTexture" id="Button_disabled"]
 content_margin_left = 18.0
@@ -71,6 +43,41 @@ expand_margin_right = 6.0
 expand_margin_bottom = 3.0
 draw_center = false
 
+[sub_resource type="StyleBoxTexture" id="Button_hover"]
+content_margin_left = 18.0
+content_margin_top = 6.0
+content_margin_right = 18.0
+content_margin_bottom = 10.0
+texture = ExtResource("1_btn")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 15.0
+modulate_color = Color(1.18, 1.12, 1.05, 1)
+
+[sub_resource type="StyleBoxTexture" id="Button_pressed"]
+content_margin_left = 18.0
+content_margin_top = 9.0
+content_margin_right = 18.0
+content_margin_bottom = 7.0
+texture = ExtResource("2_btnp")
+texture_margin_left = 12.0
+texture_margin_top = 15.0
+texture_margin_right = 12.0
+texture_margin_bottom = 12.0
+modulate_color = Color(0.92, 0.88, 0.85, 1)
+
+[sub_resource type="StyleBoxTexture" id="Button_normal"]
+content_margin_left = 18.0
+content_margin_top = 6.0
+content_margin_right = 18.0
+content_margin_bottom = 10.0
+texture = ExtResource("1_btn")
+texture_margin_left = 12.0
+texture_margin_top = 12.0
+texture_margin_right = 12.0
+texture_margin_bottom = 15.0
+
 [sub_resource type="StyleBoxTexture" id="LineEdit_normal"]
 content_margin_left = 14.0
 content_margin_top = 6.0
@@ -81,6 +88,8 @@ texture_margin_left = 12.0
 texture_margin_top = 12.0
 texture_margin_right = 12.0
 texture_margin_bottom = 15.0
+
+[sub_resource type="StyleBoxEmpty" id="Empty"]
 
 [sub_resource type="StyleBoxTexture" id="Panel"]
 content_margin_left = 30.0
@@ -133,13 +142,6 @@ texture_margin_top = 6.0
 texture_margin_right = 16.0
 texture_margin_bottom = 6.0
 
-[sub_resource type="StyleBoxTexture" id="Bar_fill_blue"]
-texture = ExtResource("10_blue")
-texture_margin_left = 16.0
-texture_margin_top = 6.0
-texture_margin_right = 16.0
-texture_margin_bottom = 6.0
-
 [sub_resource type="StyleBoxTexture" id="Bar_fill_gold"]
 texture = ExtResource("11_gold")
 texture_margin_left = 16.0
@@ -147,10 +149,10 @@ texture_margin_top = 6.0
 texture_margin_right = 16.0
 texture_margin_bottom = 6.0
 
-[sub_resource type="StyleBoxEmpty" id="Empty"]
-
 [resource]
 default_font_size = 20
+BoostBar/base_type = &"ProgressBar"
+BoostBar/styles/fill = SubResource("Bar_fill_blue")
 Button/colors/font_color = Color(0.98, 0.93, 0.8, 1)
 Button/colors/font_disabled_color = Color(0.72, 0.62, 0.55, 1)
 Button/colors/font_focus_color = Color(1, 0.97, 0.88, 1)
@@ -175,6 +177,8 @@ LineEdit/colors/selection_color = Color(0.85, 0.5, 0.25, 0.5)
 LineEdit/styles/focus = SubResource("Focus")
 LineEdit/styles/normal = SubResource("LineEdit_normal")
 LineEdit/styles/read_only = SubResource("LineEdit_normal")
+OverlayBar/base_type = &"ProgressBar"
+OverlayBar/styles/background = SubResource("Empty")
 Panel/styles/panel = SubResource("Panel")
 PanelContainer/styles/panel = SubResource("Panel")
 PlankPanel/base_type = &"PanelContainer"
@@ -184,13 +188,9 @@ ProgressBar/styles/background = SubResource("Bar_background")
 ProgressBar/styles/fill = SubResource("Bar_fill_red")
 StaminaBar/base_type = &"ProgressBar"
 StaminaBar/styles/fill = SubResource("Bar_fill_green")
-BoostBar/base_type = &"ProgressBar"
-BoostBar/styles/fill = SubResource("Bar_fill_blue")
-TrailBar/base_type = &"ProgressBar"
-TrailBar/styles/fill = SubResource("Bar_fill_gold")
-OverlayBar/base_type = &"ProgressBar"
-OverlayBar/styles/background = SubResource("Empty")
 TooltipLabel/colors/font_color = Color(0.98, 0.93, 0.8, 1)
 TooltipLabel/colors/font_outline_color = Color(0.16, 0.07, 0.04, 1)
 TooltipLabel/constants/outline_size = 4
 TooltipPanel/styles/panel = SubResource("Plank")
+TrailBar/base_type = &"ProgressBar"
+TrailBar/styles/fill = SubResource("Bar_fill_gold")

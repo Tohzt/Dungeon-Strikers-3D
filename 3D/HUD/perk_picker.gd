@@ -30,6 +30,11 @@ const SCALE_TWO := 0.62
 const SCALE_MANY := 0.48
 const SCALE_COMPACT := 0.5
 const HAND_GAP := 48.0
+## A hand's title, hint and spacing at scale 1, on top of its cards.
+const HAND_CHROME_HEIGHT := 140.0
+## Kept clear around the hands, plus room for the waiting line under them.
+const SCREEN_MARGIN := 40.0
+const WAITING_ROOM := 72.0
 
 @onready var dim: ColorRect = $Dim
 @onready var waiting_label: Label = $Waiting
@@ -52,6 +57,8 @@ var _full_screen: bool = false
 var _center: CenterContainer
 var _grid: GridContainer
 var _bottom: HBoxContainer
+## The waiting line's place at the top of the screen, as laid out in the scene.
+var _waiting_offsets: Vector2
 
 
 func _ready() -> void:
@@ -73,6 +80,7 @@ func _ready() -> void:
 	_bottom.add_theme_constant_override("separation", int(HAND_GAP))
 	_bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bottom)
+	_waiting_offsets = Vector2(waiting_label.offset_top, waiting_label.offset_bottom)
 	dim.hide()
 	waiting_label.hide()
 
@@ -114,15 +122,16 @@ func set_full_screen(full: bool) -> void:
 	_relayout()
 
 
-## During the intermission, list who still has to pick (empty = hide).
-func show_waiting(players: Array[PlayerClass3D]) -> void:
+## During the intermission or a draft, list who still has to pick under
+## `heading` (empty = hide).
+func show_waiting(players: Array[PlayerClass3D], heading: String = "Choose a perk at your altar") -> void:
 	if players.is_empty():
 		waiting_label.hide()
 		return
 	var names: PackedStringArray = []
 	for waiting: PlayerClass3D in players:
 		names.append("P%d" % (waiting.slot.index + 1) if waiting.slot else String(waiting.name))
-	waiting_label.text = "Choose a perk at your altar\nWaiting on: %s" % ", ".join(names)
+	waiting_label.text = "%s\nWaiting on: %s" % [heading, ", ".join(names)]
 	waiting_label.show()
 
 
@@ -138,7 +147,7 @@ func _process(delta: float) -> void:
 		elif _just_pressed(hand, &"move_right"):
 			_select(hand, hand.selected + 1)
 		elif _just_pressed(hand, &"interact") or _just_pressed(hand, &"attack") \
-				or _just_pressed(hand, &"attack_main") or _just_pressed(hand, &"attack_off"):
+				or _just_pressed(hand, &"attack_light") or _just_pressed(hand, &"attack_heavy"):
 			chosen.emit(hand.player, hand.selected)
 
 
@@ -172,6 +181,8 @@ func _relayout() -> void:
 	if _full_screen:
 		ui_scale = SCALE_ONE if _hands.size() <= 1 else (SCALE_TWO if _hands.size() == 2 else SCALE_MANY)
 	_grid.columns = 1 if _hands.size() <= 1 else 2
+	ui_scale = minf(ui_scale, _fit_scale())
+	_place_waiting_label()
 	for hand: Hand in _hands:
 		if hand.root:
 			if hand.tween:
@@ -182,6 +193,36 @@ func _relayout() -> void:
 		_highlight(hand)
 		hand.tween.custom_step(HIGHLIGHT_TIME)  # Open already highlighted
 	dim.visible = _full_screen and not _hands.is_empty()
+
+
+## The biggest scale at which every open hand fits on screen (a big hand,
+## like a draft's, would otherwise run off the sides), leaving room for
+## the waiting line.
+func _fit_scale() -> float:
+	var most_cards: int = 1
+	for hand: Hand in _hands:
+		most_cards = maxi(most_cards, hand.perks.size())
+	var columns: int = _grid.columns if _full_screen else maxi(_hands.size(), 1)
+	var rows: int = ceili(_hands.size() / float(columns)) if _full_screen else 1
+	# One hand at scale 1: its row of cards wide, and title + cards + hint tall
+	var hand_size := Vector2(
+		most_cards * (CARD_SIZE.x + CARD_MARGIN.x) + (most_cards - 1) * 36.0,
+		CARD_SIZE.y + CARD_MARGIN.y + HAND_CHROME_HEIGHT)
+	var room: Vector2 = get_viewport().get_visible_rect().size - Vector2(SCREEN_MARGIN * 2.0, SCREEN_MARGIN * 2.0 + WAITING_ROOM)
+	room -= Vector2(columns - 1, rows - 1) * HAND_GAP
+	return minf(room.x / (hand_size.x * columns), room.y / (hand_size.y * rows))
+
+
+## The waiting line sits at the top of the screen, unless hands fill it;
+## then it moves under them, clear of their titles.
+func _place_waiting_label() -> void:
+	var bottom: bool = _full_screen and not _hands.is_empty()
+	waiting_label.anchor_top = 1.0 if bottom else 0.0
+	waiting_label.anchor_bottom = 1.0 if bottom else 0.0
+	waiting_label.offset_top = -WAITING_ROOM if bottom else _waiting_offsets.x
+	waiting_label.offset_bottom = -12.0 if bottom else _waiting_offsets.y
+	waiting_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM if bottom else VERTICAL_ALIGNMENT_TOP
+	waiting_label.grow_vertical = Control.GROW_DIRECTION_BEGIN if bottom else Control.GROW_DIRECTION_END
 
 
 func _build_hand(hand: Hand, ui_scale: float) -> void:

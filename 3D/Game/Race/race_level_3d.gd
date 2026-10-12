@@ -28,7 +28,6 @@ const BOSS_SCENE := preload("res://3D/Entities/Boss_Slime/boss.tscn")
 const ALTAR_SCENE := preload("res://3D/Weapons/Altar.tscn")
 const CHEST_SCENE := preload("res://3D/Weapons/Chest/chest.tscn")
 const ARMOR_SCENE := preload("res://3D/Items/Armor/armor_pickup.tscn")
-const ORB_SCENE := preload("res://3D/Items/Boost/boost_orb.tscn")
 const SKELETON_SCENE := preload("res://3D/Entities/Skeleton/skeleton_enemy.tscn")
 ## Which kind of skeleton each SKELETON_* feature is.
 const SKELETON_KINDS: Dictionary[RaceLayout.Feature, SkeletonEnemy3D.Kind] = {
@@ -387,11 +386,6 @@ func _feature(room: RaceLayout.Room, feature: RaceLayout.Feature, offset: Vector
 			node = ARMOR_SCENE.instantiate()
 		Feature.ITEM_BOX:
 			node = ItemBox3D.new()
-		Feature.ORB, Feature.BIG_ORB:
-			node = ORB_SCENE.instantiate()
-			if feature == Feature.BIG_ORB:
-				node.set(&"amount", 100.0)
-				node.set(&"respawn_time", 10.0)
 		Feature.SKELETON_WARRIOR, Feature.SKELETON_MINION, Feature.SKELETON_ARCHER, Feature.SKELETON_MAGE:
 			var skeleton: SkeletonEnemy3D = SKELETON_SCENE.instantiate()
 			skeleton.kind = SKELETON_KINDS[feature]

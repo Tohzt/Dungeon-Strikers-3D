@@ -1,7 +1,8 @@
 @tool
 class_name Altar3D extends WeaponStand3D
 ## A team's own weapon stand. Only its team can take from it, unless every
-## one of its players is dead: then it's unguarded and anyone can. It holds up to
+## one of its players is dead: then it's unguarded and anyone can. A
+## NEUTRAL altar belongs to nobody, and anyone may take from it any time. It holds up to
 ## `capacity` weapons: each new one (a restock after a take, or a tier-up)
 ## goes on top and pushes the oldest off once it's full. Stronger tiers make
 ## a new weapon sit "charging" for a while before it can be taken.
@@ -15,8 +16,12 @@ class_name Altar3D extends WeaponStand3D
 ## to wipe this one out and steal it; the round only ends once it's claimed.
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
+## owner_team value: nobody's, so anyone may take from it.
+const NEUTRAL := -1
+## Color of a neutral altar.
+const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 
-## Which team (PlayerSlot.team) may take from this altar.
+## Which team (PlayerSlot.team) may take from this altar, or NEUTRAL.
 @export var owner_team: int = 0:
 	set(value):
 		owner_team = value
@@ -280,8 +285,11 @@ func _layout_held() -> void:
 		_held[i].pivot.position = display_anchor.position + Vector3(offset, 0, 0)
 
 
-## Our own team always may; anyone else only while the altar is unguarded.
+## Our own team always may; anyone else only while the altar is unguarded
+## (a neutral altar: anyone, always).
 func _may_take(player: PlayerClass3D) -> bool:
+	if owner_team == NEUTRAL:
+		return player.slot != null
 	return _is_ours(player) or (player.slot != null and is_unguarded())
 
 
@@ -587,7 +595,7 @@ func _update_arming_visual() -> void:
 func _apply_team_color() -> void:
 	# Read from the script, not the Players autoload, so it also works in the editor.
 	var team_colors: Array[Color] = PLAYERS_SCRIPT.TEAM_COLORS
-	var color: Color = team_colors[owner_team % team_colors.size()]
+	var color: Color = NEUTRAL_COLOR if owner_team == NEUTRAL else team_colors[owner_team % team_colors.size()]
 	var base_material := StandardMaterial3D.new()
 	base_material.albedo_color = color.darkened(0.4)
 	base_mesh.material_override = base_material

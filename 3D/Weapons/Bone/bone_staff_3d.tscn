@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Staff/magic_bolt_3d.tscn" id="5_bolt"]
 [ext_resource type="PackedScene" uid="uid://bhjsdkenvehv5" path="res://Assets/Skeleton/Props/Skeleton_Staff.glb" id="model"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_bonk.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_orb.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.6, 2.1, 0.3)
@@ -19,7 +19,6 @@ axis_lock_angular_z = true
 script = ExtResource("1_script")
 swing_sound = &"swing_club"
 fire_sound = &"fireball"
-alt_attack = ExtResource("alt")
 plays_swipe_animation = false
 arrow_scene = ExtResource("5_bolt")
 arrow_speed = 20.0
@@ -28,6 +27,7 @@ muzzle_height_offset = 0.6
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 swing_clip = &"CombatRanged/Ranged_Magic_Shoot"
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 weapon_name = "Bone Staff"

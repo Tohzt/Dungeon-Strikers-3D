@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="PackedScene" path="res://3D/Weapons/Staff/wand_bolt_3d.tscn" id="bolt"]
 [ext_resource type="PackedScene" uid="uid://byg2qeigxynlu" path="res://Assets/Weapons/wand_A.glb" id="model"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_poke.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_orb_small.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.21, 1.16, 0.21)
@@ -20,7 +20,6 @@ mass = 0.5
 script = ExtResource("script")
 swing_sound = &"swing_dagger"
 fire_sound = &"ice_bolt"
-alt_attack = ExtResource("alt")
 plays_swipe_animation = false
 arrow_scene = ExtResource("bolt")
 arrow_speed = 30.0
@@ -29,6 +28,7 @@ muzzle_height_offset = 0.3
 swing_clip = &"CombatRanged/Ranged_Magic_Shoot"
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
 weapon_name = "Wand"

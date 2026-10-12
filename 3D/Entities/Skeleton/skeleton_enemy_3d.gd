@@ -30,7 +30,7 @@ enum State {
 	DEAD,     ## Collapsed
 }
 
-## Every living skeleton is in this group (lock-on, bots).
+## Every living skeleton is in this group (bots).
 const GROUP := "Enemy"
 
 const MODELS: Dictionary[Kind, PackedScene] = {
@@ -354,7 +354,7 @@ func _nearest_loose_weapon() -> Weapon3D:
 	var best: Weapon3D = null
 	var best_dist: float = WEAPON_SEARCH_RANGE
 	for weapon: Weapon3D in Global.Game3D.weapons():
-		if weapon.wielder or weapon.is_broken or not weapon.can_pickup or weapon.is_thrown:
+		if weapon.wielder or weapon.is_broken or not weapon.can_pickup or weapon.is_thrown or weapon.kit_owner:
 			continue
 		if _free_hand_for(weapon) < 0:
 			continue

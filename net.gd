@@ -27,7 +27,7 @@ const CODE_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const RANDOM_CODE_LENGTH := 6
 const MIN_CODE_LENGTH := 4
 const MAX_CODE_LENGTH := 8
-const MAX_PLAYERS := 4
+const MAX_PLAYERS := Players.MAX_PLAYERS
 const JOIN_TIMEOUT := 8.0
 const MAIN_MENU := "res://Menus/MainMenu/main_menu.tscn"
 
@@ -41,7 +41,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 9
+const PROTOCOL_VERSION := 12
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -213,12 +213,6 @@ func set_boss_drop(kind: BossDrop.Kind) -> void:
 		_request_boss_drop.rpc_id(SERVER_ID, kind)
 
 
-## Leader only: top-down or third-person camera.
-func set_view(view: MatchMap.View) -> void:
-	if is_host and not in_match:
-		_request_view.rpc_id(SERVER_ID, view)
-
-
 ## [team, character] picked by `peer_id`.
 func loadout_of(peer_id: int) -> Array:
 	return loadouts.get(peer_id, [0, 0])
@@ -229,8 +223,10 @@ func local_loadout() -> Array:
 	return loadout_of(multiplayer.get_unique_id())
 
 
+## A team in play, and a character that team can play.
 func _clamp_loadout(team: int, character: int) -> Array:
-	return [posmod(team, Players.team_count), posmod(character, Players.character_count())]
+	var clamped_team: int = posmod(team, Players.team_count)
+	return [clamped_team, Roster.for_team(character, clamped_team)]
 
 
 ## The team of everyone seated, players then bots.
@@ -305,7 +301,6 @@ func _close_session() -> void:
 	loadouts.clear()
 	bots.clear()
 	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0], MatchMap.DROPS[0])
-	Players.view = MatchMap.VIEWS[0]
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -321,14 +316,13 @@ func _broadcast_peers() -> void:
 	peers_changed.emit()
 
 
-## [team_count, map, boss_drop, view], as sent to everyone.
+## [team_count, map, boss_drop], as sent to everyone.
 func _format() -> Array:
-	return [Players.team_count, Players.map, Players.boss_drop, Players.view]
+	return [Players.team_count, Players.map, Players.boss_drop]
 
 
 func _apply_format(format: Array) -> void:
 	Players.set_match_format(format[0], format[1], format[2])
-	Players.view = format[3]
 
 
 ## A new player starts on the smallest team, as the seat's usual character.
@@ -336,7 +330,8 @@ func _add_loadout(id: int) -> void:
 	var teams: Array[int] = []
 	for loadout: Array in loadouts.values() + bots:
 		teams.append(loadout[0])
-	loadouts[id] = [Players.smallest_team(teams), Players.default_character(peers.find(id))]
+	var team: int = Players.smallest_team(teams)
+	loadouts[id] = [team, Roster.for_team(Players.default_character(peers.find(id)), team)]
 
 
 ## Tell the joiner why, then drop them (after a beat so the message arrives).
@@ -503,26 +498,22 @@ func _request_boss_drop(kind: BossDrop.Kind) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _request_view(view: MatchMap.View) -> void:
-	if _from_leader_in_lobby() and MatchMap.VIEWS.has(view):
-		Players.view = view
-		_broadcast_peers()
-
-
-@rpc("any_peer", "reliable")
 func _request_add_bot() -> void:
 	if _from_leader_in_lobby() and seat_count() < MAX_PLAYERS:
-		bots.append([Players.smallest_team(seat_teams()), _unused_character()])
+		var team: int = Players.smallest_team(seat_teams())
+		bots.append([team, _unused_character(team)])
 		_broadcast_peers()
 
 
-## The first character nobody in the session is playing (the first one if all are).
-func _unused_character() -> int:
+## The first of `team`'s characters nobody in the session is playing (the
+## next in turn if all are).
+func _unused_character(team: int) -> int:
 	var taken: Array = (loadouts.values() + bots).map(func(loadout: Array) -> int: return loadout[1])
-	for character: int in Players.character_count():
+	var choices: Array[int] = Roster.characters_of_team(team)
+	for character: int in choices:
 		if not taken.has(character):
 			return character
-	return 0
+	return choices[bots.size() % choices.size()]
 
 
 @rpc("any_peer", "reliable")
@@ -541,6 +532,7 @@ func _from_leader_in_lobby() -> bool:
 func _format_changed() -> void:
 	for loadout: Array in loadouts.values() + bots:
 		loadout[0] = posmod(loadout[0], Players.team_count)
+		loadout[1] = Roster.for_team(loadout[1], loadout[0])
 	_broadcast_peers()
 
 
@@ -548,9 +540,8 @@ func _format_changed() -> void:
 func _request_start() -> void:
 	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
 			and _teams_split():
-		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s, %s)." % [access_code,
-			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop),
-			MatchMap.view_name(Players.view)])
+		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s)." % [access_code,
+			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop)])
 		_start_match.rpc(_format())
 
 

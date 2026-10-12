@@ -1,6 +1,21 @@
 class_name Ball3D extends RigidBody3D
 ## Online the server simulates the ball and streams where it is; players'
-## hits and pushes are passed on to the server.
+## hits and pushes are passed on to the server, and so are grabs and throws.
+## Every machine pins a held ball to its holder itself, so carrying looks
+## smooth for everyone.
+
+## Who carries the ball, if anyone (see PlayerClass3D.carry). Set on every
+## machine.
+var holder: PlayerClass3D = null
+var _free_collision_layer: int = 0
+var _free_collision_mask: int = 0
+## Server: after a throw nobody can grab the ball for a moment, so the
+## thrower's own grab doesn't catch it straight back.
+const GRAB_COOLDOWN := 0.4
+var _grab_cooldown: float = 0.0
+## Server: extra reach allowed on a client's grab, since it saw the ball
+## (and the server saw the player) a little in the past.
+const GRAB_REACH_SLACK := 1.0
 
 ## Team (PlayerSlot.team) of the last player to play the ball, -1 = nobody
 ## yet. Kept by whoever simulates it; four-team goals credit this team.
@@ -28,6 +43,8 @@ var _burn_light: OmniLight3D = null
 ## The crackle while it burns (see _update_burn_sound).
 var _burn_sound: AudioStreamPlayer3D = null
 ## A raised shield catches it: dropped just in front of the shield.
+## Below this it has escaped the level (squeezed through a wall).
+const OUT_OF_BOUNDS_Y := -10.0
 const CATCH_SPEED := 1.5
 const CATCH_POP := 1.0
 
@@ -48,7 +65,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not Net.decides():
+	if holder:
+		_follow_holder()
+	elif not Net.decides():
 		_motion.play(self, delta)
 	_update_burn_light()
 	burn_left = max(burn_left - delta, 0.0)
@@ -58,6 +77,13 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if not Net.decides():
 		return  # The server's updates move it
+	_grab_cooldown = max(_grab_cooldown - delta, 0.0)
+	if holder:
+		if not is_instance_valid(holder) or holder.is_dead():
+			_released_everywhere(Vector3.ZERO)
+		return
+	if global_position.y < OUT_OF_BOUNDS_Y and Global.Game3D:
+		Global.Game3D.ball_fell(self)
 	_update_curve(delta)
 	_send_state()
 
@@ -72,17 +98,21 @@ func setup_network() -> void:
 
 
 func _send_state() -> void:
-	if Net.is_server and Net.match_synced and _motion.should_send(global_transform):
+	if Net.is_server and Net.match_synced and not holder and _motion.should_send(global_transform):
 		_net_state.rpc(NetInterpolator.now(), global_transform)
 
 
 @rpc("authority", "unreliable_ordered")
 func _net_state(time: float, xform: Transform3D) -> void:
+	if holder:
+		return  # Pinned to the holder locally
 	_motion.push(time, xform)
 
 
 ## Hit or shoved by something (see Combat.push).
 func receive_impulse(impulse: Vector3) -> void:
+	if holder:
+		return
 	if Net.decides():
 		apply_central_impulse(impulse)
 	else:
@@ -118,6 +148,106 @@ func _set_last_team(player_name: String) -> void:
 		last_team = player.slot.team
 
 
+# ===== CARRYING =====
+
+## `player` wants to pick the ball up. Online the server decides, so two
+## players can't grab it at once.
+func request_grab(player: PlayerClass3D) -> void:
+	if holder:
+		return
+	if not Net.in_session():
+		if _grab_cooldown <= 0.0:
+			grab(player)
+	else:
+		_request_grab.rpc_id(Net.SERVER_ID)
+
+
+## `player` (the holder) lets go with this velocity.
+func request_throw(player: PlayerClass3D, launch: Vector3) -> void:
+	if holder != player:
+		return
+	if not Net.in_session():
+		release(launch)
+	else:
+		_request_throw.rpc_id(Net.SERVER_ID, launch)
+
+
+func grab(player: PlayerClass3D) -> void:
+	if holder:
+		release(Vector3.ZERO)
+	holder = player
+	if player.slot:
+		last_team = player.slot.team
+	_motion.clear()  # Play back from the release, not before the grab
+	player.on_ball_grabbed(self)
+	_curve_left = 0.0
+	_free_collision_layer = collision_layer
+	_free_collision_mask = collision_mask
+	freeze = true
+	collision_layer = 0
+	collision_mask = 0
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	_follow_holder()
+
+
+## Let go of the ball, flying off at `launch`.
+func release(launch: Vector3) -> void:
+	if not holder:
+		return
+	if is_instance_valid(holder):
+		holder.on_ball_released(self)
+	holder = null
+	collision_layer = _free_collision_layer
+	collision_mask = _free_collision_mask
+	freeze = Net.in_session() and not Net.is_server
+	if Net.decides():
+		linear_velocity = launch
+	_grab_cooldown = GRAB_COOLDOWN
+	_motion.send_next()
+
+
+## Carried out in front of the holder's chest.
+func _follow_holder() -> void:
+	if is_instance_valid(holder):
+		global_position = holder.carry_point()
+
+
+## Server/offline: let go everywhere (the holder died, or the ball's reset).
+func _released_everywhere(launch: Vector3) -> void:
+	if Net.match_synced:
+		_released.rpc(launch)
+	else:
+		release(launch)
+
+
+@rpc("any_peer", "reliable")
+func _request_grab() -> void:
+	if not Net.is_server or holder or _grab_cooldown > 0.0:
+		return
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
+	if player and player.can_grab_ball(self, PlayerClass3D.BALL_REACH + GRAB_REACH_SLACK):
+		_grabbed.rpc(player.name)
+
+
+@rpc("any_peer", "reliable")
+func _request_throw(launch: Vector3) -> void:
+	if Net.is_server and holder and holder.get_multiplayer_authority() == multiplayer.get_remote_sender_id():
+		_released.rpc(launch)
+
+
+@rpc("authority", "call_local", "reliable")
+func _grabbed(player_name: String) -> void:
+	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
+	if player:
+		grab(player)
+
+
+@rpc("authority", "call_local", "reliable")
+func _released(launch: Vector3) -> void:
+	release(launch)
+
+
 func _on_body_entered(body: Node) -> void:
 	if not Net.decides():
 		return
@@ -139,6 +269,8 @@ func _on_body_entered(body: Node) -> void:
 ## added to its own, or replaces it if `exact`; `curve` pulls it sideways for
 ## a moment; above 0, `ignite_time` sets it burning.
 func receive_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker: Node3D) -> void:
+	if holder:
+		return
 	if Net.decides():
 		_apply_weapon_hit(velocity, exact, curve, ignite_time, _player_name(attacker))
 	else:
@@ -160,28 +292,30 @@ func _apply_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_ti
 		_ignite(ignite_time, attacker_name)
 
 
-## Turn it to fly along `dir` (flattened), at its current speed or at least
-## `min_speed`, keeping how it's rising or falling (the staff's bolt).
-func redirect(dir: Vector3, min_speed: float) -> void:
+## Turn it to fly along `dir` (flattened), at its current speed plus
+## `boost`, or at least `min_speed`, rising at least `lift` (a magic bolt).
+func redirect(dir: Vector3, min_speed: float, boost: float = 0.0, lift: float = 0.0) -> void:
+	if holder:
+		return
 	if Net.decides():
-		_apply_redirect(dir, min_speed)
+		_apply_redirect(dir, min_speed, boost, lift)
 	else:
-		_request_redirect.rpc_id(Net.SERVER_ID, dir, min_speed)
+		_request_redirect.rpc_id(Net.SERVER_ID, dir, min_speed, boost, lift)
 
 
 @rpc("any_peer", "reliable")
-func _request_redirect(dir: Vector3, min_speed: float) -> void:
+func _request_redirect(dir: Vector3, min_speed: float, boost: float, lift: float) -> void:
 	if Net.is_server:
-		_apply_redirect(dir, min_speed)
+		_apply_redirect(dir, min_speed, boost, lift)
 
 
-func _apply_redirect(dir: Vector3, min_speed: float) -> void:
+func _apply_redirect(dir: Vector3, min_speed: float, boost: float, lift: float) -> void:
 	dir.y = 0.0
 	if dir.length() < 0.01:
 		return
 	var flat_speed: float = Vector2(linear_velocity.x, linear_velocity.z).length()
-	var vertical: float = linear_velocity.y
-	linear_velocity = dir.normalized() * max(flat_speed, min_speed) + Vector3.UP * vertical
+	var vertical: float = max(linear_velocity.y, lift)
+	linear_velocity = dir.normalized() * max(flat_speed + boost, min_speed) + Vector3.UP * vertical
 	_curve_left = 0.0
 
 

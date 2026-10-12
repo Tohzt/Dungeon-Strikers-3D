@@ -4,8 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://blunvt43on3vk" path="res://Assets/Weapons/sword_C.glb" id="model"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="properties"]
 [ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://3D/Weapons/Sword/sword_3d.gd" id="script"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/x_slash.tres" id="combo"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_wide_slash.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_slash.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_slash.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.27, 1.7, 0.15)
@@ -18,12 +18,12 @@ axis_lock_angular_y = true
 axis_lock_angular_z = true
 mass = 1.3
 script = ExtResource("script")
-alt_attack = ExtResource("alt")
 combo_family = &"blade"
-pair_combo = ExtResource("combo")
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 swing_clip = &"CombatMelee/Melee_1H_Attack_Slice_Diagonal"
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." unique_id=98890566 instance=ExtResource("behavior")]
 weapon_name = "Scimitar"

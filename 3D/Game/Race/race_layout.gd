@@ -34,7 +34,7 @@ enum DoorKind {
 
 ## What a room holds besides its boss: Feature, position (metres, relative
 ## to the room's center).
-enum Feature { CHEST, ARMOR, ORB, BIG_ORB, ITEM_BOX, SKELETON_WARRIOR, SKELETON_MINION, SKELETON_ARCHER, SKELETON_MAGE }
+enum Feature { CHEST, ARMOR, ITEM_BOX, SKELETON_WARRIOR, SKELETON_MINION, SKELETON_ARCHER, SKELETON_MAGE }
 
 
 class Room:
@@ -205,10 +205,8 @@ static func test_layout() -> RaceLayout:
 
 	var nw: int = layout.add_room("GuardRoomWest", Kind.ROOM, Vector2i(-9, -11), Vector2i(-2, -5))
 	var ne: int = layout.add_room("GuardRoomEast", Kind.ROOM, Vector2i(2, -11), Vector2i(9, -5))
-	layout.rooms[nw].features = [[Feature.ORB, Vector2(-6, 0)],
-		[Feature.SKELETON_WARRIOR, Vector2(2, -4)], [Feature.SKELETON_MINION, Vector2(-2, -6)]]
-	layout.rooms[ne].features = [[Feature.ORB, Vector2(6, 0)],
-		[Feature.SKELETON_WARRIOR, Vector2(-2, -4)], [Feature.SKELETON_ARCHER, Vector2(4, -8)]]
+	layout.rooms[nw].features = [[Feature.SKELETON_WARRIOR, Vector2(2, -4)], [Feature.SKELETON_MINION, Vector2(-2, -6)]]
+	layout.rooms[ne].features = [[Feature.SKELETON_WARRIOR, Vector2(-2, -4)], [Feature.SKELETON_ARCHER, Vector2(4, -8)]]
 	layout.add_door(Vector2i(-4, -5), DoorKind.BOSS, arena)
 	layout.add_door(Vector2i(4, -5), DoorKind.BOSS, arena)
 
@@ -222,12 +220,12 @@ static func test_layout() -> RaceLayout:
 	layout.rooms[armory].features = [[Feature.CHEST, Vector2(-4, 0)], [Feature.ARMOR, Vector2(4, -8)]]
 	layout.add_door(Vector2i(-9, -13), DoorKind.GAP)
 	var library: int = layout.add_room("Library", Kind.TREASURE, Vector2i(9, -17), Vector2i(15, -9))
-	layout.rooms[library].features = [[Feature.CHEST, Vector2(4, 0)], [Feature.BIG_ORB, Vector2(-4, 8)]]
+	layout.rooms[library].features = [[Feature.CHEST, Vector2(4, 0)], [Feature.ITEM_BOX, Vector2(-4, 8)]]
 	layout.add_door(Vector2i(9, -13), DoorKind.GAP)
 
 	# The split: crypt (west) and barracks (east), a shrine between them
 	var crypt: int = layout.add_room("Crypt", Kind.ROOM, Vector2i(-9, -23), Vector2i(-3, -15))
-	layout.rooms[crypt].features = [[Feature.ORB, Vector2(0, 4)], [Feature.SKELETON_MAGE, Vector2(0, -10)],
+	layout.rooms[crypt].features = [[Feature.SKELETON_MAGE, Vector2(0, -10)],
 		[Feature.SKELETON_MINION, Vector2(-4, -4)], [Feature.SKELETON_MINION, Vector2(4, -4)]]
 	layout.add_door(Vector2i(-6, -15), DoorKind.GAP)
 	var barracks: int = layout.add_room("Barracks", Kind.ROOM, Vector2i(3, -23), Vector2i(9, -15))
@@ -248,7 +246,7 @@ static func test_layout() -> RaceLayout:
 		layout.add_door(Vector2i(5 * side, -27), DoorKind.ARCH)
 		layout.add_door(Vector2i(7 * side, -35), DoorKind.GAP)
 	var gallery: int = layout.add_room("Gallery", Kind.TREASURE, Vector2i(-5, -31), Vector2i(5, -23))
-	layout.rooms[gallery].features = [[Feature.CHEST, Vector2(0, -6)], [Feature.BIG_ORB, Vector2(0, 6)]]
+	layout.rooms[gallery].features = [[Feature.CHEST, Vector2(0, -6)], [Feature.ITEM_BOX, Vector2(0, 6)]]
 
 	var antechamber: int = layout.add_room("Antechamber", Kind.CORRIDOR, Vector2i(-9, -39), Vector2i(9, -35))
 	layout.rooms[antechamber].features = _item_boxes([Vector2(-4, 0), Vector2(0, 0), Vector2(4, 0)])

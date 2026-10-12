@@ -1,31 +1,20 @@
 class_name PlayerInputHandler3D extends Node
 @onready var Master: CharacterBody3D = get_parent()
 
-## The boost button is held (see PlayerClass3D.boost).
-var boost_held: bool = false
 var move_dir: Vector3
 var look_dir: Vector3 = Vector3.ZERO
-## Each hand's presses, worked out from the Attack and Off-hand buttons (see
-## _buttons_to_hands); the player acts on them per hand.
-var action_left: bool = false
-var action_right: bool = false
-var action_heavy_left: bool = false
-var action_heavy_right: bool = false
-## Simple controls: hold Throw and press Attack or Off-hand to throw that
-## hand's weapon; held to charge, thrown on release.
-var throw_left: bool = false
-var throw_right: bool = false
-## Throw tapped without pressing either hand: drop the main hand's weapon
-## (the off hand's if the main is empty). Stays set until the player acts on it.
-var drop_weapon: bool = false
+## The attack buttons, held this frame (see PlayerClass3D's BUTTONS): light
+## (left click / RB) attacks on press, heavy (right click / LB) charges while
+## held and goes off on release, and Throw (Q / Y) charges a throw of the
+## weapon in hand. Bots press them too.
+var light_held: bool = false
+var heavy_held: bool = false
+var throw_held: bool = false
 var interact: bool = false
-## Swap what's in each hand (R / Select); stays set until the player acts on it.
-var swap_hands: bool = false
 var interact_held: bool = false
-var target_toggle: bool = false
-var target_scroll: bool = false
-# The controller's dodge button: a quick tap rolls (on release), holding it
-# sprints. Keyboard has its own roll (Ctrl) and sprint (Shift) keys.
+# The roll button (Space / A) rolls on press, or slides while sprinting.
+# The controller's dodge button (B) also rolls on a quick tap (on release)
+# and sprints while held; keyboard sprints with Shift.
 ## Sprinting: Shift held, or the dodge button held past DODGE_TAP_TIME.
 var move_dodge: bool = false
 var dodge_dur: float = 0.0
@@ -42,40 +31,32 @@ const AIM_RELEASE_COOLDOWN: float = 0.5
 # Camera reference for 3D mouse look
 var camera: Camera3D = null
 
+# Lock-on (middle mouse / R3): face and aim at a boss, skeleton or enemy
+# player instead of the cursor or right stick, until pressed again or the
+# target dies or gets away. Locking picks whatever's nearest the cursor (or
+# where the right stick / the player points); the mouse wheel, or flicking
+# the right stick toward another target, switches. Tab toggles it too, but
+# locks on to whatever's nearest.
+## What we're locked on to, if anything. Only people lock on (not bots).
+var lock_target: Node3D = null
+const LOCK_RANGE := 20.0
+## The lock drops once the target gets this much further than LOCK_RANGE.
+const LOCK_BREAK_RATIO := 1.3
+## Flicking the right stick this far switches target; it has to come back
+## under LOCK_FLICK_RESET before the next flick.
+const LOCK_FLICK := 0.7
+const LOCK_FLICK_RESET := 0.3
+var _flick_held: bool = false
+var _lock_marker: LockOnMarker3D = null
+
 ## Which local player/device this handler listens to; set by the owning
 ## player. Null = legacy mode that reads the shared actions from any device.
 var slot: PlayerSlot = null
-
-## Simple controls: the hand buttons as of last frame.
-var _left_click_was_pressed: bool = false
-var _right_click_was_pressed: bool = false
-## Which hand the Attack button works, settled while neither button is held
-## so a hand can't change mid-press (see PlayerClass3D.main_hand_is_left).
-var _main_is_left: bool = false
-## A hand button was pressed while Throw was held, so letting go of Throw
-## isn't a drop.
-var _throw_used: bool = false
-
-## Set while this player uses the souls-like controls: movement turns with
-## this camera, and the player faces where they walk or their lock-on target.
-var souls_camera: SoulsCamera3D = null
 
 
 ## The input action this handler should read for a project action name.
 func action(base: StringName) -> StringName:
 	return slot.action(base) if slot else base
-
-
-## Buttons aren't tied to a hand. Attack (left click / RB) uses the main
-## weapon, normally the right hand's; Off-hand (right click / LB) the other
-## hand, and a shield there blocks.
-## Simple controls (the default): both swing on press and a shield blocks
-## while Off-hand is held; holding Throw turns them into throws instead.
-## With a weapon in each hand, Off-hand does a special (see WeaponCombo3D).
-## Advanced: both swing on a tap and throw on a hold, and either guard
-## button raises a shield. See PlayerSlot.advanced_controls.
-func uses_simple_controls() -> bool:
-	return slot == null or not slot.advanced_controls
 
 
 func uses_mouse() -> bool:
@@ -112,110 +93,35 @@ func _on_slot_changed(changed: PlayerSlot) -> void:
 ## Let go of every held button, e.g. after input was ignored for a while
 ## (a perk pick paused the game) and its release events were missed.
 func release_all() -> void:
-	action_left = false
-	action_right = false
-	action_heavy_left = false
-	action_heavy_right = false
-	throw_left = false
-	throw_right = false
-	drop_weapon = false
-	_throw_used = false
+	light_held = false
+	heavy_held = false
+	throw_held = false
 	move_dodge = false
 	dodge_dur = 0.0
 	dodge_request_msec = -1
 	look_dir = Vector3.ZERO
 	aim_release_timer = 0.0
 	interact = false
-	swap_hands = false
-	boost_held = false
 
 
 func _process(delta: float) -> void:
 	# Get 2D input and convert to 3D (X/Z plane)
 	var input_2d: Vector2 = Input.get_vector(action("move_left"), action("move_right"), action("move_up"), action("move_down"))
-	if souls_camera:
-		move_dir = souls_camera.camera_relative(input_2d).normalized()
-	else:
-		move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
+	move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
 	
-	if uses_simple_controls():
-		_handle_simple_controls()
-	else:
-		_handle_advanced_controls()
-	boost_held = Input.is_action_pressed(action("boost"))
+	light_held = Input.is_action_pressed(action("attack_light"))
+	heavy_held = Input.is_action_pressed(action("attack_heavy"))
+	throw_held = Input.is_action_pressed(action("throw"))
 	# Stays set until the player acts on it
 	if Input.is_action_just_pressed(action("interact")):
 		interact = true
-	if Input.is_action_just_pressed(action("swap_hands")):
-		swap_hands = true
 	_handle_input_dodge(delta)
+	_handle_lock_on()
 	_handle_input_look(delta)
 
-## Attack and Off-hand press their hands' buttons; a shield in the off hand
-## rises while Off-hand is held. While Throw is held, they throw that hand's
-## weapon instead.
-func _handle_simple_controls() -> void:
-	var throw_mode: bool = Input.is_action_pressed(action("throw"))
-	# Throwing, Attack throws a lone shield too
-	var hands: Array[bool] = _buttons_to_hands(throw_mode)
-	if Input.is_action_just_pressed(action("throw")):
-		_throw_used = false
-	if throw_mode and (hands[0] or hands[1]):
-		_throw_used = true
-	if Input.is_action_just_released(action("throw")) and not _throw_used:
-		drop_weapon = true
-	_apply_simple_buttons(hands[0], hands[1], false, throw_mode)
 
-
-## Advanced controls: each button swings its hand on a tap and throws on a
-## hold (the player times it), and either guard button raises a shield.
-func _handle_advanced_controls() -> void:
-	var hands: Array[bool] = _buttons_to_hands(true)
-	var guard: bool = Input.is_action_pressed(action("attack_heavy_left")) \
-		or Input.is_action_pressed(action("attack_heavy_right"))
-	# The mouse's guard is Alt+click: that click is the guard, not an attack
-	var swallow: bool = guard and uses_mouse()
-	action_left = hands[0] and not swallow
-	action_right = hands[1] and not swallow
-	action_heavy_left = guard
-	action_heavy_right = guard
-
-
-## [left hand, right hand] held, from the Attack and Off-hand buttons.
-## `shield_too`: a lone shield is Attack's (see PlayerClass3D.main_hand_is_left).
-func _buttons_to_hands(shield_too: bool) -> Array[bool]:
-	var main: bool = Input.is_action_pressed(action("attack_main"))
-	var off: bool = Input.is_action_pressed(action("attack_off"))
-	if not main and not off:
-		var player := Master as PlayerClass3D
-		_main_is_left = player != null and player.main_hand_is_left(shield_too)
-	if _main_is_left:
-		return [main, off]
-	return [off, main]
-
-
-## Simple controls' per-hand buttons (held or not) into the presses the
-## player reads. `guard` raises any shield held (bots only); `throw_mode` is
-## Throw held; the hand buttons then throw that hand.
-## Only presses that start in the right mode count, so letting go of Throw
-## mid-click doesn't swing, and a click held from before doesn't throw.
-## Bots press them through here too.
-func _apply_simple_buttons(left: bool, right: bool, guard: bool, throw_mode: bool) -> void:
-	var player := Master as PlayerClass3D
-	var shield_left: bool = player != null and player.held_weapon_left is ShieldClass3D
-	var shield_right: bool = player != null and player.held_weapon_right is ShieldClass3D
-	action_left = left and not throw_mode and not shield_left and (action_left or not _left_click_was_pressed)
-	action_right = right and not throw_mode and not shield_right and (action_right or not _right_click_was_pressed)
-	throw_left = throw_mode and left and (throw_left or not _left_click_was_pressed)
-	throw_right = throw_mode and right and (throw_right or not _right_click_was_pressed)
-	_left_click_was_pressed = left
-	_right_click_was_pressed = right
-	action_heavy_left = shield_left and not throw_mode and (guard or left)
-	action_heavy_right = shield_right and not throw_mode and (guard or right)
-
-
-## Keyboard: Ctrl rolls on press, Shift sprints while held. Controller:
-## dodge tap = roll, hold = sprint; that roll goes off on release (like the
+## Space / A rolls on press, Shift sprints while held. Controller: B tap =
+## roll, hold = sprint; that roll goes off on release (like the
 ## souls games), since until then a tap can't be told apart from a hold.
 func _handle_input_dodge(delta: float) -> void:
 	if Input.is_action_just_pressed(action("roll")):
@@ -231,13 +137,14 @@ func _handle_input_dodge(delta: float) -> void:
 	move_dodge = dodge_held_long or Input.is_action_pressed(action("sprint"))
 
 ## look_dir is where the player wants to face; zero means "face the walking
-## direction". Mouse players always aim at the cursor, except while holding
-## face_movement (Alt); controller players aim with the right stick.
-## Souls-like controls face the lock-on target, if any.
+## direction". Locked on, it's the target. Otherwise mouse players aim at
+## the cursor, except while holding face_movement (Alt); controller players
+## aim with the right stick.
 func _handle_input_look(delta: float) -> void:
-	if souls_camera:
-		# The mouse and right stick turn the camera instead
-		look_dir = souls_camera.lock_direction(Master.global_position)
+	if lock_target:
+		var to_target: Vector3 = lock_target.global_position - Master.global_position
+		to_target.y = 0.0
+		look_dir = to_target.normalized() if to_target.length() > 0.1 else look_dir
 		return
 	if uses_mouse():
 		look_dir = Vector3.ZERO if Input.is_action_pressed(action("face_movement")) else _get_mouse_aim()
@@ -281,10 +188,129 @@ func _get_mouse_aim() -> Vector3:
 	return direction.normalized()
 
 
-func _input(event: InputEvent) -> void:
-	if event.is_action(action("target")):
-		target_toggle = event.is_action_pressed(action("target"))
-	
-	if event.is_action(action("target_scroll")):
-		if event.is_action_pressed(action("target_scroll")):
-			target_scroll = true
+# ===== LOCK-ON =====
+
+func _unhandled_input(event: InputEvent) -> void:
+	# The wheel switches target: up = counter-clockwise round us, down = clockwise
+	if lock_target and event is InputEventMouseButton and event.is_action_pressed(action("target_scroll")):
+		_cycle_lock(-1 if (event as InputEventMouseButton).button_index == MOUSE_BUTTON_WHEEL_UP else 1)
+
+
+func _handle_lock_on() -> void:
+	if Input.is_action_just_pressed(action("target")):
+		_set_lock(null if lock_target else _pick_lock(_lock_aim()))
+	if Input.is_action_just_pressed(action("target_nearest")):
+		_set_lock(null if lock_target else _nearest_lock())
+	if lock_target and not _can_lock(lock_target, LOCK_RANGE * LOCK_BREAK_RATIO):
+		_set_lock(null)
+	# Controller: flick the right stick toward another target to switch
+	if uses_mouse():
+		return
+	var stick: Vector2 = get_aim_stick()
+	if _flick_held:
+		_flick_held = stick.length() > LOCK_FLICK_RESET
+	elif lock_target and stick.length() >= LOCK_FLICK:
+		_flick_held = true
+		var picked: Node3D = _pick_lock(Vector3(stick.x, 0.0, stick.y), lock_target)
+		if picked:
+			_set_lock(picked)
+
+
+## Bosses still fighting, living skeletons, and players on other teams.
+func _lock_candidates() -> Array[Node3D]:
+	var found: Array[Node3D] = []
+	var game: Game3D_Class = Global.Game3D
+	if not game:
+		return found
+	for boss: Boss3D in game.bosses:
+		found.append(boss)
+	for node: Node in get_tree().get_nodes_in_group(SkeletonEnemy3D.GROUP):
+		found.append(node as Node3D)
+	for other: PlayerClass3D in game.players:
+		found.append(other)
+	return found.filter(func(node: Node3D) -> bool: return _can_lock(node, LOCK_RANGE))
+
+
+func _can_lock(node: Node3D, max_range: float) -> bool:
+	if not is_instance_valid(node) or node == Master or (Master as PlayerClass3D).is_dead():
+		return false
+	if node is PlayerClass3D and (node.is_dead() or Combat.are_teammates(node, Master)):
+		return false
+	if node is SkeletonEnemy3D and node.is_dead:
+		return false
+	if node is Boss3D and not Global.Game3D.bosses.has(node):
+		return false
+	return Master.global_position.distance_to(node.global_position) <= max_range
+
+
+## Which way from us the player means to lock: toward the cursor, the right
+## stick, or the way we face.
+func _lock_aim() -> Vector3:
+	if uses_mouse() and camera:
+		var cursor: Vector3 = _get_mouse_aim()
+		if not cursor.is_zero_approx():
+			return cursor
+	var stick: Vector2 = get_aim_stick()
+	if stick.length() > 0.3:
+		return Vector3(stick.x, 0.0, stick.y).normalized()
+	return Master.global_basis.z
+
+
+## The candidate closest to `aim` (a flat direction from us): mostly by
+## angle, with nearer ones winning a close call. `except` is left out.
+func _pick_lock(aim: Vector3, except: Node3D = null) -> Node3D:
+	var best: Node3D = null
+	var best_score: float = INF
+	for candidate: Node3D in _lock_candidates():
+		if candidate == except:
+			continue
+		var offset: Vector3 = candidate.global_position - Master.global_position
+		offset.y = 0.0
+		var angle: float = absf(aim.signed_angle_to(offset, Vector3.UP)) if offset.length() > 0.1 else 0.0
+		if except and angle > PI / 3.0:
+			continue  # A flick only switches to something roughly that way
+		var score: float = angle + offset.length() * 0.03
+		if score < best_score:
+			best_score = score
+			best = candidate
+	return best
+
+
+## The candidate closest to us, if any.
+func _nearest_lock() -> Node3D:
+	var best: Node3D = null
+	var best_dist: float = INF
+	for candidate: Node3D in _lock_candidates():
+		var dist: float = Master.global_position.distance_to(candidate.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best = candidate
+	return best
+
+
+## Switch to the next target round us, clockwise (direction 1) or
+## counter-clockwise (-1) as seen from above, wrapping around.
+func _cycle_lock(direction: int) -> void:
+	var around: Array[Node3D] = _lock_candidates()
+	if not around.has(lock_target):
+		around.append(lock_target)
+	if around.size() < 2:
+		return
+	var angle_of := func(node: Node3D) -> float:
+		var offset: Vector3 = node.global_position - Master.global_position
+		return atan2(offset.x, -offset.z)
+	around.sort_custom(func(a: Node3D, b: Node3D) -> bool: return angle_of.call(a) < angle_of.call(b))
+	_set_lock(around[posmod(around.find(lock_target) + direction, around.size())])
+
+
+func _set_lock(target: Node3D) -> void:
+	lock_target = target
+	# A stick already pushed out when locking on isn't a flick
+	_flick_held = true
+	if target and not _lock_marker:
+		_lock_marker = LockOnMarker3D.new()
+		_lock_marker.name = "LockOnMarker"
+		_lock_marker.handler = self
+		if slot:
+			_lock_marker.color = slot.color
+		add_child(_lock_marker)

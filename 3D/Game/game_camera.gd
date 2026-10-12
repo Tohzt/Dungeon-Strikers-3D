@@ -6,7 +6,7 @@ var can_zoom: bool = true
 @export var fov_sensitivity: float = 5.0
 @export var min_fov: float = 10.0
 @export var max_fov: float = 120.0
-@export var initial_fov: float = 30.0
+@export var initial_fov: float = 22.0
 
 @export var max_camera_offset: float = 10.0  # Maximum distance camera can move from player
 @export var follow_speed: float = 8.0  # Camera follow responsiveness
@@ -17,46 +17,68 @@ var can_zoom: bool = true
 
 @export_group("Multiple Players")
 @export var group_padding: float = 5.0  # World units kept visible around each player
-@export var group_max_fov: float = 70.0  # Furthest the camera zooms out to fit everyone
+@export var group_max_fov: float = 55.0  # Furthest the camera zooms out to fit everyone
 @export var group_zoom_speed: float = 3.0
 @export var frame_ball: bool = true  # Also keep the ball on screen
-@export var goal_frame_distance: float = 15.0  # Pull a goal into view once a player or the ball is this close
+@export var goal_frame_distance: float = 15.0  # Frame a goal and the ball once both a player and the ball are this close to it
 @export var goal_half_width: float = 3.5  # Goal centre to each post
 
-@export_group("Arena Framing")
-## Inside an arena (a node in the "ArenaZone" group, e.g. the dungeon's
-## boss room), the view widens past the player to also show the boss, the
-## ball and enemy players that are in there too, if they're this close.
-## Outside it the camera sticks to the player. A level without any
-## ArenaZone counts as arena everywhere.
-@export var context_range: float = 30.0
+@export_group("Focus")
+## The view stays on the players. It only widens to also show what one of
+## them is aiming at (the ball, a boss or an enemy player this close,
+## within focus_aim_angle of their aim), or a goal and the ball while they
+## and the ball are both near it.
+@export var focus_range: float = 16.0
+@export var focus_aim_angle: float = 15.0  # Degrees either side of the aim that count as aiming at something
+@export var focus_keep_angle: float = 30.0  # ...once already focused on it, so the focus doesn't flicker
+@export var focus_hold_time: float = 0.6  # Seconds the focus lingers after aiming away
 @export var frame_bosses: bool = true
 @export var frame_enemies: bool = true
 ## Extra ground kept in view below (nearer the camera than) the players while
 ## framing several things, so the boss health bar doesn't cover them.
 @export var hud_margin: float = 5.0
+## The view stays centred on the players, sliding at most this far toward
+## what they're focused on; the FOV widens to show the rest.
+@export var context_max_shift: float = 5.0
+## How quickly that slide follows (slower than follow_speed, so aiming at
+## something doesn't yank the view).
+@export var context_ease: float = 1.5
 
-@export_group("Bottom Wall")
-## The near (bottom-of-screen) wall hides whatever is right up against it,
-## so the camera tilts toward top-down as a player or the ball approaches it.
-## Distances are measured from this wall, so resizing the arena keeps working.
-@export var bottom_wall: Node3D
-@export var top_down_start_distance: float = 10.0  # Start tilting once something is this close to the wall (its center)
-@export var top_down_full_distance: float = 2.0  # Fully tilted from here to the wall
-@export_range(0.0, 30.0) var top_down_extra_pitch: float = 25.0  # Degrees added to the usual downward tilt
-@export var top_down_ease: float = 3.0  # How quickly the tilt follows
+@export_group("Wall Tilt")
+## A wall between a player (or the ball) and the camera hides them, so the
+## camera tilts toward top-down just enough to see them over it, and once
+## fully tilted, slides out over the field (away from the wall) and widens
+## the FOV to keep them on screen. Found by line of sight from each of them
+## to where the camera would be, so this works on any map and any wall
+## height without being told about either.
+@export_flags_3d_physics var wall_mask: int = 1
+@export var wall_ray_height: float = 0.5  # Sight line starts this far above their origin (about knee height)
+## ...and this far toward the bottom of the screen (but only halfway to a
+## wall there), so the camera gets out of the way before they reach the
+## wall, by as much as that wall's height actually calls for.
+@export var wall_lead: float = 2.0
+@export_range(0.0, 60.0) var top_down_extra_pitch: float = 40.0  # Most degrees added to the usual downward tilt (never past straight down)
+@export var top_down_ease: float = 4.0  # How quickly the tilt (and slide) follows
+## Furthest the view slides out over the field, past full tilt, to see a
+## player over a wall.
+@export var wall_max_shift: float = 10.0
+@export var wall_fov_padding: float = 2.5  # World units kept visible around a player while slid out
 
 @export_group("Audio")
 ## Sounds are heard from this far back from the middle of the view (along
 ## the camera's line of sight) rather than from the camera itself, which is
-## much further off than the souls camera and would make everything quiet.
+## far off and would make everything quiet.
 @export var listener_distance: float = 6.0
 
 var initial_transform: Transform3D
 ## The camera's current rotation: its starting one, tilted by top_down_blend.
 var view_basis: Basis
 var top_down_blend: float = 0.0  # 0 = usual angle, 1 = fully tilted
+var wall_shift: float = 0.0  # How far the view has slid out over the field (see wall_max_shift)
 var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
+var context_shift: Vector3 = Vector3.ZERO  # Eased slide toward what's focused on (see context_max_shift)
+## Each player (Node3D) -> [what they're aiming at (Node3D), seconds the focus lingers].
+var _aim_focus: Dictionary = {}
 ## The player's chosen zoom (scroll wheel); the camera never frames tighter.
 var zoom_fov: float
 ## Jumped to the players yet (so the match doesn't open on an empty room).
@@ -99,7 +121,7 @@ func _input(event: InputEvent) -> void:
 
 ## Who to keep in view: the exported target if one is set; online, just our
 ## own player (the others are on their own screens); else every local person
-## playing (bots only show up as enemies nearby, see _context_points), or
+## playing (bots only show up when aimed at, see _focus_points), or
 ## every bot when nobody is.
 func _get_targets() -> Array[Node3D]:
 	var targets: Array[Node3D] = []
@@ -121,63 +143,110 @@ func _get_targets() -> Array[Node3D]:
 	return targets if not targets.is_empty() else bots
 
 
-## Everything the group view should fit: the players, what's around them
-## in the arena (see _context_points), and any goal one of those is close to
-## (both posts, so the whole mouth shows).
+## Everything the group view should fit: the players and what they're
+## focused on (see _focus_points).
 func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
 	var points: Array[Vector3] = []
 	for t: Node3D in targets:
 		points.append(t.global_position)
 		points.append(_below_on_screen(t.global_position))
-	points.append_array(_context_points(targets))
-	points.append_array(_goal_points_near(points))
+	points.append_array(_focus_points(targets))
 	return points
 
 
-## The boss, balls and enemy players worth showing alongside `targets`:
-## only for targets in an arena, and only within context_range of one.
-func _context_points(targets: Array[Node3D]) -> Array[Vector3]:
+## What the view should widen to show besides `targets` themselves: what
+## each is aiming at (see _update_aim_focus), and, for any ball near a goal
+## that one of them is also near, that ball and both posts (so the whole
+## mouth shows).
+func _focus_points(targets: Array[Node3D]) -> Array[Vector3]:
 	var points: Array[Vector3] = []
+	for t: Node3D in targets:
+		if _aim_focus.has(t):
+			points.append((_aim_focus[t][0] as Node3D).global_position)
+	if not frame_ball or not Global.Game3D:
+		return points
+	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
+		var goal_flat := Vector2(goal.global_position.x, goal.global_position.z)
+		var player_near: bool = false
+		for t: Node3D in targets:
+			if _flat(t.global_position).distance_to(goal_flat) <= goal_frame_distance:
+				player_near = true
+				break
+		if not player_near:
+			continue
+		for ball: Ball3D in Global.Game3D.balls:
+			if is_instance_valid(ball) and ball.is_inside_tree() \
+					and _flat(ball.global_position).distance_to(goal_flat) <= goal_frame_distance:
+				points.append(ball.global_position)
+				points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
+				points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
+	return points
+
+
+## Note what each of `targets` is aiming at. Something already focused on
+## keeps the focus over a wider angle, and for focus_hold_time after they
+## aim away, so it doesn't flicker on and off.
+func _update_aim_focus(targets: Array[Node3D], delta: float) -> void:
+	var updated: Dictionary = {}
+	for t: Node3D in targets:
+		var held: Node3D = null
+		var hold_left: float = 0.0
+		if _aim_focus.has(t) and is_instance_valid(_aim_focus[t][0]):
+			held = _aim_focus[t][0]
+			hold_left = _aim_focus[t][1]
+		var aimed: Node3D = _aimed_at(t, held)
+		if aimed:
+			updated[t] = [aimed, focus_hold_time]
+		elif held and hold_left > delta and held in _focus_candidates(t):
+			updated[t] = [held, hold_left - delta]
+	_aim_focus = updated
+
+
+## The candidate (see _focus_candidates) closest to `player`'s aim, within
+## focus_aim_angle of it (focus_keep_angle for `held`), or null.
+func _aimed_at(player: Node3D, held: Node3D) -> Node3D:
+	var handler: PlayerInputHandler3D = player.get("Input_Handler")
+	if not handler or handler.look_dir.is_zero_approx():
+		return null
+	var aim: Vector2 = _flat(handler.look_dir).normalized()
+	var best: Node3D = null
+	var best_angle: float = INF
+	for candidate: Node3D in _focus_candidates(player):
+		var to: Vector2 = _flat(candidate.global_position - player.global_position)
+		if to.is_zero_approx():
+			continue
+		var angle: float = rad_to_deg(abs(aim.angle_to(to)))
+		var limit: float = focus_keep_angle if candidate == held else focus_aim_angle
+		if angle <= limit and angle < best_angle:
+			best = candidate
+			best_angle = angle
+	return best
+
+
+## The balls, awake bosses and enemy players within focus_range of `player`.
+func _focus_candidates(player: Node3D) -> Array[Node3D]:
+	var candidates: Array[Node3D] = []
 	var game: Game3D_Class = Global.Game3D
 	if not game:
-		return points
-	var zones: Array[Node] = get_tree().get_nodes_in_group("ArenaZone")
-	var anchors: Array[Node3D] = []
-	for t: Node3D in targets:
-		if zones.is_empty() or _in_arena(t, zones):
-			anchors.append(t)
-	if anchors.is_empty():
-		return points
-	var candidates: Array[Node3D] = []
+		return candidates
+	var all: Array[Node3D] = []
 	if frame_ball:
 		for ball: Ball3D in game.balls:
 			if is_instance_valid(ball) and ball.is_inside_tree():
-				candidates.append(ball)
+				all.append(ball)
 	if frame_bosses:
 		for boss: Boss3D in game.bosses:
 			if is_instance_valid(boss) and boss.is_awake and not boss.is_defeated:
-				candidates.append(boss)
+				all.append(boss)
 	if frame_enemies:
-		for player: PlayerClass3D in game.players:
-			if is_instance_valid(player) and not targets.has(player) and not player.is_dead() \
-					and (zones.is_empty() or _in_arena(player, zones)):
-				candidates.append(player)
-	for candidate: Node3D in candidates:
-		for anchor: Node3D in anchors:
-			if candidate is PlayerClass3D and _same_team(candidate, anchor):
-				continue
-			var gap: Vector3 = candidate.global_position - anchor.global_position
-			if Vector2(gap.x, gap.z).length() <= context_range:
-				points.append(candidate.global_position)
-				break
-	return points
-
-
-func _in_arena(node: Node3D, zones: Array[Node]) -> bool:
-	for zone: Node in zones:
-		if zone is Area3D and (zone as Area3D).overlaps_body(node):
-			return true
-	return false
+		for other: PlayerClass3D in game.players:
+			if is_instance_valid(other) and other != player and not other.is_dead() \
+					and not _same_team(other, player):
+				all.append(other)
+	for candidate: Node3D in all:
+		if _flat(candidate.global_position - player.global_position).length() <= focus_range:
+			candidates.append(candidate)
+	return candidates
 
 
 func _same_team(a: Node3D, b: Node3D) -> bool:
@@ -186,28 +255,8 @@ func _same_team(a: Node3D, b: Node3D) -> bool:
 	return slot_a != null and slot_b != null and slot_a.team == slot_b.team
 
 
-## Every ball in play (none between rounds).
-func _ball_points() -> Array[Vector3]:
-	var points: Array[Vector3] = []
-	if not Global.Game3D:
-		return points
-	for ball: Ball3D in Global.Game3D.balls:
-		if is_instance_valid(ball) and ball.is_inside_tree():
-			points.append(ball.global_position)
-	return points
-
-
-## Both posts of every goal within goal_frame_distance of any of `sources`.
-func _goal_points_near(sources: Array[Vector3]) -> Array[Vector3]:
-	var points: Array[Vector3] = []
-	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
-		var goal_flat := Vector2(goal.global_position.x, goal.global_position.z)
-		for p: Vector3 in sources:
-			if Vector2(p.x, p.z).distance_to(goal_flat) <= goal_frame_distance:
-				points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
-				points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
-				break
-	return points
+func _flat(v: Vector3) -> Vector2:
+	return Vector2(v.x, v.z)
 
 
 func _process(delta: float) -> void:
@@ -221,15 +270,20 @@ func _process(delta: float) -> void:
 		return
 
 	var targets := _get_targets()
+	_update_aim_focus(targets, delta)
 	_update_tilt(targets, delta)
 	global_transform.basis = view_basis
 
 	if targets.size() > 1:
-		_frame_group(_get_group_points(targets), delta)
+		var own: Array[Vector3] = []
+		for t: Node3D in targets:
+			own.append(t.global_position)
+			own.append(_below_on_screen(t.global_position))
+		_frame_group(_get_group_points(targets), _bounds_center(own), delta)
 		return
 
-	# Single player: fixed zoom, camera pulled toward where they're aiming,
-	# widening only while the ball is near a goal.
+	# Single player: fixed zoom, camera pulled a little toward where they're
+	# aiming, widening only to show what they focus on (see _focus_points).
 	if targets.is_empty():
 		fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 		return
@@ -293,27 +347,31 @@ func _process(delta: float) -> void:
 	# Ensure look_target is at player's height
 	look_target.y = target_pos.y
 
-	# In the arena: widen to also show the boss, ball and enemies nearby (and
-	# a goal the ball is closing in on), keeping the player and where they're
-	# aiming in view.
-	var context: Array[Vector3] = _context_points(targets)
-	if not context.is_empty():
+	# Widen to also show what they're aiming at, or the goal they and the
+	# ball are near, keeping the player and where they're aiming in view.
+	var focus_points: Array[Vector3] = _focus_points(targets)
+	if not focus_points.is_empty():
 		var points: Array[Vector3] = [target_pos, look_target, _below_on_screen(target_pos)]
-		points.append_array(context)
-		points.append_array(_goal_points_near(context))
-		_frame_group(points, delta)
+		points.append_array(focus_points)
+		_frame_group(points, look_target, delta)
 		return
 
-	# Eases back in rather than snapping after the ball leaves a goal, or the
-	# group shrinks to one.
-	fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
+	# Eases back in rather than snapping once the focus ends, or the group
+	# shrinks to one.
+	context_shift = context_shift.lerp(Vector3.ZERO, clamp(delta * context_ease, 0.0, 1.0))
+	var ideal_pos: Vector3 = _ideal_position(look_target + context_shift + _wall_offset())
+	# Slid out from a wall: widen to keep the player on screen.
+	var target_fov: float = zoom_fov
+	if wall_shift > 0.01:
+		target_fov = _fov_to_fit([target_pos], ideal_pos, wall_fov_padding)
+	fov = lerp(fov, target_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 	# Smoothly move camera position (panning only, no rotation)
-	global_position = global_position.lerp(_ideal_position(look_target), delta * follow_speed)
+	global_position = global_position.lerp(ideal_pos, delta * follow_speed)
 
 
 ## While this camera is in use, hear from listener_distance short of where
 ## its line of sight meets the floor, facing the same way (so left/right
-## still match the screen). Otherwise (souls camera) let that camera hear.
+## still match the screen).
 func _update_listener() -> void:
 	if not is_current():
 		if _listener.is_current():
@@ -357,59 +415,152 @@ func _place_on_targets() -> void:
 	_placed = true
 
 
-## Ease the tilt toward top-down by how close the lowest player (or the
-## ball) is to the bottom wall. Tilts about the camera's own right axis, so
-## it only ever pitches, never turns.
+## Ease the tilt toward top-down, just enough to see every player (and the
+## ball) over any wall in the way, and slide out over the field if even
+## full tilt isn't enough to see a player. Tilts about the camera's own
+## right axis, so it only ever pitches, never turns.
 func _update_tilt(targets: Array[Node3D], delta: float) -> void:
-	var lowest_z: float = -INF
-	for t: Node3D in targets:
-		lowest_z = max(lowest_z, t.global_position.z)
-	for p: Vector3 in _ball_points():
-		lowest_z = max(lowest_z, p.z)
 	var goal_blend: float = 0.0
-	if lowest_z > -INF and bottom_wall:
-		var wall_z: float = bottom_wall.global_position.z
-		goal_blend = smoothstep(wall_z - top_down_start_distance, wall_z - top_down_full_distance, lowest_z)
-	top_down_blend = lerp(top_down_blend, goal_blend, clamp(delta * top_down_ease, 0.0, 1.0))
-	var tilt: float = -deg_to_rad(top_down_extra_pitch) * top_down_blend
-	view_basis = Basis(initial_transform.basis.x.normalized(), tilt) * initial_transform.basis
+	var goal_shift: float = 0.0
+	for t: Node3D in targets:
+		var need: Vector2 = _wall_need(t, true)
+		goal_blend = max(goal_blend, need.x)
+		goal_shift = max(goal_shift, need.y)
+	if frame_ball and Global.Game3D:
+		for ball: Ball3D in Global.Game3D.balls:
+			if is_instance_valid(ball) and ball.is_inside_tree():
+				goal_blend = max(goal_blend, _wall_need(ball, false).x)
+	var weight: float = clamp(delta * top_down_ease, 0.0, 1.0)
+	top_down_blend = lerp(top_down_blend, goal_blend, weight)
+	wall_shift = lerp(wall_shift, goal_shift, weight)
+	view_basis = _tilted_basis(top_down_blend)
 
 
-## Several players: center on the group and widen the FOV just enough to keep
-## every point (plus padding) on screen, never tighter than the player's chosen zoom.
-func _frame_group(points: Array[Vector3], delta: float) -> void:
+## The starting rotation pitched `blend` (0-1) of the way to its furthest
+## tilt: top_down_extra_pitch more, but never past straight down.
+func _tilted_basis(blend: float) -> Basis:
+	var start_pitch: float = rad_to_deg(asin(clamp(initial_transform.basis.z.y, -1.0, 1.0)))
+	var extra: float = clamp(top_down_extra_pitch, 0.0, max(88.0 - start_pitch, 0.0))
+	return Basis(initial_transform.basis.x.normalized(), -deg_to_rad(extra) * blend) * initial_transform.basis
+
+
+## Along the ground toward the bottom of the screen.
+func _toward_camera() -> Vector3:
+	return Vector3(initial_transform.basis.z.x, 0.0, initial_transform.basis.z.z).normalized()
+
+
+## Where the view is slid to, out over the field, away from the wall.
+func _wall_offset() -> Vector3:
+	return -_toward_camera() * wall_shift
+
+
+## What it takes to see `who` over the walls: x is the least tilt (0-1),
+## y (only if `may_shift`, and only at full tilt) the least slide out over
+## the field. Each found by halving its range a few times.
+func _wall_need(who: Node3D, may_shift: bool) -> Vector2:
+	var exclude: Array[RID] = []
+	if who is CollisionObject3D:
+		exclude.append((who as CollisionObject3D).get_rid())
+	var from: Vector3 = _sight_point(who, exclude)
+	if not _hidden_by_wall(from, who, exclude, 0.0, 0.0):
+		return Vector2.ZERO
+	if not _hidden_by_wall(from, who, exclude, 1.0, 0.0):
+		var low: float = 0.0
+		var high: float = 1.0
+		for i: int in 5:
+			var mid: float = (low + high) * 0.5
+			if _hidden_by_wall(from, who, exclude, mid, 0.0):
+				low = mid
+			else:
+				high = mid
+		return Vector2(high, 0.0)
+	if not may_shift or _hidden_by_wall(from, who, exclude, 1.0, wall_max_shift):
+		return Vector2(1.0, wall_max_shift if may_shift else 0.0)
+	var low_shift: float = 0.0
+	var high_shift: float = wall_max_shift
+	for i: int in 5:
+		var mid_shift: float = (low_shift + high_shift) * 0.5
+		if _hidden_by_wall(from, who, exclude, 1.0, mid_shift):
+			low_shift = mid_shift
+		else:
+			high_shift = mid_shift
+	return Vector2(1.0, high_shift)
+
+
+## Where to check `who` can be seen from: wall_ray_height up and wall_lead
+## toward the bottom of the screen, or halfway to a wall that's closer than
+## twice that, so the camera is already out of the way when they reach it.
+func _sight_point(who: Node3D, exclude: Array[RID]) -> Vector3:
+	var origin: Vector3 = who.global_position + Vector3.UP * wall_ray_height
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + _toward_camera() * wall_lead * 2.0, wall_mask, exclude)
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return origin + _toward_camera() * wall_lead
+	return origin.lerp(hit.position, 0.5)
+
+
+## Whether a wall cuts the line of sight from `from` to where the camera
+## would be at tilt `blend`, centred `shift` out over the field from `who`.
+## Counts a sight line starting inside a wall.
+func _hidden_by_wall(from: Vector3, who: Node3D, exclude: Array[RID], blend: float, shift: float) -> bool:
+	var eye: Vector3 = _ideal_position_for(who.global_position - _toward_camera() * shift, _tilted_basis(blend))
+	var query := PhysicsRayQueryParameters3D.create(from, eye, wall_mask, exclude)
+	query.hit_from_inside = true
+	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+
+func _bounds_center(points: Array[Vector3]) -> Vector3:
 	var min_pos: Vector3 = points[0]
 	var max_pos: Vector3 = min_pos
 	for p: Vector3 in points:
 		min_pos = min_pos.min(p)
 		max_pos = max_pos.max(p)
-	var ideal_pos: Vector3 = _ideal_position((min_pos + max_pos) * 0.5)
+	return (min_pos + max_pos) * 0.5
 
-	# Measure each point from where the camera is heading, in camera space,
-	# and find the half-angle (as a tangent) needed to fit them. FOV is
-	# vertical, so horizontal extents are divided by the aspect ratio.
+
+## Center on `anchor` (the players), eased at most context_max_shift toward
+## the middle of `points` (and slid out from any wall, see wall_shift), and
+## widen the FOV just enough to keep every point
+## (plus padding) on screen, never tighter than the player's chosen zoom.
+func _frame_group(points: Array[Vector3], anchor: Vector3, delta: float) -> void:
+	var desired_shift: Vector3 = _bounds_center(points) - anchor
+	desired_shift.y = 0.0
+	context_shift = context_shift.lerp(desired_shift.limit_length(context_max_shift), clamp(delta * context_ease, 0.0, 1.0))
+	var ideal_pos: Vector3 = _ideal_position(anchor + context_shift + _wall_offset())
+	fov = lerp(fov, _fov_to_fit(points, ideal_pos, group_padding), clamp(delta * group_zoom_speed, 0.0, 1.0))
+	global_position = global_position.lerp(ideal_pos, delta * follow_speed)
+
+
+## The FOV that keeps every point (plus `padding`) on screen from
+## `camera_pos`, never tighter than the player's chosen zoom. Measures each
+## point in camera space and finds the half-angle (as a tangent) needed to
+## fit them. FOV is vertical, so horizontal extents are divided by the
+## aspect ratio.
+func _fov_to_fit(points: Array[Vector3], camera_pos: Vector3, padding: float) -> float:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var aspect: float = viewport_size.x / viewport_size.y
 	var to_camera_space: Basis = view_basis.inverse()
 	var needed_tan: float = tan(deg_to_rad(zoom_fov) * 0.5)
 	for p: Vector3 in points:
-		var local: Vector3 = to_camera_space * (p - ideal_pos)
+		var local: Vector3 = to_camera_space * (p - camera_pos)
 		var depth: float = -local.z
 		if depth <= 0.01: continue
 		needed_tan = max(needed_tan,
-			(abs(local.y) + group_padding) / depth,
-			(abs(local.x) + group_padding) / depth / aspect)
-	var target_fov: float = clamp(rad_to_deg(2.0 * atan(needed_tan)), zoom_fov, max(group_max_fov, zoom_fov))
-
-	fov = lerp(fov, target_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
-	global_position = global_position.lerp(ideal_pos, delta * follow_speed)
+			(abs(local.y) + padding) / depth,
+			(abs(local.x) + padding) / depth / aspect)
+	return clamp(rad_to_deg(2.0 * atan(needed_tan)), zoom_fov, max(group_max_fov, zoom_fov))
 
 
 ## Where the camera sits (fixed height and angle) so look_target is centered.
 func _ideal_position(look_target: Vector3) -> Vector3:
+	return _ideal_position_for(look_target, view_basis)
+
+
+## Where the camera sits (fixed height) with rotation `view` so look_target is centered.
+func _ideal_position_for(look_target: Vector3, view: Basis) -> Vector3:
 	var fixed_y: float = initial_transform.origin.y
-	# The camera looks in direction -view_basis.z (forward)
-	var forward_dir: Vector3 = -view_basis.z
+	# The camera looks in direction -view.z (forward)
+	var forward_dir: Vector3 = -view.z
 	var height_diff: float = fixed_y - look_target.y
 	
 	# Calculate distance needed along forward direction to position camera correctly

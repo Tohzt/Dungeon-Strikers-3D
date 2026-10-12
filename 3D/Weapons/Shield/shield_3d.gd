@@ -1,9 +1,16 @@
 class_name ShieldClass3D extends WeaponClass3D
-## Shield: tap-to-bump and hold-to-throw come for free from the generic
-## Weapon3D/WeaponClass3D behavior. Blocking is shield-specific: while raised
-## the arm holds it up in front (its hold_clip). A raised shield also catches
-## the ball (see Ball3D), so whoever blocks can keep goal; online every
-## machine is told when it goes up or down.
+## Shield: held in the off hand beside a one-handed weapon, it's general
+## defense: whoever holds it takes less damage and shove from every hit
+## (see PlayerClass3D.receive_hit), wearing it a little each time. It
+## doesn't attack.
+##
+## Monsters (see SkeletonEnemy3D) still raise theirs to block: while raised
+## the arm holds it up in front (its hold_clip), and it catches the ball
+## (see Ball3D); online every machine is told when it goes up or down.
+
+## Times the damage and knockback its holder takes.
+@export var damage_taken: float = 0.7
+@export var knockback_taken: float = 0.6
 
 var is_blocking: bool = false
 

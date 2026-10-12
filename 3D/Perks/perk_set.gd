@@ -13,8 +13,6 @@ const STATS: Dictionary[StringName, String] = {
 	&"ball_power": "How hard hits send the ball",
 	&"throw_power": "How hard weapons are thrown",
 	&"move_speed": "Walking and sprinting speed",
-	&"boost_speed": "Top speed while boosting",
-	&"boost_gain": "Boost gained from boost orbs",
 	&"max_hp": "Max health",
 	&"max_stamina": "Max stamina",
 	&"stamina_regen": "Stamina regeneration speed",

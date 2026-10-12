@@ -1,5 +1,6 @@
 class_name WeaponComboStep3D extends Resource
 ## One beat of a WeaponCombo3D: which hand(s) strike, when, and how.
+## MAIN is the hand doing the move, OFF the other.
 
 enum Hand {
 	OFF,  ## The off hand's weapon (the left, dual wielding)

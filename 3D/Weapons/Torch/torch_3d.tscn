@@ -4,7 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://3D/Items/Weapons/Weapon Behavior.tscn" id="2_behavior"]
 [ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://3D/Items/Weapons/Weapon Properties.tscn" id="3_properties"]
 [ext_resource type="PackedScene" uid="uid://yss0pht84rf5" path="res://Assets/BetterDungeon/glb/torch.glb" id="4_model"]
-[ext_resource type="Resource" path="res://3D/Items/Weapons/Combos/alt_jab.tres" id="alt"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/light_flame.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://3D/Items/Weapons/Moves/heavy_fire_breath.tres" id="mv_heavy"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
 size = Vector3(0.3, 1.0, 0.3)
@@ -32,10 +33,11 @@ axis_lock_angular_z = true
 mass = 0.8
 script = ExtResource("1_script")
 swing_sound = &"swing_torch"
-alt_attack = ExtResource("alt")
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 grip = 2
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 ball_ignite_time = 5.0

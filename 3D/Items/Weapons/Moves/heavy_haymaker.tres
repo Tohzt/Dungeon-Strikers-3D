@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+
+[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+
+[sub_resource type="Resource" id="wave_0"]
+script = ExtResource("2_wave")
+shape = 0
+width = 2.0
+length = 1.2
+speed = 20.0
+reach = 5.0
+start_offset = 0.8
+delay = 0.04
+damage_scale = 1.4
+knockback_scale = 2.8
+pop = 5.0
+pierce = true
+color = Color(1.0, 1.0, 1.0, 0.9)
+
+[resource]
+script = ExtResource("1_move")
+charge_time = 0.55
+clip = &"CombatMelee/Melee_Unarmed_Attack_Punch_A"
+lunge_scale = 2.5
+stamina_scale = 2.0
+sound = &"swing_fist"
+shake = 0.3
+waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])
