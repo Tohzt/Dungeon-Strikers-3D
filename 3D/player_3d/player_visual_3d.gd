@@ -244,6 +244,12 @@ func setup(owner_player: PlayerClass3D) -> void:
 	_set_character(scene)
 
 
+## Switch to `character`'s body (unless `character` overrides it).
+func show_character(roster_character: int) -> void:
+	if not character:
+		_set_character(Roster.model_of(roster_character))
+
+
 func _set_character(scene: PackedScene) -> void:
 	var new_body: Node3D = scene.instantiate()
 	new_body.transform = body.transform
@@ -259,6 +265,7 @@ func _set_character(scene: PackedScene) -> void:
 	_hand_bone_right = skeleton.find_bone("handslot.r")
 	skeleton.skeleton_updated.connect(_on_skeleton_updated)
 	set_armored(_armored)
+	_apply_overlay()
 	if tree:
 		tree.queue_free()
 	_build_tree()

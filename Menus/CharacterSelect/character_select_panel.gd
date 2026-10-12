@@ -34,6 +34,13 @@ var focusable: bool = true:
 		for button: Button in _tabs + [_prev, _next]:
 			button.focus_mode = Control.FOCUS_ALL if value else Control.FOCUS_NONE
 
+## Whether the team tabs show (off when the team can't change, e.g. mid-match).
+var teams_shown: bool = true:
+	set(value):
+		teams_shown = value
+		if _tabs_row:
+			_tabs_row.visible = value and not _empty.visible
+
 var team: int = -1
 var character: int = -1
 
@@ -143,7 +150,7 @@ func show_empty(text: String) -> void:
 func _set_empty(on: bool) -> void:
 	_empty.visible = on
 	_stage_box.visible = not on
-	_tabs_row.visible = not on
+	_tabs_row.visible = not on and teams_shown
 	_name_row.visible = not on
 	_kit.visible = not on
 	if on and _viewport:

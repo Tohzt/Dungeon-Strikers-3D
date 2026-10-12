@@ -59,6 +59,12 @@ var arms: Array[PlayerArm3D] = [left_arm, right_arm]
 ## This character's signature kit (see Roster and the KIT section below),
 ## main hand first. Made by make_kit().
 var kit: Array[Weapon3D] = []
+## Kit weapons made so far, so a new character's kit doesn't take the old
+## one's names (the same on every machine).
+var _kits_made: int = 0
+## Who a person playing here picked to come back as while down (see
+## HUD3D), taken on as they get up. -1 = stay as we are.
+var next_character: int = -1
 ## Each hand's weapon (shortcuts to the arms', which other scripts use).
 var held_weapon_left: Weapon3D:
 	get: return left_arm.weapon
@@ -616,7 +622,8 @@ func make_kit() -> void:
 		if not scene:
 			continue
 		var weapon: Weapon3D = scene.instantiate()
-		var weapon_name: String = "%s_Kit%d" % [name, i]
+		var weapon_name: String = "%s_Kit%d" % [name, _kits_made]
+		_kits_made += 1
 		weapon.name = weapon_name
 		weapon.kit_owner = self
 		Global.Game3D.add_weapon(weapon)
@@ -625,7 +632,44 @@ func make_kit() -> void:
 		if Net.in_session():
 			weapon.setup_network()
 		kit.append(weapon)
-		equip_weapon(weapon, _kit_hand_is_left(weapon, i))
+		if holds_found_weapon():
+			weapon.holster()  # Out once what we found is gone (see draw_kit)
+		else:
+			equip_weapon(weapon, _kit_hand_is_left(weapon, i))
+
+
+## Every machine: become `character` (if our team can play it), with its
+## body and its kit; the old kit goes.
+func set_character(character: int) -> void:
+	if not slot or character == slot.character or not Roster.fits_team(character, slot.team):
+		return
+	slot.character = character
+	for weapon: Weapon3D in kit:
+		if not is_instance_valid(weapon):
+			continue
+		if weapon.wielder == self:
+			weapon.unequip()
+		weapon.queue_free()
+	kit.clear()
+	visual.show_character(character)
+	make_kit()
+
+
+## Owner, getting up: take on the character picked while down, everywhere.
+func _take_next_character() -> void:
+	var character: int = next_character
+	next_character = -1
+	if character < 0 or not slot or character == slot.character:
+		return
+	if Net.match_synced:
+		_net_set_character.rpc(character)
+	set_character(character)
+
+
+@rpc("any_peer", "reliable")
+func _net_set_character(character: int) -> void:
+	if multiplayer.get_remote_sender_id() == get_multiplayer_authority():
+		set_character(character)
 
 
 ## Whether we hold anything that isn't our kit.
@@ -1601,6 +1645,7 @@ func _update_death(delta: float) -> void:
 		# (snapped to on remote copies too) happens out of sight
 		visible = false
 		if _is_local():
+			_take_next_character()
 			respawn()
 	if dead_time > 0.0:
 		return
@@ -1609,6 +1654,7 @@ func _update_death(delta: float) -> void:
 	if is_knocked_out:
 		is_knocked_out = false
 		if _is_local():
+			_take_next_character()
 			_revive_in_place()
 	visual.play_spawn()
 	Entity.start_iframes()  # A moment of spawn protection
