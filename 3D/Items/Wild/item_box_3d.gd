@@ -136,11 +136,17 @@ func _apply(player: PlayerClass3D, item: int, weapon_pick: int, is_left: bool) -
 		WildItem.Kind.WEAPON:
 			_hand_giant_weapon(player, weapon_pick, is_left)
 		WildItem.Kind.INSTANT:
-			if item == WildItem.SNACK and owned:
-				player.Entity.hp = player.Entity.hp_max
-				player.Entity.stamina = player.Entity.stamina_max
-			elif item == WildItem.THUNDERCLAP:
-				_thunderclap(player, owned)
+			match item:
+				WildItem.SNACK:
+					_flourish(&"healing", player, 1.2)
+					if owned:
+						player.Entity.hp = player.Entity.hp_max
+				WildItem.THUNDERCLAP:
+					_thunderclap(player, owned)
+				WildItem.WARP:
+					_warp(player, owned)
+				WildItem.LULLABY:
+					_lullaby(player, owned)
 
 
 func _hand_giant_weapon(player: PlayerClass3D, pick: int, is_left: bool) -> void:
@@ -158,11 +164,99 @@ func _hand_giant_weapon(player: PlayerClass3D, pick: int, is_left: bool) -> void
 	weapon.hand_to(player, is_left)
 
 
+## Show `id` (a HELD Vfx) on `player` for `seconds`.
+func _flourish(id: StringName, player: PlayerClass3D, seconds: float) -> void:
+	var fx: Node3D = Vfx.attach(id, player)
+	if fx:
+		get_tree().create_timer(seconds).timeout.connect(Vfx.release.bind(fx))
+
+
+## Seconds a warp's portals take to open, and stay open.
+const PORTAL_OPEN := 0.35
+const PORTAL_HOLD := 0.7
+const PORTAL_SIZE := 1.7
+
+
+## `player` steps into a portal and out of another by the ball (see
+## _warp_spot). Every machine shows both; the owner moves them.
+func _warp(player: PlayerClass3D, owned: bool) -> void:
+	var to: Vector3 = _warp_spot(player)
+	_portal(player.global_position)
+	_portal(to)
+	Sfx.play(&"spell_impact", player.global_position)
+	Sfx.play(&"spell_impact", to)
+	if owned:
+		player.global_position = to
+		player.velocity = Vector3.ZERO
+
+
+## Just behind the nearest ball, on `player`'s side of it. With no ball
+## about, up to WildItem.WARP_DISTANCE toward where the mode wants them
+## (a race's next stretch, see Game3D.bot_goal), or the middle of the field.
+func _warp_spot(player: PlayerClass3D) -> Vector3:
+	var from: Vector3 = player.global_position
+	var ball: Ball3D = null
+	for b: Ball3D in Global.Game3D.balls:
+		if is_instance_valid(b) and b.is_inside_tree() and b.is_visible_in_tree() \
+				and (not ball or from.distance_to(b.global_position) < from.distance_to(ball.global_position)):
+			ball = b
+	if not ball:
+		var goal: Node3D = Global.Game3D.bot_goal(player)
+		var target: Vector3 = goal.global_position if goal else Global.Game3D.ball_reset_point
+		var toward: Vector3 = target - from
+		toward.y = 0.0
+		if toward.length() < 0.1:
+			return from
+		return _clear_to(from, from + toward.limit_length(WildItem.WARP_DISTANCE))
+	var at := Vector3(ball.global_position.x, from.y, ball.global_position.z)
+	var back: Vector3 = from - at
+	back.y = 0.0
+	back = back.normalized() if back.length() > 0.1 else Vector3.BACK
+	return _clear_to(at, at + back * WildItem.WARP_BALL_GAP)
+
+
+## `to`, or short of the first wall between `from` and it.
+func _clear_to(from: Vector3, to: Vector3) -> Vector3:
+	var query := PhysicsRayQueryParameters3D.create(from, to, Combat.WORLD_MASK)
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return to
+	return hit.position - (to - from).normalized() * 0.6
+
+
+## A portal standing at `at`, facing the camera, open a moment.
+func _portal(at: Vector3) -> void:
+	var portal: Node3D = Vfx.attach(&"portal", Global.Game3D, Vector3.ZERO, PORTAL_OPEN, 1.0,
+		WildItem.color(WildItem.WARP))
+	if not portal:
+		return
+	portal.global_transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * PORTAL_SIZE), at)
+	get_tree().create_timer(PORTAL_HOLD).timeout.connect(Vfx.release.bind(portal))
+
+
+## A wave of sleep from `player`: every foe within WildItem.LULLABY_RADIUS
+## nods off (decided on the machine that owns `player`, passed on to theirs).
+func _lullaby(player: PlayerClass3D, owned: bool) -> void:
+	var center: Vector3 = player.global_position
+	Vfx.play(&"impact", center + Vector3.DOWN * 0.9, Vector3.FORWARD, false, 2.5, WildItem.color(WildItem.LULLABY))
+	Sfx.play(&"altar_reward", center)
+	if not owned:
+		return
+	for other: PlayerClass3D in Global.Game3D.players:
+		if other == player or other.is_dead() or Combat.are_teammates(other, player):
+			continue
+		var away: Vector3 = other.global_position - center
+		away.y = 0.0
+		if away.length() <= WildItem.LULLABY_RADIUS:
+			other.status.apply(PlayerStatus3D.Kind.ASLEEP, PlayerStatus3D.SLEEP_TIME, player)
+
+
 ## A shockwave from `player`: a ring everyone sees, and (on the machine
 ## that owns them, which decides their hits) a blast for everyone nearby.
 func _thunderclap(player: PlayerClass3D, owned: bool) -> void:
 	var center: Vector3 = player.global_position
 	Sfx.play(&"boss_stomp", center)
+	Vfx.play(&"impact", center + Vector3.DOWN * 0.9, Vector3.FORWARD, false, 2.5, WildItem.color(WildItem.THUNDERCLAP))
 	CameraShake.add(CameraShake.HEAVY, center)
 	var ring := MeshInstance3D.new()
 	var mesh := TorusMesh.new()

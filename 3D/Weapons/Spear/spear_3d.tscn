@@ -41,7 +41,6 @@ throw_force = 20.0
 throw_spin_speed = 4.0
 swing_duration = 0.28
 swing_windup = 0.12
-swing_stamina_scale = 1.4
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.055, 0.005)

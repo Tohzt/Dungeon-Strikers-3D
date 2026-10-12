@@ -24,6 +24,3 @@ class_name WeaponProperties3D extends Node
 ## Seconds the arm draws back before the strike, so a heavy swing can be seen
 ## coming (and dodged). Committed: it can't be rolled out of. 0 = strikes at once.
 @export var swing_windup := 0.0
-## Scales the stamina a swing costs, e.g. higher for heavy weapons so they
-## can't be spammed, lower for quick ones like the dagger.
-@export var swing_stamina_scale := 1.0

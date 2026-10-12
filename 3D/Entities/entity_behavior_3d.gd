@@ -27,16 +27,10 @@ var endurance: int = 0
 const HP_PER_STRENGTH := 25
 var hp_max: float = 1000.0
 var mana_max: float = 100.0
-var stamina_max: float = 5.0
 
 # Costs and Regens
 var mana_cost: float = 0.0
 var mana_cost_default: float = 0.0
-var stamina_regen_rate: float = 3.0  # Stamina per second once regen kicks in
-var stamina_regen_delay: float = 1.0  # Seconds after last use before regen starts
-var stamina_cost: float = 1.0
-var stamina_cost_default: float = 1.0
-var _stamina_regen_wait: float = 0.0
 var stat_values: Dictionary = {}
 
 # Stat properties with automatic signal emission
@@ -52,12 +46,6 @@ var mana: float:
 		stat_values["mana"] = value
 		mana_changed.emit(value, mana_max)
 
-var stamina: float:
-	get: return stat_values.get("stamina", stamina_max)
-	set(value): 
-		stat_values["stamina"] = value
-		stamina_changed.emit(value, stamina_max)
-
 # ===== COMBAT & MOVEMENT =====
 var atk_pwr: float = 400.0  
 var def_base: float = 100.0
@@ -72,7 +60,6 @@ var has_control: bool = false
 # ===== SIGNALS =====
 signal hp_changed(new_hp: float, max_hp: float)
 signal mana_changed(new_mana: float, max_mana: float)
-signal stamina_changed(new_stamina: float, max_stamina: float)
 
 
 # ===== MULTIPLAYER & NETWORKING =====
@@ -88,35 +75,9 @@ func _ready() -> void:
 func _setup_stat_properties() -> void:
 	hp = hp_max
 	mana = mana_max
-	stamina = stamina_max
 
 
 # ===== HEALTH SYSTEM FUNCTIONS =====
-func _process(delta: float) -> void:
-	_regen_stamina(delta)
-
-
-## Spend stamina for an action. Returns false (spending nothing) if there
-## isn't enough.
-func use_stamina(amount: float) -> bool:
-	if stamina < amount:
-		return false
-	drain_stamina(amount)
-	return true
-
-
-## Drain stamina without needing the full amount (e.g. per-frame sprinting).
-func drain_stamina(amount: float) -> void:
-	stamina = max(stamina - amount, 0.0)
-	_stamina_regen_wait = stamina_regen_delay
-
-
-func _regen_stamina(delta: float) -> void:
-	if _stamina_regen_wait > 0.0:
-		_stamina_regen_wait -= delta
-	elif stamina < stamina_max:
-		stamina = min(stamina + stamina_regen_rate * _perk_stat(&"stamina_regen") * delta, stamina_max)
-
 
 ## Damage plus a shove given directly as a velocity (horizontal slide +
 ## upward pop), for hits that want exact control over the knockback.
@@ -187,8 +148,6 @@ func reset(active_status: bool = true) -> void:
 	# Update current values to match new max values
 	hp = hp_max
 	mana = mana_max
-	stamina = stamina_max
-	_stamina_regen_wait = 0.0
 	
 	Master.global_position = spawn_pos
 
@@ -197,17 +156,14 @@ func reset(active_status: bool = true) -> void:
 func _update_max_stats() -> void:
 	hp_max = float(strength * HP_PER_STRENGTH) * _perk_stat(&"max_hp")
 	mana_max = float(intelligence * 10)  # Scale intelligence to mana
-	stamina_max = float(endurance) * _perk_stat(&"max_stamina")
 
 
-## Perks changed the max values: resize them, keeping HP and stamina just
-## as full as they were.
+## Perks changed the max values: resize them, keeping HP just as full as
+## it was.
 func refresh_max_stats() -> void:
 	var hp_ratio: float = hp / hp_max if hp_max > 0.0 else 1.0
-	var stamina_ratio: float = stamina / stamina_max if stamina_max > 0.0 else 1.0
 	_update_max_stats()
 	hp = hp_max * hp_ratio
-	stamina = stamina_max * stamina_ratio
 
 
 func _perk_stat(stat_name: StringName) -> float:

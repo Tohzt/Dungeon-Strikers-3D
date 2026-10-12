@@ -59,13 +59,16 @@ material = SubResource("StandardMaterial3D_uqeks")
 size = Vector2(100, 68)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_jrsk6"]
-size = Vector3(108, 10, 2.68)
+size = Vector3(108, 20, 2.68)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_north"]
-size = Vector3(46, 10, 2.68)
+size = Vector3(46, 20, 2.68)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_uqeks"]
-size = Vector3(2.68, 10, 76)
+size = Vector3(2.68, 20, 76)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_roof"]
+size = Vector3(108, 1, 98)
 
 [node name="Pitch" type="Node3D"]
 script = ExtResource("1_kwiv5")
@@ -125,14 +128,14 @@ cast_shadow = 0
 mesh = SubResource("PlaneMesh_lines")
 
 [node name="Wall" type="StaticBody3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 36)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall"]
 shape = SubResource("BoxShape3D_jrsk6")
 
 [node name="Wall2" type="StaticBody3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, -36)
 collision_mask = 0
 
 [node name="West" type="CollisionShape3D" parent="Walls/Wall2"]
@@ -144,18 +147,26 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31, 0, 0)
 shape = SubResource("BoxShape3D_north")
 
 [node name="Wall3" type="StaticBody3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52, 10, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall3"]
 shape = SubResource("BoxShape3D_uqeks")
 
 [node name="Wall4" type="StaticBody3D" parent="Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52, 5, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52, 10, 0)
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Wall4"]
 shape = SubResource("BoxShape3D_uqeks")
+
+[node name="Roof" type="StaticBody3D" parent="Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16.5, -12)
+collision_layer = 64
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Roof"]
+shape = SubResource("BoxShape3D_roof")
 
 [node name="GridMap" type="GridMap" parent="Walls"]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
@@ -163,7 +174,7 @@ mesh_library = ExtResource("5_uepvo")
 cell_size = Vector3(4, 4, 4)
 cell_center_y = false
 data = {
-"cells": PackedInt32Array(65530, 4, 655362, 65530, 65531, 7, 65531, 4, 655362, 65531, 65531, 7, 65532, 4, 655362, 65532, 65531, 7, 65533, 4, 655362, 65533, 65531, 7, 65534, 4, 655362, 65534, 65531, 7, 65535, 4, 655362, 0, 4, 655362, 1, 4, 655362, 1, 65531, 7, 2, 4, 655362, 2, 65531, 7, 3, 4, 655362, 3, 65531, 7, 4, 4, 655362, 4, 65531, 7, 5, 4, 655362, 5, 65531, 7, 6, 65532, 1048578, 65529, 65532, 1441794, 6, 65533, 1048578, 65529, 65533, 1441794, 6, 65534, 1048578, 65529, 65534, 1441794, 6, 65535, 1048578, 65529, 65535, 1441794, 6, 0, 1048578, 65529, 0, 1441794, 6, 1, 1048578, 65529, 1, 1441794, 6, 2, 1048578, 65529, 2, 1441794, 6, 3, 1048578, 65529, 3, 1441794, 6, 4, 1441795, 65529, 4, 655363, 65529, 65531, 1048579, 6, 65531, 3)
+"cells": PackedInt32Array(65530, 4, 655362, 65530, 65531, 7, 65531, 4, 655362, 65531, 65531, 7, 65532, 4, 655362, 65532, 65531, 7, 65533, 4, 655362, 65533, 65531, 7, 65534, 4, 655362, 65534, 65531, 7, 65535, 4, 655362, 0, 4, 655362, 1, 4, 655362, 1, 65531, 7, 2, 4, 655362, 2, 65531, 7, 3, 4, 655362, 3, 65531, 7, 4, 4, 655362, 4, 65531, 7, 5, 4, 655362, 5, 65531, 7, 6, 65532, 1048578, 65529, 65532, 1441794, 6, 65533, 1048578, 65529, 65533, 1441794, 6, 65534, 1048578, 65529, 65534, 1441794, 6, 65535, 1048578, 65529, 65535, 1441794, 6, 0, 1048578, 65529, 0, 1441794, 6, 1, 1048578, 65529, 1, 1441794, 6, 2, 1048578, 65529, 2, 1441794, 6, 3, 1048578, 65529, 3, 1441794, 6, 4, 1441795, 65529, 4, 655363, 65529, 65531, 1048579, 6, 65531, 3, 131066, 4, 655362, 131066, 65531, 7, 131067, 4, 655362, 131067, 65531, 7, 131068, 4, 655362, 131068, 65531, 7, 131069, 4, 655362, 131069, 65531, 7, 131070, 4, 655362, 131070, 65531, 7, 131071, 4, 655362, 65536, 4, 655362, 65537, 4, 655362, 65537, 65531, 7, 65538, 4, 655362, 65538, 65531, 7, 65539, 4, 655362, 65539, 65531, 7, 65540, 4, 655362, 65540, 65531, 7, 65541, 4, 655362, 65541, 65531, 7, 65542, 65532, 1048578, 131065, 65532, 1441794, 65542, 65533, 1048578, 131065, 65533, 1441794, 65542, 65534, 1048578, 131065, 65534, 1441794, 65542, 65535, 1048578, 131065, 65535, 1441794, 65542, 0, 1048578, 131065, 0, 1441794, 65542, 1, 1048578, 131065, 1, 1441794, 65542, 2, 1048578, 131065, 2, 1441794, 65542, 3, 1048578, 131065, 3, 1441794, 65542, 4, 1441795, 131065, 4, 655363, 131065, 65531, 1048579, 65542, 65531, 3)
 }
 
 [node name="Goal" parent="Walls" instance=ExtResource("8_al1ea")]
@@ -205,7 +216,7 @@ weapon_scene = ExtResource("7_al1ea")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -44.06)
 script = ExtResource("50_pen")
 inner_size = Vector2(16, 18)
-wall_height = 8.0
+wall_height = 16.0
 gate_style = 1
 build_floor = true
 countdown_text = "BOSS IN %d"

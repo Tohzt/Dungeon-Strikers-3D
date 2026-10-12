@@ -39,7 +39,6 @@ knockback_force = 6.0
 weapon_name = "Wand"
 throw_force = 18.0
 durability_scale = 2.5
-swing_stamina_scale = 0.6
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.005, 0.26, -0.005)

@@ -68,6 +68,8 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool, heavy: Wea
 			arrow.set_burst(Properties.break_burst_radius, Properties.break_burst_damage,
 				Properties.break_burst_knockback, shatter_color())
 			break_burst_scale = SPENT_BREAK_BURST_SCALE
+	if arrow.look_color.a > 0.0:
+		arrow.look_color = tint(arrow.look_color)
 	wielder.get_parent().add_child(arrow)
 	arrow.global_position = muzzle
 	arrow.exclude_body(wielder)

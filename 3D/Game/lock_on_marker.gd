@@ -3,11 +3,15 @@ class_name LockOnMarker3D extends Node3D
 ## a ring of bracket arcs turning on the floor under the target and a
 ## spinning arrow over its head, in the player's color. Both are real 3D
 ## shapes, so they read from any camera angle (from the top-down one, a
-## spinning diamond inside a ring).
+## spinning diamond inside a ring). Locked on to a teammate (a pass, see
+## PlayerClass3D.shoot_ball) it's green, turns the other way, and the arrow
+## is round instead.
 ##
 ## Built in code; top_level, so it can live under whatever owns the lock.
 
 @export var color: Color = Color(1.0, 0.82, 0.25)
+## Used instead of `color` on a teammate.
+@export var pass_color: Color = Color(0.3, 1.0, 0.55)
 ## Space between the target's body and the floor ring.
 @export var ring_margin: float = 0.35
 @export var ring_width: float = 0.09
@@ -35,6 +39,10 @@ const POP_TIME := 0.18
 
 var _ring: MeshInstance3D
 var _arrow: MeshInstance3D
+var _diamond: CylinderMesh
+var _round: CylinderMesh
+## The target's a teammate (see _restyle).
+var _friendly: bool = false
 var _target: Node3D = null
 var _time: float = 0.0
 var _pop: float = 1.0  # 0 just picked, 1 settled
@@ -49,14 +57,10 @@ func _init() -> void:
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ring)
 	_arrow = MeshInstance3D.new()
-	var cone := CylinderMesh.new()
 	# Point down; four sides make it a diamond seen from above
-	cone.top_radius = 0.26
-	cone.bottom_radius = 0.0
-	cone.height = 0.45
-	cone.radial_segments = 4
-	cone.rings = 1
-	_arrow.mesh = cone
+	_diamond = _make_cone(4)
+	_round = _make_cone(16)
+	_arrow.mesh = _diamond
 	# Drawn over walls and the target itself so it's never lost
 	_arrow.material_override = _make_material(true)
 	_arrow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -70,6 +74,7 @@ func _process(delta: float) -> void:
 	if target != _target:
 		_target = target
 		_pop = 0.0
+		_restyle(target is PlayerClass3D and Combat.are_teammates(target, handler.Master))
 	visible = target != null
 	if not target:
 		return
@@ -85,7 +90,7 @@ func _process(delta: float) -> void:
 	var pop_scale: float = lerp(POP_SCALE, 1.0, eased)
 	var pulse: float = 1.0 + 0.04 * sin(_time * bob_speed * 1.5)
 	_ring.global_transform = Transform3D(
-		Basis(Vector3.UP, _time * ring_spin).scaled(Vector3.ONE * radius * pop_scale * pulse),
+		Basis(Vector3.UP, _time * ring_spin * (-1.0 if _friendly else 1.0)).scaled(Vector3.ONE * radius * pop_scale * pulse),
 		Vector3(target.global_position.x, floor_y + FLOOR_LIFT, target.global_position.z))
 	_arrow.global_transform = Transform3D(
 		Basis(Vector3.UP, _time * arrow_spin).scaled(Vector3.ONE * lerp(0.0, 1.0, eased)),
@@ -93,6 +98,24 @@ func _process(delta: float) -> void:
 	var alpha: float = lerp(0.0, 1.0, eased)
 	(_ring.material_override as StandardMaterial3D).albedo_color.a = alpha * 0.9
 	(_arrow.material_override as StandardMaterial3D).albedo_color.a = alpha
+
+
+## Teammate (green, round arrow, turning back) or not.
+func _restyle(friendly: bool) -> void:
+	_friendly = friendly
+	_arrow.mesh = _round if friendly else _diamond
+	for mesh: MeshInstance3D in [_ring, _arrow]:
+		(mesh.material_override as StandardMaterial3D).albedo_color = pass_color if friendly else color
+
+
+func _make_cone(sides: int) -> CylinderMesh:
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.26
+	cone.bottom_radius = 0.0
+	cone.height = 0.45
+	cone.radial_segments = sides
+	cone.rings = 1
+	return cone
 
 
 ## The world floor's height under `target`, or `fallback` if there's none

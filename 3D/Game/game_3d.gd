@@ -38,6 +38,9 @@ enum Phase {
 @export var spawn_distance: float = 8.0
 ## Gap between teammates' starting spots.
 @export var spawn_spacing: float = 6.0
+## How far out in front of their own goal a team starts (when the level has
+## no SpawnPoint3D for it).
+@export var goal_spawn_distance: float = 8.0
 ## The level's background loop (an Sfx.AMBIENCES id). Empty = none.
 @export var ambience: StringName = &""
 ## Music between boss fights (an Sfx.MUSIC id). Empty = none.
@@ -149,6 +152,8 @@ func _ready() -> void:
 		for slot: PlayerSlot in match_slots:
 			_spawn_player(slot)
 	HUD.visible = huds.values().has(HUD)  # No local humans: no HUD
+	if not Net.is_server:
+		add_child(OffscreenIndicator3D.new())
 	_setup_scores()
 	for child: Node in get_children():
 		if child is Boss3D:
@@ -224,21 +229,22 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 
 
 ## Where `slot` starts (and respawns): its team's SpawnPoint3D if the level
-## has one, else halfway between its team's goal and altar, else
+## has one, else just in front of the goal it defends, else
 ## spawn_distance out towards its team's side. Teammates spread out from there.
 func _spawn_position(slot: PlayerSlot) -> Vector3:
 	var side: Vector3 = TEAM_SIDES[slot.team % TEAM_SIDES.size()]
 	var center: Vector3 = side * spawn_distance
 	var across: Vector3 = side.cross(Vector3.UP)
 	var goal: Goal3D = _goal_of_team(slot.team)
-	var altar: Altar3D = altar_of_team(slot.team)
 	var spawn_point: SpawnPoint3D = _spawn_point_of_team(slot.team)
 	if spawn_point:
 		center = spawn_point.global_position
 		across = spawn_point.global_basis.x.normalized()
-	elif goal and altar:
-		center = (goal.global_position + altar.global_position) / 2.0
-		center.y = 0.0
+	elif goal:
+		var goal_pos: Vector3 = Vector3(goal.global_position.x, 0.0, goal.global_position.z)
+		var inward: Vector3 = -goal_pos.normalized() if goal_pos.length() > 0.01 else -side
+		center = goal_pos + inward * goal_spawn_distance
+		across = inward.cross(Vector3.UP)
 	# Teammates stand side by side, in seat order
 	var teammates: Array[int] = []
 	for other: PlayerSlot in match_slots:
@@ -592,6 +598,31 @@ func altar_of_team(team: int) -> Altar3D:
 		if child is Altar3D and child.owner_team == team:
 			return child
 	return null
+
+
+## The nearest goal that scores for `player`'s team, if any.
+func goal_to_attack(player: PlayerClass3D) -> Goal3D:
+	var team: int = _team_of(player)
+	var best: Goal3D = null
+	var best_dist: float = INF
+	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		var ours: bool = goal.scoring_team == team \
+			or (goal.scoring_team == Goal3D.LAST_TOUCH and goal.owner_team != team)
+		var offset: Vector3 = goal.global_position - player.global_position
+		var dist: float = Vector2(offset.x, offset.z).length()
+		if ours and dist < best_dist:
+			best = goal
+			best_dist = dist
+	return best
+
+
+## Where `player` takes `ball`: the net they attack, or their altar with a
+## skull (see PlayerClass3D.shoot_ball). Null when there's neither.
+func shot_target(player: PlayerClass3D, ball: Ball3D) -> Node3D:
+	if ball is Skull3D:
+		return altar_of_team(_team_of(player))
+	var goal: Goal3D = goal_to_attack(player)
+	return goal.net if goal else null
 
 
 func _team_of(player: PlayerClass3D) -> int:

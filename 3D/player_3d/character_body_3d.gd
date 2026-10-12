@@ -19,7 +19,7 @@ var perks := PerkSet.new()
 ## Online: what the owning machine sends everyone else about this player.
 const SYNCED_PROPERTIES: Array[NodePath] = [
 	^":net_pose",
-	^"Entity:hp", ^"Entity:stamina",
+	^"Entity:hp",
 	# Lets each owner work out how hard someone else bumped into them
 	^":velocity",
 	# Rolling / sliding / staggered body, for PlayerVisual3D
@@ -73,8 +73,11 @@ var hitstop: float = 0.0
 
 # ===== CARRYING THE BALL =====
 # Interact picks up a ball in reach. Carrying it drains the carry meter
-# (shown on the HUD); Throw charges and throws it, and an empty meter tosses
-# it forward on its own. The meter refills while we don't carry.
+# (shown on the HUD); Throw charges and throws it where we aim, Shoot (E /
+# LT) charges and shoots it at the goal we attack (a skull: at our altar),
+# and an empty meter tosses it forward on its own. Locked on (teammates
+# can be locked on to while carrying), Shoot passes to a teammate or
+# attacks an enemy with the ball instead. The meter refills while we don't carry.
 signal carry_changed(new_carry: float, max_carry: float)
 const CARRY_MAX := 100.0
 ## A full meter lasts this many seconds of carrying.
@@ -89,6 +92,16 @@ const CARRY_SPEED := 0.85
 ## Throw speed (scaled by the throw charge), and how much it rises.
 const BALL_THROW_SPEED := 14.0
 const BALL_THROW_LIFT := 0.15
+## Shot speed (scaled by the charge like a throw: half to 1.5x), and how
+## much it rises.
+const BALL_SHOT_SPEED := 16.0
+const BALL_SHOT_LIFT := 0.12
+## A pass flies at least this fast, keeping low so it reaches them.
+const BALL_PASS_MIN_SPEED := 10.0
+const BALL_PASS_LIFT := 0.05
+## A ball attack's damage, from no charge to full.
+const BALL_ATTACK_DAMAGE_MIN := 8.0
+const BALL_ATTACK_DAMAGE_MAX := 20.0
 ## Meter ran dry: tossed forward this fast.
 const BALL_TOSS_SPEED := 6.0
 var carry: float = CARRY_MAX:
@@ -99,6 +112,11 @@ var carry: float = CARRY_MAX:
 var held_ball: Ball3D = null
 ## Asked to throw (online, until the server lets go).
 var _ball_thrown: bool = false
+## The Throw press under way began while carrying: it's for the ball, so
+## letting go without it (stripped mid-charge) throws nothing.
+var _throw_for_ball: bool = false
+## Hit while carrying: the ball pops loose along the hit this fast.
+const BALL_FUMBLE_SPEED := 5.0
 
 ## Walking speed while charging a heavy (see WeaponMove3D), times normal.
 const CHARGE_MOVE_SPEED := 0.6
@@ -154,22 +172,14 @@ const FIST_OBJECT_IMPULSE := 4.0  # Shove given to loose physics objects (ball, 
 var _fist_shape := SphereShape3D.new()
 
 
-# Stamina (the Entity's stamina pool, shown on the HUD): sprinting drains it,
-# attacks and throws cost a chunk. Running dry stops sprinting until it's
-# recovered a bit. It refills on its own shortly after you stop using it.
 ## Sprinting walks this many times faster.
 const SPRINT_SPEED_MULTIPLIER := 2.0
-const SPRINT_STAMINA_PER_SEC := 1.8
-const SPRINT_RECOVER_RATIO := 0.3  # Must refill to this share after running dry
-const PUNCH_STAMINA := 1.0
-const SWING_STAMINA := 1.05
-const THROW_STAMINA := 2.0  # Too tired to pay = weakest possible throw
 var is_sprinting: bool = false
-var sprint_exhausted: bool = false
 
 # Dodge roll (tap the dodge button): a dive along the walking direction that
 # tucks into a forward roll (see PlayerVisual3D), untouchable for the first
-# part of it so it has to be timed rather than spammed. Standing still, it's
+# part of it. Rolls are on a cooldown (ROLL_COOLDOWN) so they have to be
+# timed rather than spammed. Standing still, it's
 # a short backstep instead; sprinting, a slide tackle (see SLIDE_DURATION). Can't roll in the
 # air, while staggered, or during the strike of a swing (the follow-through
 # can be rolled out of). A tap made while a roll isn't allowed is kept for
@@ -181,8 +191,9 @@ const ROLL_IFRAMES := 0.25  # From the start of the roll
 const BACKSTEP_DURATION := 0.25
 const BACKSTEP_SPEED := 9.6
 const BACKSTEP_IFRAMES := 0.15
-const ROLL_STAMINA := 2.0  # Any stamina left is enough to start one
 const ROLL_BUFFER_MSEC := 250
+## Seconds from the start of a roll, backstep or slide until the next can go.
+const ROLL_COOLDOWN := 1.0
 ## Intermission: close enough to our altar to stop walking (see _walk_to_altar).
 const ALTAR_STOP_DISTANCE := 2.5
 ## Standing at our altar for the intermission.
@@ -192,6 +203,7 @@ var roll_duration: float = 0.0
 var roll_iframes: float = 0.0
 var roll_dir: Vector3 = Vector3.ZERO
 var is_backstep: bool = false
+var _roll_cooldown: float = 0.0
 
 # Slide tackle: dodging while sprinting (or just after letting go of a
 # controller's dodge button, since holding it is the sprint) slides in feet first instead of rolling. It has no iframes,
@@ -200,7 +212,6 @@ var is_backstep: bool = false
 const SLIDE_DURATION := 0.6
 const SLIDE_SPEED := 15.0
 const SLIDE_END_SPEED_RATIO := 0.25  # Slows to this share of SLIDE_SPEED by the end
-const SLIDE_STAMINA := 2.0
 ## A dodge this soon (seconds) after sprinting still slides.
 const SLIDE_SPRINT_GRACE := 0.4
 ## The sweep: a ball this big just ahead of our feet.
@@ -234,10 +245,15 @@ const FIST_LUNGE_SPEED := 3.5
 const LUNGE_FRICTION := 20.0
 var lunge: Vector3 = Vector3.ZERO
 
-# Poise is stamina: getting hit with none left, or blocking a hit that
-# empties it, staggers you: no moving, turning, attacking, blocking or
-# rolling for a moment, and whatever you were swinging is cut short. So
-# sprinting, swinging and rolling yourself dry leaves you open.
+# Poise (hidden, owner only): the damage we take adds up, and once it
+# reaches POISE_MAX we're staggered: no moving, turning, attacking, blocking
+# or rolling for a moment, and whatever we were swinging is cut short. It
+# comes back POISE_RESET_TIME after the last hit, so it takes a quick
+# flurry (a sword hits for 40) or a big hit to break.
+const POISE_MAX := 100.0
+const POISE_RESET_TIME := 2.0
+var _poise_damage: float = 0.0
+var _poise_reset: float = 0.0
 const STAGGER_DURATION := 0.7
 ## Hits on a staggered player do this much more damage, so breaking
 ## someone's poise is a real opening (like the boss's stagger).
@@ -245,7 +261,7 @@ const STAGGERED_DAMAGE_MULTIPLIER := 1.5
 var stagger_time: float = 0.0
 
 ## What the body is doing, for PlayerVisual3D to pick a clip (synced online).
-enum Pose { NONE, ROLL, BACKSTEP, STAGGER, SLIDE, KNOCKDOWN, GETUP }
+enum Pose { NONE, ROLL, BACKSTEP, STAGGER, SLIDE, KNOCKDOWN, GETUP, FROZEN, ASLEEP }
 var anim_pose: int = Pose.NONE
 
 # Kills: the last opponent to hit us gets the kill if we die within
@@ -263,6 +279,10 @@ var _last_attacker_msec: int = -1
 var dead_time: float = 0.0
 ## Wild items' effects still running: perk -> seconds left (see add_timed_perk).
 var timed_perks: Dictionary[Perk, float] = {}
+## Frozen, burning, asleep, and the wild items' status buffs' looks.
+var status: PlayerStatus3D = null
+## A hit this hard (after perks and armor) gets the bigger hit effect.
+const HARD_HIT_DAMAGE := 25.0
 ## How many times we've died this match (knockouts take longer each time).
 var deaths: int = 0
 ## Knocked out rather than gone: still in the level, lying where we fell.
@@ -294,6 +314,8 @@ func _ready() -> void:
 	Input_Handler.slot = slot
 	_fist_shape.radius = FIST_REACH
 	_slide_shape.radius = SLIDE_REACH
+	status = PlayerStatus3D.new(self)
+	add_child(status)
 
 	Entity.spawn_pos = global_position
 	Entity.reset(true)
@@ -371,7 +393,7 @@ func _physics_process(delta: float) -> void:
 		walk *= CARRY_SPEED
 	# Being shoved takes some control away until the shove dies down
 	var control: float = clamp(1.0 - knockback.length() / KNOCKBACK_CONTROL_LOSS, KNOCKBACK_MIN_CONTROL, 1.0)
-	if stagger_time > 0.0 or knockdown_time > 0.0:
+	if stagger_time > 0.0 or knockdown_time > 0.0 or status.held():
 		control = 0.0
 	if left_arm.charging or right_arm.charging:
 		walk *= CHARGE_MOVE_SPEED
@@ -677,8 +699,28 @@ func _exit_tree() -> void:
 var _light := PlayerArm3D.Press.new()
 var _heavy := PlayerArm3D.Press.new()
 var _throw := PlayerArm3D.Press.new()
+## Shoot only does anything while carrying the ball (see shoot_ball).
+var _shoot := PlayerArm3D.Press.new()
 ## Which hand the last light attack used, so a pair take turns.
 var _last_light_left: bool = true
+## The sparks gathering on a charging heavy's weapon (see _show_charging),
+## while they're shown.
+var _charge_fx: Node3D = null
+## _charge_fx is a held orb (see _show_charging), not the sparks.
+var _charge_fx_held: bool = false
+## A legendary heavy's blast (see _emit_move) lands this far ahead (m).
+const LEGENDARY_BLAST_AHEAD := 1.8
+## A held orb let go of, about to fly off as its heavy strikes (see _emit_move).
+var _launching_orb: Node3D = null
+## How long it waits for that strike before fizzling.
+const LAUNCH_WAIT := 0.5
+## The sparks start this big (times the blade's length) and grow to full
+## over the charge.
+const CHARGE_FX_START := 0.35
+## Their size, times the blade's length.
+const CHARGE_FX_SIZE := 0.6
+## Their color on a common weapon (rarer ones take their rarity's).
+const CHARGE_FX_COLOR := Color(1.0, 0.85, 0.5)
 
 
 ## Read the buttons and act on them. While `busy` they do nothing, and
@@ -687,12 +729,15 @@ func _handle_buttons(busy: bool) -> void:
 	_light.held = Input_Handler.light_held
 	_heavy.held = Input_Handler.heavy_held
 	_throw.held = Input_Handler.throw_held
-	for button: PlayerArm3D.Press in [_light, _heavy, _throw]:
+	_shoot.held = Input_Handler.shoot_held
+	for button: PlayerArm3D.Press in [_light, _heavy, _throw, _shoot]:
 		if busy:
 			button.armed = false
 		elif button.just_pressed():
 			button.armed = true
 			button.press_time = PlayerArm3D.now()
+			if button == _throw:
+				_throw_for_ball = carries_ball()
 	if busy:
 		for arm: PlayerArm3D in arms:
 			_end_charge(arm)
@@ -701,7 +746,8 @@ func _handle_buttons(busy: bool) -> void:
 			_light_attack()
 		_handle_heavy_button()
 		_handle_throw_button()
-	for button: PlayerArm3D.Press in [_light, _heavy, _throw]:
+		_handle_shoot_button()
+	for button: PlayerArm3D.Press in [_light, _heavy, _throw, _shoot]:
 		if button.just_released():
 			button.armed = false
 		button.was_held = button.held
@@ -818,6 +864,9 @@ func _update_charge(arm: PlayerArm3D, heavy: WeaponMove3D) -> void:
 			return  # Starts once the arm's free
 		var fallback: StringName = arm.weapon.offhand_swing_clip if arm.is_left else arm.weapon.swing_clip
 		arm.begin_charge(heavy.charge_clip(fallback))
+		_show_charging(true, arm.is_left)
+		if Net.match_synced:
+			_net_charging.rpc(true, arm.is_left)
 	arm.charge = clampf((PlayerArm3D.now() - arm.charge_start) / maxf(heavy.charge_time, 0.01), 0.0, 1.0)
 	if arm.charge >= 1.0 and not arm.charged:
 		arm.charged = true
@@ -826,14 +875,21 @@ func _update_charge(arm: PlayerArm3D, heavy: WeaponMove3D) -> void:
 			_net_charged.rpc(arm.is_left, true)
 
 
-## Stop charging (let go, or interrupted).
-func _end_charge(arm: PlayerArm3D) -> void:
+## Stop charging (let go, or interrupted). `cut_short`: a held orb fizzles
+## even if it was ready to fly.
+func _end_charge(arm: PlayerArm3D, cut_short: bool = false) -> void:
 	if not arm.charging:
 		return
 	if arm.charged:
 		_show_charged(arm.is_left, false)
 		if Net.match_synced:
 			_net_charged.rpc(arm.is_left, false)
+	# Let go early: the swirl stops (once charged it finishes its burst). A
+	# held orb always goes: it's flying off as its wave, or fizzling.
+	var cut: bool = cut_short or not arm.charged
+	_show_charging(false, arm.is_left, cut)
+	if Net.match_synced:
+		_net_charging.rpc(false, arm.is_left, cut)
 	arm.end_charge()
 
 
@@ -853,6 +909,52 @@ func _net_charged(is_left: bool, on: bool) -> void:
 		_show_charged(is_left, on)
 
 
+## On every machine: sparks gather on that hand's weapon while its heavy
+## charges, growing till it's ready (see Weapon3D.charge_anchor); or, for a
+## heavy that holds its orb (see AttackWaveSpec3D.held_while_charging), the
+## orb grows in front of us instead, to fly off as it strikes. Stopping
+## lets the sparks fade out; a held orb not `cut` waits to be launched.
+func _show_charging(on: bool, is_left: bool, cut: bool = true) -> void:
+	if is_instance_valid(_charge_fx) and _charge_fx_held and not on and not cut:
+		_launching_orb = _charge_fx
+		var orb: Node3D = _charge_fx
+		var holder: int = get_instance_id()
+		orb.create_tween().tween_callback(func() -> void:
+			if orb.get_parent() and orb.get_parent().get_instance_id() == holder:
+				orb.queue_free()).set_delay(LAUNCH_WAIT)
+	elif is_instance_valid(_charge_fx) and _charge_fx_held:
+		_charge_fx.queue_free()
+	elif is_instance_valid(_charge_fx):
+		Vfx.release(_charge_fx)
+	_charge_fx = null
+	_charge_fx_held = false
+	if not on:
+		return
+	var heavy: WeaponMove3D = _heavy_move_of(arm_of(is_left))
+	if not heavy:
+		return
+	var weapon: Weapon3D = arm_of(is_left).weapon
+	var held: AttackWaveSpec3D = heavy.held_wave()
+	if held:
+		_charge_fx = AttackWave3D.hold_orb(held, self, heavy.charge_time, weapon.tint(held.color))
+		_charge_fx_held = true
+	else:
+		var tint: Color = WeaponRarity.effect_color(weapon.rarity)
+		var size: float = weapon.blade_length() * CHARGE_FX_SIZE
+		_charge_fx = Vfx.attach(&"charging", weapon.charge_anchor(), Vector3.ZERO, 0.0, size,
+			tint if tint.a > 0.0 else CHARGE_FX_COLOR)
+		if _charge_fx:
+			var full: Vector3 = _charge_fx.scale
+			_charge_fx.scale = full * CHARGE_FX_START
+			_charge_fx.create_tween().tween_property(_charge_fx, ^"scale", full, heavy.charge_time)
+
+
+@rpc("any_peer", "reliable")
+func _net_charging(on: bool, is_left: bool, cut: bool = true) -> void:
+	if multiplayer.get_remote_sender_id() == get_multiplayer_authority():
+		_show_charging(on, is_left, cut)
+
+
 ## Let go of Throw: throw the weapon in hand, harder the longer it was held
 ## (up to THROW_CHARGE_MAX_DURATION).
 func _handle_throw_button() -> void:
@@ -861,9 +963,18 @@ func _handle_throw_button() -> void:
 	if carries_ball():
 		throw_ball(_pay_throw_charge(_throw.held_for()))
 		return
+	if _throw_for_ball:
+		return
 	var arm: PlayerArm3D = _throw_arm()
 	if arm:
 		_throw_weapon(arm, _pay_throw_charge(_throw.held_for()))
+
+
+## Let go of Shoot while carrying: shoot the ball at the goal, further the
+## longer it was held. Pressed without the ball it does nothing.
+func _handle_shoot_button() -> void:
+	if _shoot.just_released() and _shoot.armed and carries_ball():
+		shoot_ball(_pay_throw_charge(_shoot.held_for()))
 
 
 ## The hand Throw throws from: the main hand first. A weapon off flying
@@ -933,10 +1044,53 @@ func throw_ball(charge: float) -> void:
 	right_arm.play_throw_release()
 
 
-func _launch_ball(launch: Vector3) -> void:
+## Shoot the ball, further with more `charge` (0-1): at what we're locked
+## on to (a pass to a teammate, an attack on anyone else), or else at the
+## goal we attack (a skull: at our altar), or else along our aim.
+func shoot_ball(charge: float) -> void:
+	if not carries_ball():
+		return
+	var speed: float = BALL_SHOT_SPEED * _throw_force_ratio(charge) * perk_stat(&"throw_power")
+	var lift: float = BALL_SHOT_LIFT
+	var shot: Ball3D.Shot = Ball3D.Shot.NONE
+	var damage: float = 0.0
+	var lock: Node3D = Input_Handler.lock_target
+	var target: Node3D = null
+	if is_instance_valid(lock):
+		target = lock
+		if Combat.are_teammates(lock, self):
+			shot = Ball3D.Shot.PASS
+			speed = max(speed, BALL_PASS_MIN_SPEED)
+			lift = BALL_PASS_LIFT
+		else:
+			shot = Ball3D.Shot.ATTACK
+			damage = lerp(BALL_ATTACK_DAMAGE_MIN, BALL_ATTACK_DAMAGE_MAX, charge)
+	elif Global.Game3D:
+		target = Global.Game3D.shot_target(self, held_ball)
+	var dir: Vector3 = _get_aim_direction()
+	if target:
+		dir = target.global_position - global_position
+		if shot != Ball3D.Shot.NONE and target is CharacterBody3D:
+			dir += (target as CharacterBody3D).velocity * dir.length() / speed  # Lead them
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else global_basis.z
+	_launch_ball((dir + Vector3.UP * lift).normalized() * speed, shot, damage)
+	right_arm.play_throw_release()
+
+
+func _launch_ball(launch: Vector3, shot: Ball3D.Shot = Ball3D.Shot.NONE, damage: float = 0.0) -> void:
 	held_ball.touched_by(self)
-	held_ball.request_throw(self, launch)
+	held_ball.request_throw(self, launch, shot, damage)
 	_ball_thrown = true
+
+
+## Owner: a hit knocks the ball loose, along `dir`.
+func _fumble_ball(dir: Vector3) -> void:
+	if not carries_ball():
+		return
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else global_basis.z
+	_launch_ball(dir * BALL_FUMBLE_SPEED + Vector3.UP * 3.0)
 
 
 ## Owner: drain the meter while carrying (tossing the ball forward once it's
@@ -954,18 +1108,13 @@ func _update_carry(delta: float) -> void:
 
 # ===== SWINGS =====
 
-## Stamina a swing of `weapon` costs.
-func _swing_stamina(weapon: Weapon3D) -> float:
-	return SWING_STAMINA * (weapon.Properties.swing_stamina_scale if weapon.Properties else 1.0)
-
-
-## Swing (or fire) the arm's weapon, if that arm is free and we have the
-## stamina; false if it couldn't. A heavy weapon draws back first (see
+## Swing (or fire) the arm's weapon, if that arm is free; false if it
+## couldn't. A heavy weapon draws back first (see
 ## PlayerArm3D.begin_draw).
 func _swing_weapon(arm: PlayerArm3D) -> bool:
 	var weapon: Weapon3D = arm.weapon
-	if arm.is_swinging() or weapon.away or not _use_stamina(_swing_stamina(weapon)):
-		return false  # Mid-swing already, off flying, or too tired
+	if arm.is_swinging() or weapon.away:
+		return false  # Mid-swing already, or off flying
 	arm.move = null
 	var draw_time: float = weapon.Properties.swing_windup if weapon.Properties else 0.0
 	if draw_time > 0.0 and weapon.plays_swipe_animation:
@@ -1073,14 +1222,12 @@ func _lunge(speed: float) -> void:
 # everyone else's (see _net_strike_move).
 
 ## Start `move` (a light attack, or a fully charged heavy if `heavy`) with
-## `arm`'s weapon, if the arm's free and we have the stamina. A light attack
+## `arm`'s weapon, if the arm's free. A light attack
 ## draws back first like a plain swing (see _swing_weapon); a heavy's charge
 ## already has.
 func _start_move(arm: PlayerArm3D, move: WeaponMove3D, heavy: bool) -> bool:
 	var weapon: Weapon3D = arm.weapon
 	if arm.is_swinging() or _combo.is_running() or weapon.away:
-		return false
-	if not _use_stamina(_swing_stamina(weapon) * move.stamina_scale):
 		return false
 	weapon.begin_action()
 	arm.move = move
@@ -1103,7 +1250,7 @@ func _strike_move(arm: PlayerArm3D, move: WeaponMove3D) -> void:
 	var dir: Vector3 = _get_aim_direction()
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else global_basis.z
-	_emit_move(arm.weapon, move, dir, true)
+	_emit_move(arm.weapon, move, dir, true, arm.move_heavy)
 	if Net.match_synced:
 		_net_strike_move.rpc(arm.is_left, arm.move_heavy, dir)
 
@@ -1115,19 +1262,31 @@ func _net_strike_move(is_left: bool, heavy: bool, dir: Vector3) -> void:
 	var weapon: Weapon3D = arm_of(is_left).weapon
 	var move: WeaponMove3D = (_heavy_move_of(arm_of(is_left)) if heavy else weapon.light_move) if weapon else null
 	if move:
-		_emit_move(weapon, move, dir, false)
+		_emit_move(weapon, move, dir, false, heavy)
 
 
 ## `move`'s waves and action from `weapon` along `dir`: `real` ones hit
-## things, the rest are for show.
-func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool) -> void:
+## things, the rest are for show. A rarer weapon's effects take its
+## rarity's color, and a legendary's `heavy` lands with a blast of fire.
+func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool, heavy: bool) -> void:
 	var hits: Array[Node] = weapon.hits_this_action()
+	var held: Node3D = null
+	if is_instance_valid(_launching_orb) and _launching_orb.get_parent() == self:
+		held = _launching_orb
+	_launching_orb = null
 	for spec: AttackWaveSpec3D in move.waves:
-		AttackWave3D.emit(spec, self, weapon, dir, real, hits)
+		AttackWave3D.emit(spec, self, weapon, dir, real, hits, 1.0, held if spec.held_while_charging else null)
 	if move.sound != &"":
 		Sfx.play(move.sound, global_position)
 	if move.shake > 0.0:
 		CameraShake.add(move.shake, global_position)
+	var tint: Color = WeaponRarity.effect_color(weapon.rarity)
+	if move.vfx != &"":
+		Vfx.play(move.vfx, global_position, dir, weapon == held_weapon_left, 1.0, tint)
+	if heavy and weapon.rarity >= WeaponRarity.Tier.LEGENDARY:
+		var ahead: Vector3 = global_position + dir * LEGENDARY_BLAST_AHEAD
+		Vfx.play(&"impact", ahead + Vector3.DOWN * 0.9, dir, false, 1.2, tint)
+		Vfx.play(&"fire_cast", global_position, dir, false, 1.0, tint)
 	match move.action:
 		WeaponMove3D.Action.BOOMERANG:
 			WeaponPhantom3D.launch(move, weapon, self, dir, real)
@@ -1150,11 +1309,9 @@ func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool) 
 
 # ===== THROWING =====
 
-## A throw charged for `seconds` (0-1, full at THROW_CHARGE_MAX_DURATION),
-## paid for in stamina. Too tired to pay = the weakest possible throw.
+## A throw charged for `seconds` (0-1, full at THROW_CHARGE_MAX_DURATION).
 func _pay_throw_charge(seconds: float) -> float:
-	var charge: float = clamp(seconds / THROW_CHARGE_MAX_DURATION, 0.0, 1.0)
-	return charge if _use_stamina(THROW_STAMINA) else 0.0
+	return clamp(seconds / THROW_CHARGE_MAX_DURATION, 0.0, 1.0)
 
 
 ## The force multiplier a throw `charge` (0-1) gives.
@@ -1176,13 +1333,17 @@ func _get_aim_direction() -> Vector3:
 	return Vector3(sin(rotation.y), 0, cos(rotation.y))
 
 
-## Winds the throwing arm back while Throw is held.
+## Winds the throwing arm back while Throw (or Shoot, with the ball) is held.
 func _update_weapon_windups(delta: float) -> void:
 	var throwing: PlayerArm3D = null
+	var press: PlayerArm3D.Press = _throw
 	if _throw.held and _throw.armed:
 		throwing = right_arm if carries_ball() else _throw_arm()
+	elif _shoot.held and _shoot.armed and carries_ball():
+		throwing = right_arm
+		press = _shoot
 	for arm: PlayerArm3D in arms:
-		arm.update_windup(delta, arm == throwing, _throw.press_time, arm.weapon != null or arm == throwing, THROW_CHARGE_MAX_DURATION)
+		arm.update_windup(delta, arm == throwing, press.press_time, arm.weapon != null or arm == throwing, THROW_CHARGE_MAX_DURATION)
 
 
 # ===== KNOCKBACK, BUMPING & FISTS =====
@@ -1253,7 +1414,7 @@ func _bump_other_players(delta: float) -> void:
 
 
 func _start_punch(arm: PlayerArm3D) -> void:
-	if arm.is_swinging() or not _use_stamina(PUNCH_STAMINA):
+	if arm.is_swinging():
 		return
 	arm.begin_swing(PlayerArm3D.SWIPE_DURATION)
 	arm.punching = true
@@ -1313,8 +1474,7 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 	if roll_iframes > 0.0:
 		return false  # Rolled through it
 	if attacker is PlayerClass3D and attacker != self:
-		_last_attacker_name = attacker.name
-		_last_attacker_msec = Time.get_ticks_msec()
+		blame(attacker)
 	damage *= perk_stat(&"damage_taken")
 	if armored:
 		damage *= ARMOR_DAMAGE_TAKEN
@@ -1332,19 +1492,61 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 	if shield and not was_in_iframes:
 		Sfx.play_everywhere(&"block", shield.global_position)
 		shield.wear()  # Each hit it softens is a use
-	var exhausted: bool = Entity.stamina <= 0.0
 	Entity.take_hit(damage, knockback_velocity)
 	_share_iframes(was_in_iframes)
 	if not was_in_iframes:
+		var look: StringName = &"block" if shield else (&"hit_hard" if damage >= HARD_HIT_DAMAGE else &"hit")
+		Vfx.play_everywhere(look, global_position, dir)
+		status.on_hit()
+		if attacker is PlayerClass3D and attacker != self:
+			if attacker.status.has_buff(&"frost_touch"):
+				status.apply(PlayerStatus3D.Kind.FROZEN, PlayerStatus3D.FREEZE_TIME, attacker)
+			if attacker.status.has_buff(&"ablaze"):
+				status.apply(PlayerStatus3D.Kind.BURNING, PlayerStatus3D.BURN_TIME, attacker)
+		_fumble_ball(dir)
 		hitstop = Combat.HITSTOP
 		_shake_view(CameraShake.MEDIUM)
-		if exhausted:
-			_stagger()
+		_wear_poise(damage)
 	if Entity.hp <= 0:
 		_on_lethal_hit()
 	elif knock_down:
 		_knock_down()
 	return true
+
+
+## Owner: `attacker` gets the kill if we die soon (see KILL_CREDIT_TIME).
+func blame(attacker: PlayerClass3D) -> void:
+	_last_attacker_name = attacker.name
+	_last_attacker_msec = Time.get_ticks_msec()
+
+
+## Owner: lose `amount` HP to a status (burning): no shove, no flinch.
+func hurt(amount: float) -> void:
+	if is_dead():
+		return
+	Entity.hp -= amount * perk_stat(&"damage_taken")
+	if Entity.hp <= 0:
+		_on_lethal_hit()
+
+
+## Owner: gain `amount` HP, up to max.
+func heal(amount: float) -> void:
+	if not is_dead():
+		Entity.hp = minf(Entity.hp + amount, Entity.hp_max)
+
+
+## Owner: frozen or put to sleep, so whatever we were doing stops.
+func stop_in_place() -> void:
+	roll_time = 0.0
+	roll_iframes = 0.0
+	lunge = Vector3.ZERO
+	_dash_time = 0.0
+	_cancel_attacks()
+
+
+## Owner: woken up, so we get up off the floor.
+func get_up() -> void:
+	knockdown_time = GETUP_DURATION
 
 
 ## Out of HP (on the owner): we die and Game3D is told who, if anyone,
@@ -1420,15 +1622,26 @@ func _go_down(delay: float, knocked_out: bool) -> void:
 	dead_time = delay
 	_last_attacker_name = ""
 	_last_attacker_msec = -1
+	# A heavy being charged goes with its glow and sparks (here, and on remote
+	# copies whether or not the owner's word has reached them yet)
+	for arm: PlayerArm3D in arms:
+		_end_charge(arm, true)
+		if arm.weapon:
+			arm.weapon.set_charged(false)
+	_show_charging(false, false)
 	_cancel_attacks()
-	for button: PlayerArm3D.Press in [_light, _heavy, _throw]:
+	# Arms at rest (not frozen mid-charge or mid-swing), so the body lies flat
+	arm_anim = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 0.0])
+	for button: PlayerArm3D.Press in [_light, _heavy, _throw, _shoot]:
 		button.armed = false
 	knockback = Vector3.ZERO
 	lunge = Vector3.ZERO
 	_dash_time = 0.0
 	roll_time = 0.0
 	roll_iframes = 0.0
+	_roll_cooldown = 0.0
 	stagger_time = 0.0
+	_poise_damage = 0.0
 	knockdown_time = 0.0
 	_alive_collision_layer = collision_layer
 	collision_layer = 0
@@ -1496,7 +1709,9 @@ func respawn() -> void:
 	_dash_time = 0.0
 	roll_time = 0.0
 	roll_iframes = 0.0
+	_roll_cooldown = 0.0
 	stagger_time = 0.0
+	_poise_damage = 0.0
 	knockdown_time = 0.0
 	Entity.reset(true)  # Full stats, and moves us to Entity.spawn_pos
 	carry = CARRY_MAX
@@ -1521,7 +1736,7 @@ func shove(direction: Vector3, force: float) -> void:
 ## Rolling, sliding, staggered or knocked down: no attacking, turning or
 ## rolling again.
 func is_busy() -> bool:
-	return roll_time > 0.0 or stagger_time > 0.0 or knockdown_time > 0.0
+	return roll_time > 0.0 or stagger_time > 0.0 or knockdown_time > 0.0 or status.held()
 
 
 ## The intermission (walking back to our altar and picking there), a
@@ -1561,13 +1776,11 @@ func _try_roll(direction: Vector3) -> void:
 	if Time.get_ticks_msec() - request > ROLL_BUFFER_MSEC:
 		Input_Handler.dodge_request_msec = -1
 		return
-	if is_busy() or not is_on_floor():
+	if is_busy() or not is_on_floor() or _roll_cooldown > 0.0:
 		return  # Keep it buffered
-	if Entity.stamina <= 0.0:
-		return
+	_roll_cooldown = ROLL_COOLDOWN
 	is_slide = not direction.is_zero_approx() and _since_sprint <= SLIDE_SPRINT_GRACE
 	is_backstep = direction.is_zero_approx()
-	Entity.drain_stamina(SLIDE_STAMINA if is_slide else ROLL_STAMINA)
 	Input_Handler.dodge_request_msec = -1
 	_cancel_attacks()
 	lunge = Vector3.ZERO
@@ -1603,6 +1816,7 @@ func _roll_velocity() -> Vector3:
 func _update_roll(delta: float) -> void:
 	roll_time = max(roll_time - delta, 0.0)
 	roll_iframes = max(roll_iframes - delta, 0.0)
+	_roll_cooldown = max(_roll_cooldown - delta, 0.0)
 
 
 ## Mid-slide: sweep whatever's just ahead of our feet, once each. Players
@@ -1646,9 +1860,18 @@ func _update_knockdown(delta: float) -> void:
 		_knockdown_immunity = max(_knockdown_immunity - delta, 0.0)
 
 
-## A hit landed on our raised shield: a little damage and shove, paid for
-## in stamina. Emptying the bar breaks the guard. Unlike an open hit it
-## leaves no iframes, so a flurry keeps draining the guard.
+## A hit got through for `damage`: wear down poise, staggering us once
+## it's broken. Hits on someone already reeling don't count toward the next.
+func _wear_poise(damage: float) -> void:
+	if stagger_time > 0.0:
+		return
+	_poise_damage += damage
+	_poise_reset = POISE_RESET_TIME
+	if _poise_damage >= POISE_MAX:
+		_poise_damage = 0.0
+		_stagger()
+
+
 ## Poise broken: stagger, cutting short any roll or swing.
 func _stagger() -> void:
 	stagger_time = STAGGER_DURATION
@@ -1659,6 +1882,10 @@ func _stagger() -> void:
 
 func _update_poise(delta: float) -> void:
 	stagger_time = max(stagger_time - delta, 0.0)
+	if _poise_reset > 0.0:
+		_poise_reset -= delta
+		if _poise_reset <= 0.0:
+			_poise_damage = 0.0
 
 
 ## Rolling, backstepping, sliding, knocked down or staggered (each has its
@@ -1671,6 +1898,10 @@ func _update_body_pose() -> void:
 			anim_pose = Pose.BACKSTEP if is_backstep else Pose.ROLL
 	elif knockdown_time > 0.0:
 		anim_pose = Pose.GETUP if knockdown_time <= GETUP_DURATION else Pose.KNOCKDOWN
+	elif status.is_frozen():
+		anim_pose = Pose.FROZEN
+	elif status.is_asleep():
+		anim_pose = Pose.ASLEEP
 	elif stagger_time > 0.0:
 		anim_pose = Pose.STAGGER
 	else:
@@ -1701,19 +1932,9 @@ func put_on_armor() -> void:
 # ===== SPRINT =====
 
 func _update_sprint(direction: Vector3, delta: float) -> void:
-	if sprint_exhausted and Entity.stamina >= Entity.stamina_max * SPRINT_RECOVER_RATIO:
-		sprint_exhausted = false
-	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() and not sprint_exhausted \
+	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() \
 		and not is_busy() and not is_perk_locked()
-	if is_sprinting:
-		Entity.drain_stamina(SPRINT_STAMINA_PER_SEC * delta)
-		if Entity.stamina <= 0.0:
-			sprint_exhausted = true
 	_since_sprint = 0.0 if is_sprinting else _since_sprint + delta
-
-
-func _use_stamina(amount: float) -> bool:
-	return Entity.use_stamina(amount)
 
 
 # ===== PERKS =====
@@ -1723,7 +1944,7 @@ func perk_stat(stat_name: StringName) -> float:
 	return perks.stat(stat_name)
 
 
-## Take a perk. Max HP/stamina grow at once, keeping how full they were.
+## Take a perk. Max HP grows at once, keeping how full they were.
 ## Call on every machine.
 func add_perk(perk: Perk) -> void:
 	perks.add(perk)
@@ -1764,10 +1985,15 @@ func _is_local() -> bool:
 	return not Net.in_session() or is_multiplayer_authority()
 
 
+## A person playing on this machine (not a bot, not someone online).
+func is_local_person() -> bool:
+	return _is_local() and not (slot and slot.is_bot)
+
+
 ## Shake the camera (see CameraShake) for something that happened to us,
 ## if we're a person playing on this machine (bots don't shake the view).
 func _shake_view(amount: float) -> void:
-	if _is_local() and not (slot and slot.is_bot):
+	if is_local_person():
 		CameraShake.add(amount)
 
 

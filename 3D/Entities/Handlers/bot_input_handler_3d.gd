@@ -5,9 +5,9 @@ class_name BotInputHandler3D extends PlayerInputHandler3D
 ## like anyone else. Game3D swaps it in for slots with is_bot; online the
 ## server runs every bot.
 ##
-## Each think picks a goal - get a weapon, fight, knock the ball toward the
-## other team's goal (or a skull home to our altar), pick a perk - and
-## every frame steers toward it.
+## Each think picks a goal - get a weapon, fight, pick up the ball and run
+## it at the other team's goal (or a skull home to our altar), pick a perk -
+## and every frame steers toward it.
 
 ## Seconds between decisions (a little random, so bots don't move in lockstep).
 const THINK_TIME := 0.15
@@ -31,6 +31,29 @@ const HEAVY_CHANCE := 0.25
 const SPRINT_DISTANCE := 10.0
 ## Keep this far from teammates so they don't stack up.
 const SPACING := 2.5
+# Carrying the ball (see PlayerClass3D.carry): run it at the goal and shoot
+# once there's a clear line within SHOT_RANGE. Before the meter runs dry,
+# pass to a teammate further up the field, or throw it on toward the goal.
+## Shoot from this close to the net, if nothing's in the way.
+const SHOT_RANGE := 22.0
+## Throws need this much charge per metre to the target (0-1, see
+## PlayerClass3D.THROW_CHARGE_MAX_DURATION), at least SHOT_MIN_CHARGE.
+const SHOT_CHARGE_PER_METRE := 1.0 / SHOT_RANGE
+const SHOT_MIN_CHARGE := 0.3
+## Close to the net, any line will do: just shoot.
+const POINT_BLANK := 6.0
+## Pass only to a teammate at least this much nearer the goal than us, and
+## no further off than PASS_RANGE.
+const PASS_GAIN := 6.0
+const PASS_RANGE := 24.0
+## Shots come from in front of the goal mouth: within this angle of
+## straight out from the net (toward the middle of the field). Further
+## round, run out in front first, to about FRONT_DISTANCE from the net.
+const SHOT_ANGLE := deg_to_rad(40.0)
+const FRONT_DISTANCE := 9.0
+## A teammate carrying: go after enemies this close to them.
+const ESCORT_RANGE := 7.0
+
 ## Seconds a bot waits before taking its perk, so it doesn't feel instant.
 const PERK_DELAY := 1.0
 ## In the intermission, a bot that hasn't reached its altar after this long
@@ -50,6 +73,12 @@ var _attack_press_left: float = 0.0
 ## The current press is the heavy button, held to charge.
 var _attack_heavy: bool = false
 var _interact_gap_left: float = 0.0
+## Holding Throw to charge a shot: seconds left before letting go.
+var _throw_press_left: float = 0.0
+## Where to face, when it isn't _attack_target (a shot's target).
+var _look_point: Variant = null
+## Where the shot being charged is aimed.
+var _shot_aim: Vector3 = Vector3.ZERO
 var _perk_wait: float = 0.0
 var _intermission_time: float = 0.0
 
@@ -84,6 +113,7 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	_attack_target = null
 	_want_attack = false
 	_want_interact = false
+	_look_point = null
 
 	if game.phase == Game3D_Class.Phase.INTERMISSION:
 		_think_intermission(player, game)
@@ -92,6 +122,11 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	# A boss kill's perk: bots take it on the spot rather than walk back for it
 	if game.perks.can_open(player):
 		_take_perk_soon(player, game)
+
+	# Got the ball: nothing else matters
+	if player.carries_ball():
+		_carry_ball(player)
+		return
 
 	var enemy: PlayerClass3D = _nearest_enemy(player, game)
 	var enemy_dist: float = _flat_dist(player, enemy) if enemy else INF
@@ -115,7 +150,7 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 		return
 	var ball: Ball3D = _nearest_ball(game)
 	if ball:
-		_go_hit_ball(player, ball)
+		_go_for_ball(player, ball)
 		return
 	# The mode has a route (a race): stick to it, only fighting players who
 	# get in the way (above)
@@ -167,6 +202,135 @@ func _fight(player: PlayerClass3D, target: Node3D) -> void:
 	if target is PlayerClass3D and dist < MELEE_RANGE and target.is_swinging() \
 			and player.Entity and player.Entity.hp < player.Entity.hp_max * 0.35 and randf() < 0.3:
 		dodge_request_msec = Time.get_ticks_msec()
+
+
+## The ball's loose: pick it up if the meter allows, else knock it along.
+## Someone has it: an enemy gets tackled, a teammate gets escorted.
+func _go_for_ball(player: PlayerClass3D, ball: Ball3D) -> void:
+	var holder: PlayerClass3D = ball.holder
+	if is_instance_valid(holder) and holder != player:
+		if not Combat.are_teammates(player, holder):
+			_fight(player, holder)
+		else:
+			_escort(player, holder, ball)
+		return
+	if player.carry < PlayerClass3D.CARRY_MIN_TO_GRAB:
+		_go_hit_ball(player, ball)
+		return
+	_move_target = ball.global_position
+	_want_interact = player.can_grab_ball(ball)
+
+
+## A teammate has the ball: clear enemies off them, otherwise get up the
+## field ahead of them.
+func _escort(player: PlayerClass3D, holder: PlayerClass3D, ball: Ball3D) -> void:
+	var threat: PlayerClass3D = null
+	for other: PlayerClass3D in Global.Game3D.players:
+		if is_instance_valid(other) and not other.is_dead() and not Combat.are_teammates(player, other) \
+				and _flat_dist(holder, other) < ESCORT_RANGE \
+				and (not threat or _flat_dist(holder, other) < _flat_dist(holder, threat)):
+			threat = other
+	if threat:
+		_fight(player, threat)
+		return
+	var target: Node3D = _carry_target(player, ball)
+	if target:
+		_move_target = holder.global_position.lerp(target.global_position, 0.5)
+
+
+## Where we take the ball: the net we attack, or our altar with a skull.
+func _carry_target(player: PlayerClass3D, ball: Ball3D) -> Node3D:
+	return Global.Game3D.shot_target(player, ball)
+
+
+## We have the ball: run it home. A skull is delivered by walking it onto
+## the altar; the ball has to be thrown in, so shoot when there's a clear
+## line in range, and before the meter empties (or we're cornered) throw
+## it on along the way to the goal.
+func _carry_ball(player: PlayerClass3D) -> void:
+	var ball: Ball3D = player.held_ball
+	var target: Node3D = _carry_target(player, ball)
+	if not target:
+		return
+	var aim_at: Vector3 = target.global_position
+	var in_front: bool = ball is Skull3D or _in_front_of_goal(player, aim_at)
+	_move_target = aim_at if in_front else aim_at + _goal_front(aim_at) * FRONT_DISTANCE
+	if _throw_press_left > 0.0:
+		_look_point = _shot_aim  # Mid-charge: keep aiming where we meant to
+		return
+	var dist: float = _flat_dist_to(player, aim_at)
+	var seconds_left: float = player.carry / PlayerClass3D.CARRY_DRAIN_PER_SEC
+	var enemy: PlayerClass3D = _nearest_enemy(player, Global.Game3D)
+	# An enemy on top of us and swinging: get rid of it before it's knocked loose
+	var cornered: bool = enemy != null and _flat_dist(player, enemy) < MELEE_RANGE and enemy.is_swinging()
+	if ball is Skull3D:
+		# Walk it in, unless it'd be lost first
+		if seconds_left < 0.4 or cornered:
+			_start_throw(player, aim_at, NavPath.direction(player, aim_at))
+		return
+	if in_front and (dist < POINT_BLANK or (dist < SHOT_RANGE and _clear_line(player, aim_at))):
+		_start_throw(player, aim_at, aim_at - player.global_position)
+	elif seconds_left < PlayerClass3D.THROW_CHARGE_MAX_DURATION + 0.2 or cornered:
+		# Can't hold on: pass it up the field, or send it on toward the goal
+		var mate: PlayerClass3D = _pass_target(player, aim_at, dist)
+		if mate:
+			_start_throw(player, mate.global_position, mate.global_position - player.global_position)
+		elif not cornered or dist < SHOT_RANGE * 2.0:
+			_start_throw(player, aim_at, NavPath.direction(player, aim_at))
+
+
+## Straight out from a net at `net`: toward the middle of the field.
+func _goal_front(net: Vector3) -> Vector3:
+	var out: Vector3 = Global.Game3D.ball_reset_point - net
+	out.y = 0.0
+	return out.normalized() if out.length() > 0.01 else Vector3.FORWARD
+
+
+## Whether we're in front of the net at `net`, with the mouth to shoot at.
+func _in_front_of_goal(player: PlayerClass3D, net: Vector3) -> bool:
+	var from_net: Vector3 = player.global_position - net
+	from_net.y = 0.0
+	return from_net.length() > 0.01 and from_net.angle_to(_goal_front(net)) < SHOT_ANGLE
+
+
+## The teammate furthest up the field (nearest `goal`) that's worth passing
+## to and has nothing in the way, if any.
+func _pass_target(player: PlayerClass3D, goal: Vector3, our_dist: float) -> PlayerClass3D:
+	var best: PlayerClass3D = null
+	var best_dist: float = our_dist - PASS_GAIN
+	for mate: PlayerClass3D in Global.Game3D.players:
+		if mate == player or not is_instance_valid(mate) or mate.is_dead() \
+				or not Combat.are_teammates(player, mate) or _flat_dist(player, mate) > PASS_RANGE:
+			continue
+		var mate_dist: float = _flat_dist_to(mate, goal)
+		if mate_dist < best_dist and _clear_line(player, mate.global_position):
+			best = mate
+			best_dist = mate_dist
+	return best
+
+
+## Hold Throw long enough to reach `target`, facing along `dir`, as far as
+## the meter allows.
+func _start_throw(player: PlayerClass3D, target: Vector3, dir: Vector3) -> void:
+	dir.y = 0.0
+	if dir.length() < 0.01:
+		dir = player.global_basis.z
+	_shot_aim = player.global_position + dir.normalized() * 5.0
+	_look_point = _shot_aim
+	var charge: float = clampf(_flat_dist_to(player, target) * SHOT_CHARGE_PER_METRE, SHOT_MIN_CHARGE, 1.0)
+	var hold: float = charge * PlayerClass3D.THROW_CHARGE_MAX_DURATION
+	# Let go before the meter tosses it for us
+	hold = minf(hold, player.carry / PlayerClass3D.CARRY_DRAIN_PER_SEC - 0.1)
+	_throw_press_left = maxf(hold, 0.05)
+
+
+## Nothing solid between us and `point` (walls; players and the ball don't
+## count).
+func _clear_line(player: PlayerClass3D, point: Vector3) -> bool:
+	var from: Vector3 = player.carry_point()
+	var query := PhysicsRayQueryParameters3D.create(from, Vector3(point.x, from.y, point.z), 1)
+	query.exclude = [player.get_rid()]
+	return player.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 
 ## Get behind the ball (seen from the goal) and swing or punch it goalwards.
@@ -255,7 +419,11 @@ func _steer(player: PlayerClass3D, _delta: float) -> void:
 	move_dir = dir.normalized() if dir.length() > 0.1 else Vector3.ZERO
 	move_dodge = dist > SPRINT_DISTANCE
 
-	if _attack_target and is_instance_valid(_attack_target):
+	if _look_point != null:
+		var look: Vector3 = (_look_point as Vector3) - player.global_position
+		look.y = 0.0
+		look_dir = look.normalized() if look.length() > 0.1 else Vector3.ZERO
+	elif _attack_target and is_instance_valid(_attack_target):
 		var look: Vector3 = _attack_target.global_position - player.global_position
 		look.y = 0.0
 		look_dir = look.normalized() if look.length() > 0.1 else Vector3.ZERO
@@ -279,7 +447,11 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 	var pressing: bool = _attack_press_left > 0.0
 	light_held = pressing and not _attack_heavy
 	heavy_held = pressing and _attack_heavy
-	throw_held = false
+	# A shot: Throw held while it charges, let go once it's long enough
+	_throw_press_left -= delta
+	throw_held = _throw_press_left > 0.0 and player.carries_ball()
+	if not player.carries_ball():
+		_throw_press_left = 0.0
 
 	_interact_gap_left -= delta
 	if _want_interact and _interact_gap_left <= 0.0:
@@ -337,14 +509,7 @@ func _nearest_ball(game: Game3D_Class) -> Ball3D:
 
 ## The nearest goal that scores for our team.
 func _goal_to_attack(player: PlayerClass3D) -> Goal3D:
-	var team: int = player.slot.team if player.slot else 0
-	var best: Goal3D = null
-	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
-		var ours: bool = goal.scoring_team == team \
-			or (goal.scoring_team == Goal3D.LAST_TOUCH and goal.owner_team != team)
-		if ours and (not best or _flat_dist(player, goal) < _flat_dist(player, best)):
-			best = goal
-	return best
+	return Global.Game3D.goal_to_attack(player)
 
 
 func _has_ranged_weapon(player: PlayerClass3D) -> bool:

@@ -3,7 +3,6 @@ class_name HUD3D extends CanvasLayer
 
 @onready var panel:       PanelContainer = $Panel
 @onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
-@onready var stamina_bar: ProgressBar    = $Panel/Row/Bars/StaminaBar
 ## The blue bar: the player's carry meter (see PlayerClass3D.carry).
 @onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
 @onready var player_icon: TextureRect    = $Panel/Row/PlayerIcon
@@ -49,19 +48,13 @@ func _connect_signals(eb: Node) -> void:
 	eb.hp_changed.connect(_on_hp_changed)
 	player.carry_changed.connect(_on_carry_changed)
 	_on_carry_changed(player.carry, PlayerClass3D.CARRY_MAX)
-	eb.stamina_changed.connect(_on_stamina_changed)
 
 	# Get initial values immediately after connecting
 	_on_hp_changed(eb.hp, eb.hp_max)
-	_on_stamina_changed(eb.stamina, eb.stamina_max)
 
 func _on_hp_changed(new_hp: float, max_hp: float) -> void:
 	health_bar.max_value = max_hp
 	health_bar.value = new_hp
-
-func _on_stamina_changed(new_stamina: float, max_stamina: float) -> void:
-	stamina_bar.max_value = max_stamina
-	stamina_bar.value = new_stamina
 
 func _on_carry_changed(new_carry: float, max_carry: float) -> void:
 	carry_bar.max_value = max_carry

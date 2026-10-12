@@ -17,6 +17,23 @@ const COLORS: Array[Color] = [
 ]
 
 
+## How far a rarer weapon's effects lean toward its tier's color.
+const EFFECT_TINT := 0.65
+
+
+## `base` (an effect's own color) leaned toward `tier`'s color; commons keep it.
+static func tint(tier: int, base: Color) -> Color:
+	if tier <= Tier.COMMON:
+		return base
+	return Color(base.lerp(COLORS[tier], EFFECT_TINT), base.a)
+
+
+## `tier`'s color, opaque, to recolor an effect with (see Vfx.play); clear
+## (= as made) for a common.
+static func effect_color(tier: int) -> Color:
+	return Color.TRANSPARENT if tier <= Tier.COMMON else Color(COLORS[tier], 1.0)
+
+
 ## A tier picked at random, weighted by `weights` (one per tier; missing
 ## ones count as 0). Common if they're all 0.
 static func roll(weights: Array[float]) -> int:

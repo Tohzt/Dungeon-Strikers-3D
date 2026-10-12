@@ -6,10 +6,12 @@ var look_dir: Vector3 = Vector3.ZERO
 ## The attack buttons, held this frame (see PlayerClass3D's BUTTONS): light
 ## (left click / RB) attacks on press, heavy (right click / LB) charges while
 ## held and goes off on release, and Throw (Q / Y) charges a throw of the
-## weapon in hand. Bots press them too.
+## weapon in hand (or the ball we carry), and Shoot (E / LT) charges a shot
+## of the carried ball at the goal. Bots press them too.
 var light_held: bool = false
 var heavy_held: bool = false
 var throw_held: bool = false
+var shoot_held: bool = false
 var interact: bool = false
 var interact_held: bool = false
 # The roll button (Space / A) rolls on press, or slides while sprinting.
@@ -36,7 +38,8 @@ var camera: Camera3D = null
 # target dies or gets away. Locking picks whatever's nearest the cursor (or
 # where the right stick / the player points); the mouse wheel, or flicking
 # the right stick toward another target, switches. Tab toggles it too, but
-# locks on to whatever's nearest.
+# locks on to whatever's nearest. While carrying the ball, teammates can be
+# locked on to as well (to pass to; see PlayerClass3D.shoot_ball).
 ## What we're locked on to, if anything. Only people lock on (not bots).
 var lock_target: Node3D = null
 const LOCK_RANGE := 20.0
@@ -96,6 +99,7 @@ func release_all() -> void:
 	light_held = false
 	heavy_held = false
 	throw_held = false
+	shoot_held = false
 	move_dodge = false
 	dodge_dur = 0.0
 	dodge_request_msec = -1
@@ -112,6 +116,7 @@ func _process(delta: float) -> void:
 	light_held = Input.is_action_pressed(action("attack_light"))
 	heavy_held = Input.is_action_pressed(action("attack_heavy"))
 	throw_held = Input.is_action_pressed(action("throw"))
+	shoot_held = Input.is_action_pressed(action("shoot"))
 	# Stays set until the player acts on it
 	if Input.is_action_just_pressed(action("interact")):
 		interact = true
@@ -216,7 +221,8 @@ func _handle_lock_on() -> void:
 			_set_lock(picked)
 
 
-## Bosses still fighting, living skeletons, and players on other teams.
+## Bosses still fighting, living skeletons, and players on other teams (and
+## our own, while we carry the ball).
 func _lock_candidates() -> Array[Node3D]:
 	var found: Array[Node3D] = []
 	var game: Game3D_Class = Global.Game3D
@@ -234,7 +240,8 @@ func _lock_candidates() -> Array[Node3D]:
 func _can_lock(node: Node3D, max_range: float) -> bool:
 	if not is_instance_valid(node) or node == Master or (Master as PlayerClass3D).is_dead():
 		return false
-	if node is PlayerClass3D and (node.is_dead() or Combat.are_teammates(node, Master)):
+	if node is PlayerClass3D and (node.is_dead() \
+			or (Combat.are_teammates(node, Master) and not (Master as PlayerClass3D).carries_ball())):
 		return false
 	if node is SkeletonEnemy3D and node.is_dead:
 		return false

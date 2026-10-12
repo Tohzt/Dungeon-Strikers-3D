@@ -14,12 +14,13 @@ const STATS: Dictionary[StringName, String] = {
 	&"throw_power": "How hard weapons are thrown",
 	&"move_speed": "Walking and sprinting speed",
 	&"max_hp": "Max health",
-	&"max_stamina": "Max stamina",
-	&"stamina_regen": "Stamina regeneration speed",
 	&"damage_taken": "Damage taken (negative = less)",
 	&"knockback_taken": "Knockback taken (negative = less)",
-	&"block_stamina": "Stamina lost blocking a hit (negative = less)",
 	&"size": "How big the body looks (wild items: Giant, Pipsqueak)",
+	# Wild items' status buffs: on above 1 (see PlayerStatus3D)
+	&"frost_touch": "Hits freeze whoever they land on",
+	&"ablaze": "On fire: hits set people burning, touching the ball lights it",
+	&"regen": "Heals over time",
 }
 ## No stat goes below this multiplier, however many negatives stack up.
 const MIN_MULTIPLIER := 0.1

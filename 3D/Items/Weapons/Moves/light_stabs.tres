@@ -51,6 +51,5 @@ steps = Array[ExtResource("4_step")]([SubResource("step_0"), SubResource("step_1
 
 [resource]
 script = ExtResource("1_move")
-stamina_scale = 1.4
 combo = SubResource("combo")
 waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])

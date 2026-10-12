@@ -53,5 +53,22 @@ enum Shape {
 ## Times the knockback it hits the ball with.
 @export var ball_scale: float = 1.0
 
+@export_group("Burst")
+## An ORB only: over 0, it hits nothing on its way. It bursts on touching
+## anyone (or the ball), on reaching a wall, or once it's flown its reach
+## (so reach / speed is its fuse), hitting everything within this many
+## meters once.
+@export var burst_radius: float = 0.0
+## Grows in front of the wielder while their heavy charges, and is what
+## flies off when it strikes (see PlayerClass3D._show_charging).
+@export var held_while_charging: bool = false
+
 @export_group("Look")
+## Its own look's color, and what a `look` or `end_look` is tinted.
 @export var color: Color = Color(0.85, 0.95, 1.0, 0.85)
+## Shown as it instead of its own look: a HELD Vfx.EFFECTS id (an orb, a
+## fireball), `width` across. Empty = its own look.
+@export var look: StringName = &""
+## Shown on the ground where it ends (a burst: burst_radius across, else
+## `width`): a Vfx.EFFECTS id. Empty = none.
+@export var end_look: StringName = &""

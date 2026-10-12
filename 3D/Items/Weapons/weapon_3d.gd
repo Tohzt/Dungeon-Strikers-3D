@@ -371,13 +371,39 @@ func set_away(value: bool) -> void:
 		swing_time_left = 0.0
 
 
+## Where a charging heavy's sparks gather (see PlayerClass3D._show_charging):
+## the middle of the blade.
+func charge_anchor() -> Node3D:
+	return Collision if Collision else self
+
+
+## The blade's longest side, from its hitbox, before any scaling (a giant
+## weapon's is bigger by its scale). 1 if it has none.
+func blade_length() -> float:
+	var box := Collision.shape as BoxShape3D if Collision else null
+	if not box:
+		return 1.0
+	return maxf(box.size.x, maxf(box.size.y, box.size.z))
+
+
 ## Glow while a heavy is charged and ready (see PlayerClass3D). On every machine.
 func set_charged(value: bool) -> void:
 	charged = value
 	if not value and _charge_glow:
-		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
-			(mesh as MeshInstance3D).material_overlay = _worn_glow
+		for mesh: MeshInstance3D in _glow_meshes():
+			mesh.material_overlay = _worn_glow
 		_charge_glow = null
+
+
+## The weapon's own meshes, for a glow to lie over: not those of any effect
+## on it (a charging heavy's sparks, see Vfx), which would light up as a
+## big flat rectangle.
+func _glow_meshes() -> Array[MeshInstance3D]:
+	var meshes: Array[MeshInstance3D] = []
+	for mesh: Node in find_children("*", "MeshInstance3D", true, false):
+		if not Vfx.is_part_of_effect(mesh, self):
+			meshes.append(mesh)
+	return meshes
 
 
 func _update_charge_glow() -> void:
@@ -388,8 +414,8 @@ func _update_charge_glow() -> void:
 		_charge_glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_charge_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_charge_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		for mesh: Node in find_children("*", "MeshInstance3D", true, false):
-			(mesh as MeshInstance3D).material_overlay = _charge_glow
+		for mesh: MeshInstance3D in _glow_meshes():
+			mesh.material_overlay = _charge_glow
 	var pulse: float = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 1000.0 * CHARGED_PULSE_SPEED)
 	_charge_glow.albedo_color = Color(CHARGED_COLOR, CHARGED_COLOR.a * pulse)
 
@@ -722,6 +748,12 @@ func make_giant(size: float, hit_power: float) -> void:
 			child.fit_blade()  # A giant blade leaves a giant trail
 
 
+## An effect's own `base` color, leaned toward this weapon's rarity's (see
+## WeaponRarity.tint).
+func tint(base: Color) -> Color:
+	return WeaponRarity.tint(rarity, base)
+
+
 ## Make this a `tier` weapon, at full durability. Call on every machine.
 func set_rarity(tier: int) -> void:
 	rarity = clampi(tier, 0, WeaponRarity.Tier.size() - 1)
@@ -774,8 +806,8 @@ func _update_worn_glow() -> void:
 		_worn_glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_worn_glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		if not _charge_glow:
-			for mesh: Node in find_children("*", "MeshInstance3D", true, false):
-				(mesh as MeshInstance3D).material_overlay = _worn_glow
+			for mesh: MeshInstance3D in _glow_meshes():
+				mesh.material_overlay = _worn_glow
 	var last: bool = is_last_use()
 	var color: Color = LAST_USE_COLOR if last else WORN_COLOR
 	var speed: float = LAST_USE_PULSE_SPEED if last else WORN_PULSE_SPEED
@@ -799,6 +831,7 @@ func _break() -> void:
 	Sfx.play(&"weapon_break", global_position)
 	CameraShake.add(CameraShake.MEDIUM, global_position)
 	WeaponShatter3D.spawn(get_parent(), global_position, shatter_color(), radius)
+	Vfx.play(&"shatter", global_position, Vector3.FORWARD, false, radius, shatter_color())
 	if wielder:
 		unequip()
 	swing_time_left = 0.0

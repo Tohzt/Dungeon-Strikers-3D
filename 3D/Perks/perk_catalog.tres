@@ -67,15 +67,6 @@ mods = Dictionary[StringName, float]({
 &"knockback_taken": -0.35
 })
 
-[sub_resource type="Resource" id="Perk_second_wind"]
-script = ExtResource("1_perk")
-title = "Second Wind"
-description = "+50% stamina regeneration."
-category = 1
-mods = Dictionary[StringName, float]({
-&"stamina_regen": 0.5
-})
-
 [sub_resource type="Resource" id="Perk_power_boot"]
 script = ExtResource("1_perk")
 title = "Power Boot"
@@ -92,15 +83,6 @@ description = "+30% throw power for weapons."
 category = 2
 mods = Dictionary[StringName, float]({
 &"throw_power": 0.3
-})
-
-[sub_resource type="Resource" id="Perk_marathoner"]
-script = ExtResource("1_perk")
-title = "Marathoner"
-description = "+30% max stamina."
-category = 2
-mods = Dictionary[StringName, float]({
-&"max_stamina": 0.3
 })
 
 [sub_resource type="Resource" id="Perk_momentum"]
@@ -144,11 +126,10 @@ mods = Dictionary[StringName, float]({
 [sub_resource type="Resource" id="Perk_rally"]
 script = ExtResource("1_perk")
 title = "Rally"
-description = "+60% stamina regeneration and +10% move speed."
+description = "+10% move speed."
 category = 3
 mods = Dictionary[StringName, float]({
-&"move_speed": 0.1,
-&"stamina_regen": 0.6
+&"move_speed": 0.1
 })
 
 [sub_resource type="Resource" id="Perk_vitality"]
@@ -157,14 +138,6 @@ title = "Vitality"
 description = "+15% max health."
 mods = Dictionary[StringName, float]({
 &"max_hp": 0.15
-})
-
-[sub_resource type="Resource" id="Perk_endurance"]
-script = ExtResource("1_perk")
-title = "Endurance"
-description = "+20% max stamina."
-mods = Dictionary[StringName, float]({
-&"max_stamina": 0.2
 })
 
 [sub_resource type="Resource" id="Perk_swiftness"]
@@ -252,12 +225,10 @@ mods = Dictionary[StringName, float]({
 [sub_resource type="Resource" id="Perk_relic_phantom_step"]
 script = ExtResource("1_perk")
 title = "Phantom Step"
-description = "+30% move speed, +40% max stamina and +50% stamina regeneration."
+description = "+30% move speed."
 category = 6
 mods = Dictionary[StringName, float]({
-&"max_stamina": 0.4,
-&"move_speed": 0.3,
-&"stamina_regen": 0.5
+&"move_speed": 0.3
 })
 
 [sub_resource type="Resource" id="Perk_relic_bloodlust"]
@@ -273,10 +244,9 @@ mods = Dictionary[StringName, float]({
 [sub_resource type="Resource" id="Perk_relic_juggernaut"]
 script = ExtResource("1_perk")
 title = "Juggernaut"
-description = "25% less damage and 50% less knockback taken; blocking costs 40% less stamina."
+description = "25% less damage and 50% less knockback taken."
 category = 6
 mods = Dictionary[StringName, float]({
-&"block_stamina": -0.4,
 &"damage_taken": -0.25,
 &"knockback_taken": -0.5
 })
@@ -303,4 +273,4 @@ mods = Dictionary[StringName, float]({
 
 [resource]
 script = ExtResource("2_catalog")
-perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_second_wind"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_marathoner"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_endurance"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_quick_return"), SubResource("Perk_relic_titans_grip"), SubResource("Perk_relic_undying"), SubResource("Perk_relic_warlord"), SubResource("Perk_relic_phantom_step"), SubResource("Perk_relic_bloodlust"), SubResource("Perk_relic_juggernaut"), SubResource("Perk_relic_reaper"), SubResource("Perk_relic_colossus_bane")])
+perks = Array[ExtResource("1_perk")]([SubResource("Perk_heavy_hands"), SubResource("Perk_brute_force"), SubResource("Perk_giant_slayer"), SubResource("Perk_glass_cannon"), SubResource("Perk_fleet_foot"), SubResource("Perk_thick_skin"), SubResource("Perk_anchor"), SubResource("Perk_power_boot"), SubResource("Perk_cannon_arm"), SubResource("Perk_momentum"), SubResource("Perk_hearty"), SubResource("Perk_grudge"), SubResource("Perk_stubborn"), SubResource("Perk_rally"), SubResource("Perk_vitality"), SubResource("Perk_swiftness"), SubResource("Perk_sharpened"), SubResource("Perk_iron_will"), SubResource("Perk_vampiric"), SubResource("Perk_executioner"), SubResource("Perk_quick_return"), SubResource("Perk_relic_titans_grip"), SubResource("Perk_relic_undying"), SubResource("Perk_relic_warlord"), SubResource("Perk_relic_phantom_step"), SubResource("Perk_relic_bloodlust"), SubResource("Perk_relic_juggernaut"), SubResource("Perk_relic_reaper"), SubResource("Perk_relic_colossus_bane")])

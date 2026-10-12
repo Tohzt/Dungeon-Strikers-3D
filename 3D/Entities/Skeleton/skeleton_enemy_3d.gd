@@ -695,8 +695,10 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		knockback_velocity *= BLOCK_KNOCKBACK_RATIO
 		shield.wear()
 		Sfx.play_everywhere(&"block", shield.global_position)
+		Vfx.play_everywhere(&"block", global_position + Vector3.UP, dir)
 	else:
 		Sfx.play_everywhere(&"hit_player", global_position + Vector3.UP)
+		Vfx.play_everywhere(&"hit", global_position + Vector3.UP, dir)
 	_knockback = _flat(knockback_velocity) * KNOCKBACK_RATIO
 	velocity.y = maxf(velocity.y, knockback_velocity.y * KNOCKBACK_RATIO)
 	hp -= damage

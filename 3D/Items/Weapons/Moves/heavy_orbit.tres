@@ -9,7 +9,6 @@ charge_time = 0.5
 action = 2
 swings = false
 clip = &"General/Throw"
-stamina_scale = 2.0
 orbit_radius = 3.2
 orbit_time = 1.0
 orbit_turns = 2.0

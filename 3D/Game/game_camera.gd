@@ -24,24 +24,17 @@ var can_zoom: bool = true
 @export var goal_half_width: float = 3.5  # Goal centre to each post
 
 @export_group("Focus")
-## The view stays on the players. It only widens to also show what one of
-## them is aiming at (the ball, a boss or an enemy player this close,
-## within focus_aim_angle of their aim), or a goal and the ball while they
-## and the ball are both near it.
-@export var focus_range: float = 16.0
-@export var focus_aim_angle: float = 15.0  # Degrees either side of the aim that count as aiming at something
-@export var focus_keep_angle: float = 30.0  # ...once already focused on it, so the focus doesn't flicker
-@export var focus_hold_time: float = 0.6  # Seconds the focus lingers after aiming away
-@export var frame_bosses: bool = true
-@export var frame_enemies: bool = true
+## The view stays on the players. It only widens to also show a goal and
+## the ball while one of them and the ball are both near it.
+
 ## Extra ground kept in view below (nearer the camera than) the players while
 ## framing several things, so the boss health bar doesn't cover them.
 @export var hud_margin: float = 5.0
 ## The view stays centred on the players, sliding at most this far toward
 ## what they're focused on; the FOV widens to show the rest.
 @export var context_max_shift: float = 5.0
-## How quickly that slide follows (slower than follow_speed, so aiming at
-## something doesn't yank the view).
+## How quickly that slide follows (slower than follow_speed, so framing a
+## goal doesn't yank the view).
 @export var context_ease: float = 1.5
 
 @export_group("Wall Tilt")
@@ -77,8 +70,6 @@ var top_down_blend: float = 0.0  # 0 = usual angle, 1 = fully tilted
 var wall_shift: float = 0.0  # How far the view has slid out over the field (see wall_max_shift)
 var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
 var context_shift: Vector3 = Vector3.ZERO  # Eased slide toward what's focused on (see context_max_shift)
-## Each player (Node3D) -> [what they're aiming at (Node3D), seconds the focus lingers].
-var _aim_focus: Dictionary = {}
 ## The player's chosen zoom (scroll wheel); the camera never frames tighter.
 var zoom_fov: float
 ## Jumped to the players yet (so the match doesn't open on an empty room).
@@ -121,8 +112,7 @@ func _input(event: InputEvent) -> void:
 
 ## Who to keep in view: the exported target if one is set; online, just our
 ## own player (the others are on their own screens); else every local person
-## playing (bots only show up when aimed at, see _focus_points), or
-## every bot when nobody is.
+## playing, or every bot when nobody is.
 func _get_targets() -> Array[Node3D]:
 	var targets: Array[Node3D] = []
 	if target:
@@ -154,105 +144,40 @@ func _get_group_points(targets: Array[Node3D]) -> Array[Vector3]:
 	return points
 
 
-## What the view should widen to show besides `targets` themselves: what
-## each is aiming at (see _update_aim_focus), and, for any ball near a goal
-## that one of them is also near, that ball and both posts (so the whole
-## mouth shows).
+## What the view should widen to show besides `targets` themselves: for
+## any ball near a goal that one of them is also near, that ball and both
+## posts (so the whole mouth shows). Nothing else pulls the view.
 func _focus_points(targets: Array[Node3D]) -> Array[Vector3]:
 	var points: Array[Vector3] = []
-	for t: Node3D in targets:
-		if _aim_focus.has(t):
-			points.append((_aim_focus[t][0] as Node3D).global_position)
-	if not frame_ball or not Global.Game3D:
-		return points
 	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
-		var goal_flat := Vector2(goal.global_position.x, goal.global_position.z)
-		var player_near: bool = false
-		for t: Node3D in targets:
-			if _flat(t.global_position).distance_to(goal_flat) <= goal_frame_distance:
-				player_near = true
-				break
-		if not player_near:
-			continue
-		for ball: Ball3D in Global.Game3D.balls:
-			if is_instance_valid(ball) and ball.is_inside_tree() \
-					and _flat(ball.global_position).distance_to(goal_flat) <= goal_frame_distance:
-				points.append(ball.global_position)
-				points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
-				points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
+		var balls: Array[Ball3D] = _balls_at_goal(goal, targets)
+		for ball: Ball3D in balls:
+			points.append(ball.global_position)
+		if not balls.is_empty():
+			points.append(goal.to_global(Vector3(0, 0, goal_half_width)))
+			points.append(goal.to_global(Vector3(0, 0, -goal_half_width)))
 	return points
 
 
-## Note what each of `targets` is aiming at. Something already focused on
-## keeps the focus over a wider angle, and for focus_hold_time after they
-## aim away, so it doesn't flicker on and off.
-func _update_aim_focus(targets: Array[Node3D], delta: float) -> void:
-	var updated: Dictionary = {}
+## The balls within goal_frame_distance of `goal`, if one of `targets` is
+## too (else none).
+func _balls_at_goal(goal: Node3D, targets: Array[Node3D]) -> Array[Ball3D]:
+	var balls: Array[Ball3D] = []
+	if not frame_ball or not Global.Game3D:
+		return balls
+	var goal_flat: Vector2 = _flat(goal.global_position)
+	var player_near: bool = false
 	for t: Node3D in targets:
-		var held: Node3D = null
-		var hold_left: float = 0.0
-		if _aim_focus.has(t) and is_instance_valid(_aim_focus[t][0]):
-			held = _aim_focus[t][0]
-			hold_left = _aim_focus[t][1]
-		var aimed: Node3D = _aimed_at(t, held)
-		if aimed:
-			updated[t] = [aimed, focus_hold_time]
-		elif held and hold_left > delta and held in _focus_candidates(t):
-			updated[t] = [held, hold_left - delta]
-	_aim_focus = updated
-
-
-## The candidate (see _focus_candidates) closest to `player`'s aim, within
-## focus_aim_angle of it (focus_keep_angle for `held`), or null.
-func _aimed_at(player: Node3D, held: Node3D) -> Node3D:
-	var handler: PlayerInputHandler3D = player.get("Input_Handler")
-	if not handler or handler.look_dir.is_zero_approx():
-		return null
-	var aim: Vector2 = _flat(handler.look_dir).normalized()
-	var best: Node3D = null
-	var best_angle: float = INF
-	for candidate: Node3D in _focus_candidates(player):
-		var to: Vector2 = _flat(candidate.global_position - player.global_position)
-		if to.is_zero_approx():
-			continue
-		var angle: float = rad_to_deg(abs(aim.angle_to(to)))
-		var limit: float = focus_keep_angle if candidate == held else focus_aim_angle
-		if angle <= limit and angle < best_angle:
-			best = candidate
-			best_angle = angle
-	return best
-
-
-## The balls, awake bosses and enemy players within focus_range of `player`.
-func _focus_candidates(player: Node3D) -> Array[Node3D]:
-	var candidates: Array[Node3D] = []
-	var game: Game3D_Class = Global.Game3D
-	if not game:
-		return candidates
-	var all: Array[Node3D] = []
-	if frame_ball:
-		for ball: Ball3D in game.balls:
-			if is_instance_valid(ball) and ball.is_inside_tree():
-				all.append(ball)
-	if frame_bosses:
-		for boss: Boss3D in game.bosses:
-			if is_instance_valid(boss) and boss.is_awake and not boss.is_defeated:
-				all.append(boss)
-	if frame_enemies:
-		for other: PlayerClass3D in game.players:
-			if is_instance_valid(other) and other != player and not other.is_dead() \
-					and not _same_team(other, player):
-				all.append(other)
-	for candidate: Node3D in all:
-		if _flat(candidate.global_position - player.global_position).length() <= focus_range:
-			candidates.append(candidate)
-	return candidates
-
-
-func _same_team(a: Node3D, b: Node3D) -> bool:
-	var slot_a: PlayerSlot = a.get("slot")
-	var slot_b: PlayerSlot = b.get("slot")
-	return slot_a != null and slot_b != null and slot_a.team == slot_b.team
+		if _flat(t.global_position).distance_to(goal_flat) <= goal_frame_distance:
+			player_near = true
+			break
+	if not player_near:
+		return balls
+	for ball: Ball3D in Global.Game3D.balls:
+		if is_instance_valid(ball) and ball.is_inside_tree() \
+				and _flat(ball.global_position).distance_to(goal_flat) <= goal_frame_distance:
+			balls.append(ball)
+	return balls
 
 
 func _flat(v: Vector3) -> Vector2:
@@ -270,7 +195,6 @@ func _process(delta: float) -> void:
 		return
 
 	var targets := _get_targets()
-	_update_aim_focus(targets, delta)
 	_update_tilt(targets, delta)
 	global_transform.basis = view_basis
 
@@ -283,7 +207,8 @@ func _process(delta: float) -> void:
 		return
 
 	# Single player: fixed zoom, camera pulled a little toward where they're
-	# aiming, widening only to show what they focus on (see _focus_points).
+	# aiming, widening only to show a goal they and the ball are near (see
+	# _focus_points).
 	if targets.is_empty():
 		fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
 		return
@@ -347,8 +272,8 @@ func _process(delta: float) -> void:
 	# Ensure look_target is at player's height
 	look_target.y = target_pos.y
 
-	# Widen to also show what they're aiming at, or the goal they and the
-	# ball are near, keeping the player and where they're aiming in view.
+	# Widen to also show the goal they and the ball are near, keeping the
+	# player and where they're aiming in view.
 	var focus_points: Array[Vector3] = _focus_points(targets)
 	if not focus_points.is_empty():
 		var points: Array[Vector3] = [target_pos, look_target, _below_on_screen(target_pos)]
@@ -415,8 +340,8 @@ func _place_on_targets() -> void:
 	_placed = true
 
 
-## Ease the tilt toward top-down, just enough to see every player (and the
-## ball) over any wall in the way, and slide out over the field if even
+## Ease the tilt toward top-down, just enough to see every player (and a
+## ball framed at a goal) over any wall in the way, and slide out over the field if even
 ## full tilt isn't enough to see a player. Tilts about the camera's own
 ## right axis, so it only ever pitches, never turns.
 func _update_tilt(targets: Array[Node3D], delta: float) -> void:
@@ -426,10 +351,11 @@ func _update_tilt(targets: Array[Node3D], delta: float) -> void:
 		var need: Vector2 = _wall_need(t, true)
 		goal_blend = max(goal_blend, need.x)
 		goal_shift = max(goal_shift, need.y)
-	if frame_ball and Global.Game3D:
-		for ball: Ball3D in Global.Game3D.balls:
-			if is_instance_valid(ball) and ball.is_inside_tree():
-				goal_blend = max(goal_blend, _wall_need(ball, false).x)
+	# The ball only while it's framed at a goal (see _focus_points); elsewhere
+	# it never moves the view.
+	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
+		for ball: Ball3D in _balls_at_goal(goal, targets):
+			goal_blend = max(goal_blend, _wall_need(ball, false).x)
 	var weight: float = clamp(delta * top_down_ease, 0.0, 1.0)
 	top_down_blend = lerp(top_down_blend, goal_blend, weight)
 	wall_shift = lerp(wall_shift, goal_shift, weight)

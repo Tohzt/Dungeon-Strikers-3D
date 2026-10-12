@@ -26,6 +26,13 @@ const GIANT_WEAPONS: Array[PackedScene] = [
 	preload("res://3D/Weapons/Dagger/dagger_3d.tscn"),
 ]
 
+## Lullaby: every foe this close falls asleep.
+const LULLABY_RADIUS := 8.0
+## Warp: lands this far behind the ball (from where we were), or, with no
+## ball about, this far ahead of us at most.
+const WARP_BALL_GAP := 1.5
+const WARP_DISTANCE := 10.0
+
 ## Thunderclap: everyone else this close gets blasted.
 const THUNDERCLAP_RADIUS := 7.0
 const THUNDERCLAP_DAMAGE := 25.0
@@ -53,13 +60,13 @@ const ITEMS: Array[Dictionary] = [
 		"front": 2.0, "back": 2.0},
 	{"title": "Sugar Rush", "blurb": "Go go go!",
 		"kind": Kind.BUFF, "color": Color(1.0, 0.5, 0.9), "seconds": 10.0,
-		"mods": {&"move_speed": 0.6, &"stamina_regen": 2.0},
+		"mods": {&"move_speed": 0.6, },
 		"front": 2.0, "back": 3.0},
 	{"title": "Berserk", "blurb": "Hit way harder, get hit way harder",
 		"kind": Kind.BUFF, "color": Color(0.85, 0.1, 0.1), "seconds": 12.0,
 		"mods": {&"damage": 1.5, &"damage_taken": 1.0},
 		"front": 1.0, "back": 2.0},
-	{"title": "Snack", "blurb": "Full health and stamina",
+	{"title": "Snack", "blurb": "Full health",
 		"kind": Kind.INSTANT, "color": Color(1.0, 0.85, 0.4),
 		"front": 2.0, "back": 1.0},
 	{"title": "Thunderclap", "blurb": "Blast everyone nearby away",
@@ -68,9 +75,29 @@ const ITEMS: Array[Dictionary] = [
 	{"title": "Giant Weapon", "blurb": "Big. Very big.",
 		"kind": Kind.WEAPON, "color": Color(1.0, 0.65, 0.1),
 		"front": 1.0, "back": 3.0},
+	{"title": "Frost Touch", "blurb": "Your hits freeze them solid",
+		"kind": Kind.BUFF, "color": Color(0.55, 0.85, 1.0), "seconds": 12.0,
+		"mods": {&"frost_touch": 1.0},
+		"front": 2.0, "back": 2.0},
+	{"title": "Ablaze", "blurb": "Set everything you touch on fire",
+		"kind": Kind.BUFF, "color": Color(1.0, 0.55, 0.1), "seconds": 12.0,
+		"mods": {&"ablaze": 1.0},
+		"front": 2.0, "back": 2.0},
+	{"title": "Regen", "blurb": "Heal up over time",
+		"kind": Kind.BUFF, "color": Color(0.45, 1.0, 0.45), "seconds": 8.0,
+		"mods": {&"regen": 1.0},
+		"front": 2.0, "back": 1.0},
+	{"title": "Warp", "blurb": "Blink right to the ball",
+		"kind": Kind.INSTANT, "color": Color(0.75, 0.6, 1.0),
+		"front": 1.0, "back": 3.0},
+	{"title": "Lullaby", "blurb": "Everyone nearby nods off",
+		"kind": Kind.INSTANT, "color": Color(0.8, 0.7, 1.0),
+		"front": 1.0, "back": 3.0},
 ]
 const SNACK := 6
 const THUNDERCLAP := 7
+const WARP := 12
+const LULLABY := 13
 
 ## Each buff's Perk, made once (the same object every time, so getting a
 ## buff again restarts it instead of stacking a copy).

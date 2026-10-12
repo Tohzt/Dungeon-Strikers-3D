@@ -270,6 +270,7 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, _att
 			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
 		return true
 	Sfx.play_everywhere(&"hit_slime", global_position)
+	Vfx.play_everywhere(&"hit", global_position, knockback_velocity)  # Its dir is lost when passed to the server
 	_knockback = _flat(knockback_velocity) * HIT_KNOCKBACK_RATIO
 	velocity.y = max(velocity.y, knockback_velocity.y * HIT_KNOCKBACK_RATIO)
 	hp -= damage

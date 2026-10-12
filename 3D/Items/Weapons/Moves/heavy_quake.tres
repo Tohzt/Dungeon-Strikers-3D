@@ -21,7 +21,6 @@ color = Color(0.95, 0.8, 0.55, 0.85)
 script = ExtResource("1_move")
 charge_time = 0.7
 clip = &"CombatMelee/Melee_1H_Attack_Chop"
-stamina_scale = 2.0
 sound = &"boss_stomp"
 shake = 0.45
 waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])

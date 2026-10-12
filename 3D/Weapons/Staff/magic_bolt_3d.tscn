@@ -33,6 +33,9 @@ ball_redirect_lift = 3.0
 max_lifetime = 3.0
 wall_sound = &"spell_impact"
 body_sound = &"spell_impact"
+look = &"dark_bolt"
+look_size = 0.6
+look_color = Color(0.4, 1, 0.5, 1)
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
 cast_shadow = 0

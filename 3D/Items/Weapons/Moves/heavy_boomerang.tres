@@ -9,7 +9,6 @@ charge_time = 0.6
 action = 1
 swings = false
 clip = &"General/Throw"
-stamina_scale = 2.0
 throw_reach = 11.0
 throw_speed = 22.0
 action_damage_scale = 1.2

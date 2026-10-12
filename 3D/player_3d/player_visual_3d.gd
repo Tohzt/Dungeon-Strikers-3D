@@ -149,6 +149,16 @@ const IFRAME_FLASH_RATE := 6.0
 
 @onready var body: Node3D = $Character
 @onready var team_ring: MeshInstance3D = $TeamRing
+## Someone playing on this machine: a copy of their ring keeps spreading
+## out from it and fading (a sonar ping), and the ring swells as each one
+## leaves, so they can spot themselves in a crowd.
+const RING_PULSE := 0.12
+const PING_PERIOD := 1.4
+const PING_DURATION := 0.9
+const PING_SCALE := 2.2
+const PING_ALPHA := 0.7
+var _ping_ring: MeshInstance3D = null
+var _ping_time: float = 0.0
 
 var player: PlayerClass3D = null
 var tree: AnimationTree = null
@@ -158,6 +168,9 @@ var _last_pose: int = PlayerClass3D.Pose.NONE
 var _iframe_flash: bool = false
 var _iframe_time: float = 0.0
 var _flash_material: StandardMaterial3D = null
+## Laid over the body while a status lasts (see set_status_overlay), under
+## the iframe flash.
+var _status_overlay: Material = null
 var _armored: bool = false
 ## Where the body sits when nothing moves it (a dodge roll lifts and pivots it).
 var _body_rest_position := Vector3.ZERO
@@ -223,6 +236,7 @@ func setup(owner_player: PlayerClass3D) -> void:
 	add_child(_hand_right)
 	# Each player tints its own ring
 	team_ring.material_override = team_ring.material_override.duplicate()
+	_make_ping_ring()
 	_make_stars()
 	var scene: PackedScene = character
 	if not scene:
@@ -390,12 +404,15 @@ func _transition(xfade: float, auto: bool = false) -> AnimationNodeStateMachineT
 func _process(delta: float) -> void:
 	if not player or not tree:
 		return
+	_update_ping(delta)
 	var speed: float = Vector2(player.velocity.x, player.velocity.z).length()
 	tree.set(&"parameters/base/Move/locomotion/blend_position", speed)
 	tree.set(&"parameters/base/Move/speed/scale", clampf(speed / RUN_SPEED, 1.0, MAX_RUN_TIME_SCALE))
 
 	var pose: int = player.anim_pose
 	if pose != _last_pose and not player.is_dead():  # Knocked out bodies stay down
+		# Frozen solid: the body holds whatever pose it was in
+		tree.active = pose != PlayerClass3D.Pose.FROZEN
 		match pose:
 			PlayerClass3D.Pose.ROLL:
 				_go(&"Dive")
@@ -411,6 +428,7 @@ func _process(delta: float) -> void:
 				_go(&"Knockdown")
 				Sfx.play(&"land", player.global_position)
 			PlayerClass3D.Pose.GETUP: _go(&"GetUp")
+			PlayerClass3D.Pose.ASLEEP: _go(&"Knockdown")  # Lies there until woken
 			PlayerClass3D.Pose.STAGGER: _go(&"Stagger")
 		_last_pose = pose
 
@@ -692,6 +710,7 @@ func play_spawn() -> void:
 ## Killed or knocked out: collapse and stay down until play_spawn().
 func play_down() -> void:
 	if _playback:
+		tree.active = true  # Even if frozen
 		_go(&"Down")
 
 
@@ -708,6 +727,42 @@ func set_team_color(color: Color) -> void:
 	var material := team_ring.material_override as StandardMaterial3D
 	if material:
 		material.albedo_color = color
+	if _ping_ring:
+		(_ping_ring.material_override as StandardMaterial3D).albedo_color = color
+
+
+# ===== SPOTTING YOURSELF =====
+
+func _make_ping_ring() -> void:
+	_ping_ring = MeshInstance3D.new()
+	_ping_ring.name = "PingRing"
+	_ping_ring.mesh = team_ring.mesh
+	_ping_ring.transform = team_ring.transform
+	_ping_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = (team_ring.material_override as StandardMaterial3D).albedo_color
+	_ping_ring.material_override = material
+	_ping_ring.visible = false
+	add_child(_ping_ring)
+
+
+## Pulse our ring and send out pings, if we're someone playing here.
+func _update_ping(delta: float) -> void:
+	var mine: bool = player.is_local_person() and not player.is_dead()
+	_ping_ring.visible = mine
+	if not mine:
+		team_ring.scale = Vector3.ONE
+		return
+	_ping_time = fmod(_ping_time + delta, PING_PERIOD)
+	var t: float = _ping_time / PING_DURATION
+	var swell: float = clampf(1.0 - t, 0.0, 1.0)
+	team_ring.scale = Vector3.ONE * (1.0 + RING_PULSE * swell * swell)
+	_ping_ring.visible = t < 1.0
+	var spread: float = lerp(1.0, PING_SCALE, ease(t, 0.5))  # Fast out, slowing
+	_ping_ring.scale = Vector3(spread, 1.0, spread)
+	(_ping_ring.material_override as StandardMaterial3D).albedo_color.a = PING_ALPHA * (1.0 - t)
 
 
 ## Show or hide the character's headgear and cape (see ARMOR_MESHES).
@@ -728,8 +783,20 @@ func set_iframe_fade(on: bool) -> void:
 		_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_flash_material.albedo_color = Color(1.0, 0.1, 0.1, IFRAME_FLASH_ALPHA)
+	_apply_overlay()
+
+
+## Lay `material` over the body (a status: frozen, burning), or null for
+## none. The iframe flash still shows over it while it lasts.
+func set_status_overlay(material: Material) -> void:
+	_status_overlay = material
+	_apply_overlay()
+
+
+func _apply_overlay() -> void:
+	var material: Material = _flash_material if _iframe_flash else _status_overlay
 	for mesh: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):
-		mesh.material_overlay = _flash_material if on else null
+		mesh.material_overlay = material
 
 
 ## The stars: small flat five-pointed ones, always facing the camera,

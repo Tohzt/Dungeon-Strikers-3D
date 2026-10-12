@@ -31,14 +31,14 @@ enum Action {
 @export var duration_scale: float = 1.0
 ## Times the step forward a swing takes. 0 = stand still.
 @export var lunge_scale: float = 1.0
-## Times the stamina of a normal swing.
-@export var stamina_scale: float = 1.0
 ## Sent out on each strike.
 @export var waves: Array[AttackWaveSpec3D] = []
 ## Played as it strikes (an Sfx.SOUNDS id), on top of the swing. Empty = none.
 @export var sound: StringName = &""
 ## Shakes the camera of everyone near where it strikes (see CameraShake). 0 = none.
 @export var shake: float = 0.0
+## Shown as it strikes (a Vfx.EFFECTS id), along the aim. Empty = none.
+@export var vfx: StringName = &""
 
 @export_group("Action")
 @export var action: Action = Action.NONE
@@ -61,6 +61,14 @@ enum Action {
 @export var shot_damage_scale: float = 2.5
 @export var shot_speed_scale: float = 1.3
 @export var shot_pierce: bool = true
+
+
+## The wave held while this charges (see AttackWaveSpec3D.held_while_charging), if any.
+func held_wave() -> AttackWaveSpec3D:
+	for wave: AttackWaveSpec3D in waves:
+		if wave.held_while_charging:
+			return wave
+	return null
 
 
 ## The clip a charge winds back with, for a weapon whose own is `fallback`.

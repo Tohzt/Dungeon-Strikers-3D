@@ -31,6 +31,12 @@ class_name Arrow3D extends RigidBody3D
 ## What hitting anything else sounds like, on top of its own hit sound.
 ## Empty = only the hit sound.
 @export var body_sound: StringName = &""
+## Shown as it instead of its Mesh and light: a HELD Vfx.EFFECTS id (a
+## spell's bolt), `look_size` meters across, in `look_color`. Empty = its
+## Mesh.
+@export var look: StringName = &""
+@export var look_size: float = 0.5
+@export var look_color: Color = Color.TRANSPARENT
 
 ## Walls and floor. The HitArea can't be relied on for these: areas don't
 ## always report static bodies (Jolt skips them by default), and a fast arrow
@@ -60,6 +66,25 @@ var _excluded_bodies: Array[Node] = []
 var shooter: Node3D = null
 var _age: float = 0.0
 var _last_tip: Vector3
+var _look: Node3D = null
+## Times its size, from enlarge() (which may come before its look is made).
+var _size: float = 1.0
+
+
+func _ready() -> void:
+	if look == &"":
+		return
+	_look = Vfx.attach(look, self, Vector3.ZERO, 0.0, look_size * _size, look_color)
+	if _look:
+		for child: Node in get_children():
+			if child is MeshInstance3D or child is OmniLight3D:
+				child.visible = false
+
+
+## Gone (landed, or flown too long): its look fades out where it is.
+func _finish() -> void:
+	Vfx.release(_look)
+	queue_free()
 
 
 ## Exempts a body from ever registering as a hit. Used to keep the arrow
@@ -95,12 +120,12 @@ func _physics_process(delta: float) -> void:
 		return
 	_age += delta
 	if _age > max_lifetime:
-		queue_free()
+		_finish()
 		return
 	if _hit_world():
 		Sfx.play(wall_sound, global_position)
 		_burst(null)
-		queue_free()
+		_finish()
 		return
 	if linear_velocity.length_squared() < 0.01:
 		return
@@ -139,6 +164,7 @@ func _burst(struck: Node) -> void:
 		Weapon3D.burst(get_world_3d(), global_position, burst_radius, burst_damage, burst_knockback, shooter, exclude)
 	Sfx.play(&"weapon_break", global_position)
 	WeaponShatter3D.spawn(get_parent(), global_position, burst_color, burst_radius)
+	Vfx.play(&"shatter", global_position, Vector3.FORWARD, false, burst_radius, burst_color)
 
 
 func _align_to_velocity(velocity: Vector3) -> void:
@@ -150,6 +176,7 @@ func _align_to_velocity(velocity: Vector3) -> void:
 ## Everything about it this many times bigger (not the body itself: physics
 ## bodies mustn't be scaled).
 func enlarge(factor: float) -> void:
+	_size *= factor
 	for child: Node in get_children():
 		if child is Node3D:
 			(child as Node3D).scale *= factor
@@ -182,4 +209,4 @@ func _on_body_entered(body: Node) -> void:
 		return
 	_burst(body)
 
-	queue_free()
+	_finish()

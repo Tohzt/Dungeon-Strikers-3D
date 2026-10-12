@@ -10,6 +10,11 @@ class_name AttackWave3D extends Node3D
 ## Seconds it takes to fade in, and to fade out once it's done.
 const FADE_IN := 0.05
 const FADE_OUT := 0.12
+## Seconds a bursting orb takes to swell out to its burst_radius and fade.
+const BURST_TIME := 0.3
+## A held orb (see hold_orb) throbs this much bigger, this often (s), once grown.
+const HOLD_THROB := 1.1
+const HOLD_THROB_TIME := 0.35
 ## A shockwave's hitbox and look sit this far below the wielder's middle,
 ## on the ground.
 const GROUND_DROP := 0.9
@@ -28,6 +33,8 @@ var damage: float = 0.0
 var knockback: float = 0.0
 ## How far it goes (a ring: its final radius), after any charge scaling.
 var reach: float = 0.0
+## spec.color, leaned toward its weapon's rarity's (see Weapon3D.tint).
+var color: Color
 
 var _dir: Vector3 = Vector3.FORWARD
 var _origin: Vector3
@@ -46,15 +53,23 @@ var _shape: Shape3D
 var _visual: Node3D
 var _material: StandardMaterial3D
 var _light: OmniLight3D
+## Its spec.look, while it's shown.
+var _look: Node3D = null
+## A held orb (see hold_orb) to fly off as its look, set before it's ready.
+var _held: Node3D = null
 
 
 ## Send `spec`'s wave from `from` along `dir` (flattened), for `attacker`
 ## and its `weapon`. `hits` is the attack's shared list of bodies hit
 ## already; `power` scales its damage, knockback and reach (a charge).
+## `held` is the orb held for it while charging (see hold_orb), to fly off
+## as it.
 static func emit(spec: AttackWaveSpec3D, from: Node3D, from_weapon: Weapon3D, dir: Vector3, real: bool,
-		hits: Array[Node] = [], power: float = 1.0) -> AttackWave3D:
+		hits: Array[Node] = [], power: float = 1.0, held: Node3D = null) -> AttackWave3D:
 	var wave := AttackWave3D.new()
 	wave.spec = spec
+	wave._held = held
+	wave.color = from_weapon.tint(spec.color) if from_weapon else spec.color
 	wave.attacker = from
 	wave.weapon = from_weapon
 	wave.deals_damage = real
@@ -73,6 +88,33 @@ static func emit(spec: AttackWaveSpec3D, from: Node3D, from_weapon: Weapon3D, di
 	wave._place_at_start()
 	wave.visible = spec.delay <= 0.0
 	return wave
+
+
+## An orb that looks like `spec`'s, held where its wave would start in
+## front of `holder` (along its +Z), growing from nothing over `grow_time`
+## seconds then throbbing, until it flies off as its wave (see emit) or is
+## freed. `tint` is its color (its weapon's, see Weapon3D.tint). Null if
+## nothing's shown.
+static func hold_orb(spec: AttackWaveSpec3D, holder: Node3D, grow_time: float, tint: Color) -> Node3D:
+	if spec.look != &"":
+		return Vfx.attach(spec.look, holder, Vector3(0.0, 0.0, spec.start_offset), grow_time, spec.width, tint)
+	var orb := Node3D.new()
+	var material: StandardMaterial3D = _new_material()
+	material.albedo_color = tint
+	var light: OmniLight3D = _build_orb(spec, orb, material, tint)
+	light.light_energy = 0.0
+	orb.position = Vector3(0.0, 0.0, spec.start_offset)
+	orb.scale = Vector3.ONE * 0.01
+	holder.add_child(orb)
+	var grow: Tween = orb.create_tween().set_parallel()
+	grow.tween_property(orb, ^"scale", Vector3.ONE, maxf(grow_time, 0.01)) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	grow.tween_property(light, ^"light_energy", 1.2, maxf(grow_time, 0.01))
+	grow.chain().tween_callback(func() -> void:
+		var throb: Tween = orb.create_tween().set_loops()
+		throb.tween_property(orb, ^"scale", Vector3.ONE * HOLD_THROB, HOLD_THROB_TIME).set_trans(Tween.TRANS_SINE)
+		throb.tween_property(orb, ^"scale", Vector3.ONE, HOLD_THROB_TIME).set_trans(Tween.TRANS_SINE))
+	return orb
 
 
 func _ready() -> void:
@@ -96,11 +138,16 @@ func _physics_process(delta: float) -> void:
 	if _ending:
 		_end_time += delta
 		_update_look()
-		if _end_time >= FADE_OUT:
+		if _end_time >= (BURST_TIME if _bursts() else FADE_OUT):
 			queue_free()
 		return
 	_move(delta)
 	_update_look()
+	if _bursts():
+		# Every machine's copy decides for itself when it touches something
+		if not _ending and (_travelled >= reach or _touching_anyone()):
+			_end()
+		return
 	if deals_damage and not _ending:
 		_hit_overlapping()
 	if _travelled >= reach:
@@ -153,6 +200,23 @@ func _end() -> void:
 		return
 	_ending = true
 	_end_time = 0.0
+	if is_instance_valid(_look):
+		Vfx.release(_look)
+		_look = null
+	if spec.end_look != &"":
+		var size: float = spec.burst_radius * 2.0 if _bursts() else spec.width
+		var ground: Vector3 = global_position
+		if spec.shape != AttackWaveSpec3D.Shape.SHOCKWAVE:
+			ground.y -= GROUND_DROP
+		Vfx.play(spec.end_look, ground, _dir, false, size, color)
+	if _bursts():
+		_burst()
+
+
+## An orb that bursts rather than hitting on its way (see
+## AttackWaveSpec3D.burst_radius).
+func _bursts() -> bool:
+	return spec.shape == AttackWaveSpec3D.Shape.ORB and spec.burst_radius > 0.0
 
 
 ## 0 at the start of its flight, 1 at the end.
@@ -195,11 +259,15 @@ func _shape_transform() -> Transform3D:
 	return Transform3D(global_basis.orthonormalized(), center)
 
 
-func _hit_overlapping() -> void:
+func _exclude() -> Array[RID]:
 	var exclude: Array[RID] = []
 	if attacker is CollisionObject3D:
 		exclude.append(attacker.get_rid())
-	for body: Node3D in Combat.overlaps(get_world_3d(), _shape, _shape_transform(), exclude):
+	return exclude
+
+
+func _hit_overlapping() -> void:
+	for body: Node3D in Combat.overlaps(get_world_3d(), _shape, _shape_transform(), _exclude()):
 		if body is Weapon3D or not _can_hit(body):
 			continue
 		_note_hit(body)
@@ -218,6 +286,36 @@ func _hit_overlapping() -> void:
 		if landed and not spec.pierce:
 			_end()
 			return
+
+
+## A bursting orb touching anyone it could hurt, or the ball.
+func _touching_anyone() -> bool:
+	for body: Node3D in Combat.overlaps(get_world_3d(), _shape, _shape_transform(), _exclude()):
+		if not body is Weapon3D and not Combat.are_teammates(body, attacker):
+			return true
+	return false
+
+
+## Burst: hit everything within burst_radius, shoved out from the middle.
+func _burst() -> void:
+	Sfx.play(&"spell_impact", global_position)
+	CameraShake.add(CameraShake.LIGHT, global_position)
+	if not deals_damage:
+		return
+	(_shape as SphereShape3D).radius = spec.burst_radius
+	for body: Node3D in Combat.overlaps(get_world_3d(), _shape, global_transform, _exclude()):
+		if body is Weapon3D or not _can_hit(body):
+			continue
+		_note_hit(body)
+		var dir: Vector3 = body.global_position - global_position
+		dir.y = 0.0
+		if dir.length() < 0.1:
+			dir = _dir
+		if body is Ball3D:
+			_hit_ball(body, dir)
+			continue
+		if Combat.strike(body, dir, damage, knockback, spec.pop, -1.0, attacker) and is_instance_valid(weapon):
+			weapon.wear_once()
 
 
 func _can_hit(body: Node3D) -> bool:
@@ -245,16 +343,50 @@ func _hit_ball(ball: Ball3D, dir: Vector3) -> void:
 
 # ===== LOOK =====
 
+static func _new_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.vertex_color_use_as_albedo = true
+	material.no_depth_test = false
+	return material
+
+
+## An orb's shell and core under `parent`, and its glow (returned).
+static func _build_orb(orb_spec: AttackWaveSpec3D, parent: Node3D, material: StandardMaterial3D, tint: Color) -> OmniLight3D:
+	var sphere := SphereMesh.new()
+	sphere.radius = orb_spec.width * 0.5
+	sphere.height = orb_spec.width
+	_add_mesh_to(parent, sphere, material, Basis())
+	var core := SphereMesh.new()
+	core.radius = orb_spec.width * 0.28
+	core.height = orb_spec.width * 0.56
+	_add_mesh_to(parent, core, material, Basis())
+	var light := OmniLight3D.new()
+	light.light_color = Color(tint, 1.0)
+	light.omni_range = orb_spec.width * 1.5
+	light.light_energy = 1.2
+	parent.add_child(light)
+	return light
+
+
 func _build_visual() -> void:
-	_material = StandardMaterial3D.new()
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_material.vertex_color_use_as_albedo = true
-	_material.no_depth_test = false
+	_material = _new_material()
 	_visual = Node3D.new()
 	add_child(_visual)
+	if spec.look != &"":
+		if is_instance_valid(_held):
+			# Already grown, facing along us
+			_held.reparent(_visual, false)
+			_held.position = Vector3.ZERO
+			_look = _held
+		else:
+			_look = Vfx.attach(spec.look, _visual, Vector3.ZERO, 0.0, spec.width, color)
+		return
+	if is_instance_valid(_held):
+		_held.queue_free()
 	match spec.shape:
 		AttackWaveSpec3D.Shape.ARC:
 			_add_mesh(_crescent_mesh(spec.width, spec.length), Basis(Vector3.FORWARD, deg_to_rad(spec.tilt)))
@@ -268,40 +400,44 @@ func _build_visual() -> void:
 			var wall: ArrayMesh = _crescent_mesh(spec.width, spec.height * 0.6)
 			_add_mesh(wall, Basis(Vector3.RIGHT, -deg_to_rad(70.0)), Vector3.UP * 0.05)
 		AttackWaveSpec3D.Shape.ORB:
-			var sphere := SphereMesh.new()
-			sphere.radius = spec.width * 0.5
-			sphere.height = spec.width
-			_add_mesh(sphere, Basis())
-			var core := SphereMesh.new()
-			core.radius = spec.width * 0.28
-			core.height = spec.width * 0.56
-			_add_mesh(core, Basis())
+			_light = _build_orb(spec, _visual, _material, color)
 		AttackWaveSpec3D.Shape.RING:
 			_add_mesh(_ring_mesh(), Basis(), Vector3.UP * 0.08)
-	if spec.shape == AttackWaveSpec3D.Shape.ORB or spec.width >= 3.0:
+	if not _light and spec.width >= 3.0:
 		_light = OmniLight3D.new()
-		_light.light_color = Color(spec.color, 1.0)
+		_light.light_color = Color(color, 1.0)
 		_light.omni_range = spec.width * 1.5
 		_light.light_energy = 1.2
 		add_child(_light)
 
 
 func _add_mesh(mesh: Mesh, basis: Basis, offset: Vector3 = Vector3.ZERO) -> void:
+	_add_mesh_to(_visual, mesh, _material, basis, offset)
+
+
+static func _add_mesh_to(parent: Node3D, mesh: Mesh, material: Material, basis: Basis, offset: Vector3 = Vector3.ZERO) -> void:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
-	instance.material_override = _material
+	instance.material_override = material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.transform = Transform3D(basis, offset)
-	_visual.add_child(instance)
+	parent.add_child(instance)
 
 
 ## Fades in, then out over the last part of its flight (and once it's done).
 func _update_look() -> void:
+	if spec.look != &"":
+		_visual.scale = Vector3.ONE * _size_scale()
+		return
 	var alpha: float = clampf(_age / FADE_IN, 0.0, 1.0)
-	alpha *= 1.0 - pow(_progress(), 3.0) * 0.7
+	if not _bursts():
+		alpha *= 1.0 - pow(_progress(), 3.0) * 0.7
+	if _ending and _bursts():
+		_update_burst_look()
+		return
 	if _ending:
 		alpha *= 1.0 - clampf(_end_time / FADE_OUT, 0.0, 1.0)
-	_material.albedo_color = Color(spec.color, spec.color.a * alpha)
+	_material.albedo_color = Color(color, color.a * alpha)
 	if _light:
 		_light.light_energy = 1.2 * alpha
 	if spec.shape == AttackWaveSpec3D.Shape.RING:
@@ -312,6 +448,17 @@ func _update_look() -> void:
 		_visual.scale = Vector3.ONE * s
 	if spec.shape == AttackWaveSpec3D.Shape.ORB:
 		_visual.rotation.y += 0.2
+
+
+## Swells out to its burst_radius, flaring, and fades.
+func _update_burst_look() -> void:
+	var t: float = clampf(_end_time / BURST_TIME, 0.0, 1.0)
+	var full: float = spec.burst_radius / maxf(spec.width * 0.5, 0.01)
+	_visual.scale = Vector3.ONE * lerpf(_size_scale(), full, ease(t, 0.3))
+	_material.albedo_color = Color(color, color.a * (1.0 - t * t))
+	if _light:
+		_light.light_energy = 4.0 * (1.0 - t)
+		_light.omni_range = spec.burst_radius * 2.0
 
 
 ## A crescent `width` across, `depth` thick in the middle, bowed forward

@@ -17,6 +17,19 @@ var _grab_cooldown: float = 0.0
 ## (and the server saw the player) a little in the past.
 const GRAB_REACH_SLACK := 1.0
 
+## What a launch (see PlayerClass3D.shoot_ball) was meant as: a pass, which
+## the first of the passer's teammates it reaches catches, or an attack,
+## which hurts the first enemy it hits. Server/offline, until it's caught,
+## hits something or SHOT_TIME runs out.
+enum Shot { NONE, PASS, ATTACK }
+const SHOT_TIME := 1.5
+const ATTACK_KNOCKBACK := 6.0
+const ATTACK_POP := 2.0
+var _shot: Shot = Shot.NONE
+var _shot_by_name: String = ""
+var _shot_damage: float = 0.0
+var _shot_left: float = 0.0
+
 ## Team (PlayerSlot.team) of the last player to play the ball, -1 = nobody
 ## yet. Kept by whoever simulates it; four-team goals credit this team.
 var last_team: int = -1
@@ -54,6 +67,7 @@ func _ready() -> void:
 	set_collision_mask_value(2, true)  # Player
 	set_collision_mask_value(3, true)  # Enemy
 	set_collision_mask_value(4, true)  # Weapon
+	set_collision_mask_value(7, true)  # Roof (keeps it in bounds)
 	
 	# Connect body entered signal
 	body_entered.connect(_on_body_entered)
@@ -82,6 +96,9 @@ func _physics_process(delta: float) -> void:
 		if not is_instance_valid(holder) or holder.is_dead():
 			_released_everywhere(Vector3.ZERO)
 		return
+	_shot_left = max(_shot_left - delta, 0.0)
+	if _shot_left <= 0.0:
+		_shot = Shot.NONE
 	if global_position.y < OUT_OF_BOUNDS_Y and Global.Game3D:
 		Global.Game3D.ball_fell(self)
 	_update_curve(delta)
@@ -146,6 +163,9 @@ func _set_last_team(player_name: String) -> void:
 	var player: PlayerClass3D = Global.Game3D.player_named(player_name) if Global.Game3D else null
 	if player and player.slot:
 		last_team = player.slot.team
+	# An Ablaze player's touch lights it (see PlayerStatus3D)
+	if player and player.status and player.status.has_buff(&"ablaze"):
+		_ignite(PlayerStatus3D.ABLAZE_BALL_BURN, player_name)
 
 
 # ===== CARRYING =====
@@ -162,20 +182,23 @@ func request_grab(player: PlayerClass3D) -> void:
 		_request_grab.rpc_id(Net.SERVER_ID)
 
 
-## `player` (the holder) lets go with this velocity.
-func request_throw(player: PlayerClass3D, launch: Vector3) -> void:
+## `player` (the holder) lets go with this velocity, as a plain throw, a
+## pass or an attack doing `damage` (see Shot).
+func request_throw(player: PlayerClass3D, launch: Vector3, shot: Shot = Shot.NONE, damage: float = 0.0) -> void:
 	if holder != player:
 		return
 	if not Net.in_session():
 		release(launch)
+		_start_shot(shot, String(player.name), damage)
 	else:
-		_request_throw.rpc_id(Net.SERVER_ID, launch)
+		_request_throw.rpc_id(Net.SERVER_ID, launch, shot, damage)
 
 
 func grab(player: PlayerClass3D) -> void:
 	if holder:
 		release(Vector3.ZERO)
 	holder = player
+	_shot = Shot.NONE
 	if player.slot:
 		last_team = player.slot.team
 	_motion.clear()  # Play back from the release, not before the grab
@@ -231,9 +254,11 @@ func _request_grab() -> void:
 
 
 @rpc("any_peer", "reliable")
-func _request_throw(launch: Vector3) -> void:
+func _request_throw(launch: Vector3, shot: Shot, damage: float) -> void:
 	if Net.is_server and holder and holder.get_multiplayer_authority() == multiplayer.get_remote_sender_id():
+		var by_name := String(holder.name)
 		_released.rpc(launch)
+		_start_shot(shot, by_name, damage)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -252,8 +277,11 @@ func _on_body_entered(body: Node) -> void:
 	if not Net.decides():
 		return
 	if body is ShieldClass3D and body.is_blocking and body.wielder:
+		_shot = Shot.NONE
 		_catch_on(body)
 		_set_last_team(String(body.wielder.name))
+		return
+	if _shot != Shot.NONE and _shot_reached(body):
 		return
 	if body is PlayerClass3D and burn_left > 0.0:
 		_burn_on_hit(body)
@@ -261,6 +289,43 @@ func _on_body_entered(body: Node) -> void:
 		_set_last_team(String(body.name))
 	# Swung and thrown weapons play the ball through WeaponBehavior3D.hit_ball,
 	# so touching one here does nothing extra.
+
+
+# ===== PASSES & BALL ATTACKS =====
+
+## Server/offline: the ball just left `by_name`'s hands as `shot`.
+func _start_shot(shot: Shot, by_name: String, damage: float) -> void:
+	_shot = shot
+	_shot_by_name = by_name
+	_shot_damage = damage
+	_shot_left = SHOT_TIME if shot != Shot.NONE else 0.0
+
+
+## Server/offline: a pass or attack ran into `body`. Returns whether it was
+## caught (nothing else happens then).
+func _shot_reached(body: Node) -> bool:
+	var by: PlayerClass3D = Global.Game3D.player_named(_shot_by_name) if Global.Game3D else null
+	if not by or body == by:
+		return false
+	if _shot == Shot.PASS:
+		if body is PlayerClass3D and Combat.are_teammates(body, by) and body.can_grab_ball(self, INF):
+			_shot = Shot.NONE
+			_caught_by.call_deferred(body)  # Not mid-collision: grabbing freezes the body
+			return true
+	elif (body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D) \
+			and not Combat.are_teammates(body, by):
+		_shot = Shot.NONE
+		Combat.strike(body, linear_velocity, _shot_damage, ATTACK_KNOCKBACK, ATTACK_POP, -1.0, by)
+	return false
+
+
+func _caught_by(player: PlayerClass3D) -> void:
+	if holder or not is_instance_valid(player) or not player.can_grab_ball(self, INF):
+		return
+	if Net.match_synced:
+		_grabbed.rpc(player.name)
+	else:
+		grab(player)
 
 
 # ===== WEAPON EFFECTS =====

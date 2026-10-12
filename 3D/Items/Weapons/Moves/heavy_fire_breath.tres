@@ -16,6 +16,8 @@ angle_offset = -14.0
 damage_scale = 0.8
 knockback_scale = 1.2
 color = Color(1.0, 0.5, 0.15, 0.9)
+look = &"fire_bolt"
+end_look = &"fire_patch"
 
 [sub_resource type="Resource" id="wave_1"]
 script = ExtResource("2_wave")
@@ -30,6 +32,8 @@ angle_offset = 0.0
 damage_scale = 0.8
 knockback_scale = 1.2
 color = Color(1.0, 0.5, 0.15, 0.9)
+look = &"fire_bolt"
+end_look = &"fire_patch"
 
 [sub_resource type="Resource" id="wave_2"]
 script = ExtResource("2_wave")
@@ -44,10 +48,12 @@ angle_offset = 14.0
 damage_scale = 0.8
 knockback_scale = 1.2
 color = Color(1.0, 0.5, 0.15, 0.9)
+look = &"fire_bolt"
+end_look = &"fire_patch"
 
 [resource]
 script = ExtResource("1_move")
 charge_time = 0.6
-stamina_scale = 2.0
 sound = &"fireball"
+vfx = &"fire_cast"
 waves = Array[ExtResource("2_wave")]([SubResource("wave_0"), SubResource("wave_1"), SubResource("wave_2")])

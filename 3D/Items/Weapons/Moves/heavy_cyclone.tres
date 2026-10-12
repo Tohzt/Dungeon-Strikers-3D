@@ -36,8 +36,8 @@ steps = Array[ExtResource("4_step")]([SubResource("step_0")])
 [resource]
 script = ExtResource("1_move")
 charge_time = 0.8
-stamina_scale = 2.5
 sound = &"swing_greatsword"
 shake = 0.35
 combo = SubResource("combo")
 waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])
+vfx = &"swing"

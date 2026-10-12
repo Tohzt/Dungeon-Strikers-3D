@@ -89,27 +89,30 @@ map, give them unique names after `_ready`, or drop the rename.
   (`PlayerVisual3D.OFFHAND_THROW_CLIP`). Mirroring the throw clip offline
   (Blender) would fix it; Godot can't mirror animations at runtime.
 
-## 7. Shelved: carrying the ball
+## 7. Carrying the ball (carry meter)
 
-Picking up, carrying and throwing the ball (and skull) was removed on
-2026-10-07, to come back as part of a future game mode. The last commit
-with it is `a0959a5` ("fixings"). It covered:
-- `Ball3D`: `holder`, grab/release and their server RPCs (with a grab
-  cooldown and reach slack), and burning whoever held a lit ball.
-- `PlayerClass3D`: `held_ball`, interact to grab, tap/hold or Throw to
-  throw, a bonk swing while carrying, slower walking and no sprinting with
-  it, fumbling it on a hard hit, and `receive_burn`; plus the `Hold` node
-  in `player_3d.tscn` where it was carried.
-- Bots that carried drops home and shot at goals; the skull delivered by
-  walking it onto the altar.
-- Perks "Sure Hands" (`ball_grip`) and "Pickpocket" (`ball_strip`).
-- Still to do when it returns: a carry pose (the arms just rested), and a
-  throw animation on the hand that threw it (always the right arm).
-
-Now the ball and skull are only knocked around: by swings, punches, thrown
-weapons and the boss. A skull counts as home once it's knocked onto the
-altar of the team that last played it. Bots knock it along the level's
-navigation (`BotInputHandler3D._go_hit_ball`).
+Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
+2026-10-12 with a carry meter in place of the old boost bar:
+- `Ball3D`: `holder`, `request_grab`/`request_throw` and their server RPCs
+  (grab cooldown, reach slack). A held ball has no collision, so it can't
+  be carried into a net: it has to be thrown in. A skull can be walked
+  onto the altar.
+- `PlayerClass3D.carry` (blue HUD bar, 0-100): Interact grabs a ball in
+  reach (needs `CARRY_MIN_TO_GRAB`). Carrying drains it (3s from full);
+  Throw charges and throws along the aim; Shoot (E / LT) charges and
+  shoots it straight at `Game3D.shot_target` (the goal attacked, or your
+  altar with a skull; bots don't use it yet). Carrying, you can lock on to
+  teammates: Shoot then passes (`Ball3D.Shot.PASS`, the first teammate it
+  reaches catches it) or, locked on to an enemy, attacks (`Shot.ATTACK`,
+  8-20 damage by charge to the first enemy hit); it's tossed forward when the meter empties,
+  and knocked loose by a hit, a roll, a stagger or a knockdown.
+- Bots grab the ball, run it at the goal (around to the front of it),
+  shoot inside `SHOT_RANGE` with a clear line, pass up the field or throw
+  it on before the meter runs out, tackle enemy carriers and escort
+  teammates. In 4-bot simulations on Pitch they scored about 3 goals per
+  5 minutes, where before they scored none.
+- Still to do: a carry pose, carrying-specific perks (the old "Sure Hands"
+  / "Pickpocket"), and a playtest of the meter numbers.
 
 ## 8. Unfinished features (from the old TODO list)
 

@@ -11,19 +11,20 @@ length = 2.2
 speed = 5.0
 reach = 14.0
 start_offset = 1.2
-damage_scale = 0.35
+damage_scale = 1.2
 knockback_scale = 3.5
 pop = 4.0
-pierce = true
-rehit_time = 0.5
 ball_scale = 2.0
+burst_radius = 3.0
+held_while_charging = true
 color = Color(0.72, 0.45, 1.0, 0.85)
+look = &"dark_ball"
+end_look = &"dark_blast"
 
 [resource]
 script = ExtResource("1_move")
 charge_time = 0.7
 swings = false
 clip = &"CombatRanged/Ranged_Magic_Shoot"
-stamina_scale = 2.0
 sound = &"ice_bolt"
 waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])
