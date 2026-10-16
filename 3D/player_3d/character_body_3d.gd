@@ -1787,11 +1787,13 @@ func is_busy() -> bool:
 
 ## The intermission (walking back to our altar and picking there), a
 ## draft, or choosing a perk mid-round: movement and hands are out of our
-## control.
+## control. Online, also until everyone has loaded the match.
 func is_perk_locked() -> bool:
 	var game: Game3D_Class = Global.Game3D
 	if not game:
 		return false
+	if Net.waiting_for_load():
+		return true
 	return game.phase == Game3D_Class.Phase.INTERMISSION or game.perks.in_draft or game.perks.is_picking(self)
 
 

@@ -14,17 +14,6 @@ Code is referenced by file and function rather than line, since lines move.
 The dedicated server runs one session at a time (`net.gd`), so anything
 that stalls a match also blocks every other player from hosting.
 
-- **One idle player stalls the round.** The intermission only ends once
-  every player has picked a perk at their altar (`PerkDirector._apply_pick`
-  → `_finish_intermission`), and there's no time limit. Someone who walks
-  away holds up the next boss for everyone.
-  *Fix idea:* an intermission timer that auto-picks a random card for
-  anyone still holding cards (bots already do this via `auto_pick`, which
-  is offline-only today).
-- **The server stays locked after a match.** `Net.in_match` only resets in
-  `Net._close_session`, which runs when the *last* player leaves. A player
-  sitting on the win screen blocks every new host. *Fix idea:* after
-  `_win`, return everyone to the lobby (or end the session) after a delay.
 - **Idle connections hold slots forever.** A client that connects but never
   sends `_request_host`/`_request_join` keeps one of the
   `MAX_CONNECTIONS` (8) slots. *Fix idea:* on the server, disconnect peers

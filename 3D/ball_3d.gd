@@ -178,6 +178,8 @@ func request_grab(player: PlayerClass3D) -> void:
 	if not Net.in_session():
 		if _grab_cooldown <= 0.0:
 			grab(player)
+	elif Net.is_server:
+		_decide_grab(player)  # A bot
 	else:
 		_request_grab.rpc_id(Net.SERVER_ID)
 
@@ -190,6 +192,8 @@ func request_throw(player: PlayerClass3D, launch: Vector3, shot: Shot = Shot.NON
 	if not Net.in_session():
 		release(launch)
 		_start_shot(shot, String(player.name), damage)
+	elif Net.is_server:
+		_decide_throw(launch, shot, damage)  # A bot
 	else:
 		_request_throw.rpc_id(Net.SERVER_ID, launch, shot, damage)
 
@@ -246,9 +250,14 @@ func _released_everywhere(launch: Vector3) -> void:
 
 @rpc("any_peer", "reliable")
 func _request_grab() -> void:
-	if not Net.is_server or holder or _grab_cooldown > 0.0:
+	if Net.is_server:
+		_decide_grab(Global.Game3D.rpc_sender())
+
+
+## Server: hand the ball to `player` if it's still free and in reach.
+func _decide_grab(player: PlayerClass3D) -> void:
+	if holder or _grab_cooldown > 0.0:
 		return
-	var player: PlayerClass3D = Global.Game3D.rpc_sender()
 	if player and player.can_grab_ball(self, PlayerClass3D.BALL_REACH + GRAB_REACH_SLACK):
 		_grabbed.rpc(player.name)
 
@@ -256,9 +265,14 @@ func _request_grab() -> void:
 @rpc("any_peer", "reliable")
 func _request_throw(launch: Vector3, shot: Shot, damage: float) -> void:
 	if Net.is_server and holder and holder.get_multiplayer_authority() == multiplayer.get_remote_sender_id():
-		var by_name := String(holder.name)
-		_released.rpc(launch)
-		_start_shot(shot, by_name, damage)
+		_decide_throw(launch, shot, damage)
+
+
+## Server: the holder lets go, everywhere.
+func _decide_throw(launch: Vector3, shot: Shot, damage: float) -> void:
+	var by_name := String(holder.name)
+	_released.rpc(launch)
+	_start_shot(shot, by_name, damage)
 
 
 @rpc("authority", "call_local", "reliable")

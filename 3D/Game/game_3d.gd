@@ -524,7 +524,8 @@ func _win(team: int, reason: String = "") -> void:
 	scoreboard.show_winner(text, _team_color(team))
 	match_won.emit(team)
 	if Net.in_session():
-		return  # Online the pause menu leaves the match
+		Net.finish_match()  # Back to the lobby (the server decides when)
+		return
 	await get_tree().create_timer(restart_delay).timeout
 	get_tree().reload_current_scene()
 

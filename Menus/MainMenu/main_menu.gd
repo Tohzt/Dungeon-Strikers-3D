@@ -81,9 +81,15 @@ var stick_dirs: Dictionary[int, int] = {}
 
 
 func _ready() -> void:
+	# Back from an online match that ended (Net.match_ended): still in the
+	# session, so straight back to its lobby, on the device we played with.
+	var back_in_lobby: bool = Net.in_session() and not Net.in_match
+	if back_in_lobby and not Players.slots.is_empty():
+		online_device = Players.slots[0].device
 	# Returning from a match: start with nobody seated.
 	Players.leave_all()
-	Net.leave()
+	if not back_in_lobby:
+		Net.leave()
 
 	%SinglePlayerButton.pressed.connect(_show.bind(single_player, %KeyboardMouse))
 	%LocalMultiplayerButton.pressed.connect(_show.bind(lobby, start_button))
@@ -139,7 +145,14 @@ func _ready() -> void:
 	# Only one format (Humans vs Skeletons) for now; see Players.TEAM_COUNTS
 	for button: Button in [lobby_teams, online_teams, solo_teams]:
 		button.visible = Players.TEAM_COUNTS.size() > 1
-	_show(home, %SinglePlayerButton)
+	if back_in_lobby:
+		_show(online_lobby, online_start if Net.is_host else %OnlineLeave)
+	else:
+		_show(home, %SinglePlayerButton)
+	# Dropped out of an online match: say why
+	if Net.end_reason:
+		_on_net_session_ended(Net.end_reason)
+		Net.end_reason = ""
 
 
 func _show(screen: Control, focus: Control) -> void:

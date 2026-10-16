@@ -146,4 +146,5 @@ func _on_reset_game() -> void:
 
 func _on_main_menu() -> void:
 	get_tree().paused = false
+	Net.leave()  # Online: out of the session too, not back to its lobby
 	get_tree().change_scene_to_file(MAIN_MENU)

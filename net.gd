@@ -6,8 +6,8 @@ extends Node
 ## session at a time: the first player to host claims it with their code,
 ## friends join with the same code, and whoever got in first is the leader
 ## who starts the match. The server isn't a player; it checks codes, relays
-## everyone's player syncing, and frees the session when the last player
-## leaves.
+## everyone's player syncing, sends everyone back to the lobby a little
+## after a match is won, and frees the session when the last player leaves.
 ##
 ## To test against a server on this machine, run one with
 ##   godot --headless --path . -- --server
@@ -19,6 +19,9 @@ signal failed(reason: String)
 signal peers_changed
 signal session_ended(reason: String)
 signal match_started
+## The match is over and everyone is headed back to the lobby, still in the
+## session.
+signal match_ended
 ## Every machine has loaded the match scene, so player syncing can begin.
 signal all_loaded
 
@@ -41,7 +44,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 14
+const PROTOCOL_VERSION := 15
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -61,12 +64,18 @@ var in_match := false
 var match_synced := false
 ## True on the headless server.
 var is_server := false
+## Why the session ended mid-match, for the main menu to show once it's
+## back (it wasn't around to hear session_ended). Cleared once shown.
+var end_reason := ""
 
 ## While connecting, what we asked the server for: "host" or "join".
 var _request := ""
 ## Server only: machines that have finished loading the match scene.
 var _loaded: Array[int] = []
 var _all_loaded_sent := false
+## Seconds after a match is won before the server sends everyone back to
+## the lobby (enough to read the result).
+const LOBBY_RETURN_DELAY := 8.0
 ## Server only: each map's scene, loaded once at startup so Start is quick.
 var _map_scenes: Dictionary[MatchMap.Map, PackedScene] = {}
 
@@ -90,6 +99,12 @@ func in_session() -> bool:
 ## local game offline, the server online.
 func decides() -> bool:
 	return not in_session() or is_server
+
+
+## Online, until every machine has loaded the match: nothing in it may act
+## yet, since what it did wouldn't reach whoever is still loading.
+func waiting_for_load() -> bool:
+	return in_session() and not match_synced
 
 
 ## Run `method` (a "call_local" RPC) on every machine: as an RPC online, or
@@ -293,6 +308,21 @@ func _start_server() -> void:
 	print("Server listening on UDP port %d." % PORT)
 
 
+## Server: someone won. After LOBBY_RETURN_DELAY, unless the match is gone
+## by then (everyone left), end it and send everyone back to the lobby,
+## where the session (code, players, picks, bots, format) carries on.
+func finish_match() -> void:
+	if not is_server or not in_match:
+		return
+	var scene: Node = get_tree().current_scene
+	await get_tree().create_timer(LOBBY_RETURN_DELAY).timeout
+	if not in_match or get_tree().current_scene != scene:
+		return
+	print("Session %s finished its match." % access_code)
+	_to_session(_return_to_lobby)
+	_broadcast_peers()  # Anything that changed meanwhile (someone left)
+
+
 ## The last player left, so free the session for the next host.
 func _close_session() -> void:
 	print("Session %s closed." % access_code)
@@ -306,6 +336,15 @@ func _close_session() -> void:
 	_loaded.clear()
 	_all_loaded_sent = false
 	get_tree().unload_current_scene()
+
+
+## Server: run `method` (a "call_local" RPC) here and on every player in the
+## session, but not on machines still connecting or being turned away.
+func _to_session(method: Callable, ...args: Array) -> void:
+	for id: int in peers:
+		if multiplayer.get_peers().has(id):
+			method.get_object().callv(&"rpc_id", [id, method.get_method()] + args)
+	method.callv(args)
 
 
 func _broadcast_peers() -> void:
@@ -356,7 +395,7 @@ func _check_all_loaded() -> void:
 			or not peers.all(func(id: int) -> bool: return _loaded.has(id)):
 		return
 	_all_loaded_sent = true
-	_all_loaded.rpc()
+	_to_session(_all_loaded)
 
 
 # ===== CONNECTION EVENTS =====
@@ -416,6 +455,7 @@ func _end(reason: String) -> void:
 	session_ended.emit(reason)
 	var scene: Node = get_tree().current_scene
 	if scene and scene.scene_file_path != MAIN_MENU:
+		end_reason = reason
 		get_tree().change_scene_to_file(MAIN_MENU)
 
 
@@ -542,7 +582,7 @@ func _request_start() -> void:
 			and _teams_split():
 		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s)." % [access_code,
 			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop)])
-		_start_match.rpc(_format())
+		_to_session(_start_match, _format())
 
 
 @rpc("any_peer", "reliable")
@@ -581,6 +621,19 @@ func _start_match(format: Array) -> void:
 	if is_server:
 		get_tree().change_scene_to_packed(_map_scenes[Players.map])
 	match_started.emit()
+
+
+@rpc("authority", "call_local", "reliable")
+func _return_to_lobby() -> void:
+	in_match = false
+	match_synced = false
+	if is_server:
+		_loaded.clear()
+		_all_loaded_sent = false
+		get_tree().unload_current_scene()
+	else:
+		get_tree().change_scene_to_file(MAIN_MENU)
+	match_ended.emit()
 
 
 @rpc("authority", "call_local", "reliable")

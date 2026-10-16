@@ -239,7 +239,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not Net.decides():
 		return
-	if not is_awake or is_defeated:
+	if not is_awake or is_defeated or Net.waiting_for_load():
 		_apply_gravity(delta)
 		move_and_slide()
 		_send_state()

@@ -232,7 +232,7 @@ static func nearest_to(pos: Vector3, range_: float) -> SkeletonEnemy3D:
 
 
 func _physics_process(delta: float) -> void:
-	if not Net.decides():
+	if not Net.decides() or Net.waiting_for_load():
 		return
 	if is_dead:
 		_apply_gravity(delta)

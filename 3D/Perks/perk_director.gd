@@ -14,6 +14,9 @@ class_name PerkDirector extends Node
 ## hand at once and takes several cards from it, one at a time, before play
 ## starts.
 ## Online the server deals and approves picks; every machine applies them.
+## Online, a draft or intermission also runs on a clock (pick_time): once
+## it's up, anyone still holding cards is given random ones, so one idle
+## player can't hold up everyone else.
 
 signal intermission_started
 ## Everyone has picked. On every machine.
@@ -28,6 +31,10 @@ const OPEN_RETRY_MSEC := 500
 
 @export var catalog: PerkCatalog = preload("res://3D/Perks/perk_catalog.tres")
 @export var picker: PerkPicker3D
+## Online: seconds a draft or intermission waits before picking at random
+## for anyone who hasn't finished (0 = wait forever). Offline everyone is
+## in the room, so there's no clock.
+@export var pick_time: float = 45.0
 
 var in_intermission: bool = false
 ## A draft is on: everyone stands still until it's done.
@@ -46,11 +53,43 @@ var _boss_rewards: Dictionary[String, Perk.Category] = {}
 var _goal_rewards: Dictionary[String, Perk.Category] = {}
 ## Player kills each player (by name) has made since the last intermission.
 var _round_kills: Dictionary[String, int] = {}
+## Seconds left on the current draft or intermission's clock (< 0 = none).
+## Every machine counts it down to show it; the server acts on it.
+var _time_left: float = -1.0
 
 
 func _ready() -> void:
 	if picker:
 		picker.chosen.connect(_on_picker_chosen)
+
+
+func _process(delta: float) -> void:
+	if _time_left < 0.0:
+		return
+	var shown: int = ceili(_time_left)
+	_time_left = maxf(_time_left - delta, 0.0)
+	if ceili(_time_left) != shown:
+		_update_waiting()
+	if _time_left <= 0.0:
+		_time_left = -1.0
+		_pick_for_everyone_left()
+
+
+func _start_clock() -> void:
+	_time_left = pick_time if Net.in_session() and pick_time > 0.0 else -1.0
+
+
+## Server/offline: time's up. Everyone still holding cards takes random
+## ones until they have none left (which ends the draft or intermission).
+func _pick_for_everyone_left() -> void:
+	if not Net.decides():
+		return
+	for player_name: String in offers.keys():
+		while offers.has(player_name):
+			var hand: PackedInt32Array = offers[player_name][0]
+			if hand.is_empty():
+				break  # Never dealt, but don't spin on one
+			Net.everywhere(_apply_pick, player_name, hand[randi() % hand.size()])
 
 
 # ===== EARNING =====
@@ -193,6 +232,7 @@ func _start_intermission(dealt: Dictionary) -> void:
 	for player_name: String in dealt:
 		_add_hand(player_name, dealt[player_name])
 	in_intermission = true
+	_start_clock()
 	picker.set_full_screen(true)
 	_update_waiting()
 	intermission_started.emit()
@@ -202,6 +242,7 @@ func _start_intermission(dealt: Dictionary) -> void:
 
 func _finish_intermission() -> void:
 	in_intermission = false
+	_time_left = -1.0
 	picker.set_full_screen(false)
 	picker.show_waiting([])
 	intermission_finished.emit()
@@ -228,6 +269,7 @@ func begin_draft(hand_size: int, picks: int) -> void:
 @rpc("authority", "call_local", "reliable")
 func _start_draft(dealt: Dictionary, picks: int) -> void:
 	in_draft = true
+	_start_clock()
 	for player_name: String in dealt:
 		var hand: PackedInt32Array = dealt[player_name]
 		if hand.is_empty():
@@ -244,6 +286,7 @@ func _start_draft(dealt: Dictionary, picks: int) -> void:
 
 func _finish_draft() -> void:
 	in_draft = false
+	_time_left = -1.0
 	_draft_left.clear()
 	picker.set_full_screen(false)
 	picker.show_waiting([])
@@ -413,6 +456,8 @@ func _update_waiting() -> void:
 			if offers.has(player.name):
 				waiting.append(player)
 	var heading: String = "Choose your perks" if in_draft else "Choose a perk at your altar"
+	if _time_left >= 0.0:
+		heading += " (%ds)" % ceili(_time_left)
 	picker.show_waiting(waiting, heading)
 
 
