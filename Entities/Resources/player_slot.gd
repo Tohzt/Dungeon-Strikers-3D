@@ -17,6 +17,15 @@ const BOT := -3
 @export var character: int = 0
 ## Played by the computer (BotInputHandler3D) instead of a device.
 @export var is_bot: bool = false
+## What everyone sees this player called (and their health bar, NameTag).
+## Random to start with; see PlayerNames and Players.set_player_name.
+@export var display_name: String = ""
+
+
+## Who this is in messages and over their head: their name, or "P1"-style
+## if they have none.
+func label() -> String:
+	return display_name if display_name != "" else "P%d" % (index + 1)
 
 
 func uses_keyboard_mouse() -> bool:

@@ -154,6 +154,7 @@ func _ready() -> void:
 	HUD.visible = huds.values().has(HUD)  # No local humans: no HUD
 	if not Net.is_server:
 		add_child(OffscreenIndicator3D.new())
+		add_child(Nameplates3D.new())
 	_setup_scores()
 	for child: Node in get_children():
 		if child is Boss3D:
@@ -182,6 +183,7 @@ func _spawn_online_players() -> void:
 			slot.index = seat
 			Players.set_team(slot, loadout[0])
 			slot.character = loadout[1]
+			slot.display_name = Net.name_in(loadout)
 		match_slots.append(slot)
 	for bot: Array in Net.bots:
 		var slot := PlayerSlot.new()
@@ -190,6 +192,7 @@ func _spawn_online_players() -> void:
 		slot.is_bot = true
 		Players.set_team(slot, bot[0])
 		slot.character = bot[1]
+		slot.display_name = Net.name_in(bot)
 		match_slots.append(slot)
 	for seat in match_slots.size():
 		var peer_id: int = Net.peers[seat] if seat < Net.peers.size() else Net.SERVER_ID
@@ -640,7 +643,7 @@ func _team_name(team: int) -> String:
 
 
 func _player_label(player: PlayerClass3D) -> String:
-	return "P%d" % (player.slot.index + 1) if player.slot else String(player.name)
+	return player.slot.label() if player.slot else String(player.name)
 
 
 # ===== BALLS =====

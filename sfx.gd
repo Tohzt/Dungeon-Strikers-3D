@@ -84,12 +84,71 @@ const VOLUME_VARIATION_DB := 2.0
 const UNIT_SIZE := 12.0
 const MAX_DISTANCE := 80.0
 
+## Mixer buses (see default_bus_layout.tres). Music and ambience go on
+## MUSIC_BUS; every other sound, the VFX packs' own included, on EFFECTS_BUS.
+const MUSIC_BUS := &"Music"
+const EFFECTS_BUS := &"Effects"
+## The volumes players can set (pause menu > Settings): bus: label.
+const VOLUME_BUSES: Dictionary[StringName, String] = {
+	&"Master": "Master",
+	MUSIC_BUS: "Music",
+	EFFECTS_BUS: "Effects",
+}
+## Where those volumes are kept between runs.
+const SETTINGS_PATH := "user://settings.cfg"
+
 var _streams: Dictionary[StringName, AudioStreamRandomizer] = {}
 var _ambience: AudioStreamPlayer = null
 var _music: AudioStreamPlayer = null
 var _music_id: StringName = &""
 ## A dedicated server has nobody to play to.
 var _silent: bool = DisplayServer.get_name() == "headless"
+
+
+func _ready() -> void:
+	_load_volumes()
+	# Sounds that come with scenes (the VFX packs) default to Master: moved
+	# onto Effects, so its slider covers them too.
+	get_tree().node_added.connect(_route_to_effects)
+
+
+## `bus`'s volume, 0 (silent) to 1 (full).
+func get_volume(bus: StringName) -> float:
+	var index: int = AudioServer.get_bus_index(bus)
+	return db_to_linear(AudioServer.get_bus_volume_db(index)) if index >= 0 else 1.0
+
+
+## Set `bus`'s volume (0 to 1) and remember it for next time.
+func set_volume(bus: StringName, volume: float) -> void:
+	var index: int = AudioServer.get_bus_index(bus)
+	if index < 0:
+		return
+	volume = clampf(volume, 0.0, 1.0)
+	AudioServer.set_bus_volume_db(index, linear_to_db(volume))
+	AudioServer.set_bus_mute(index, volume <= 0.0)
+	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)  # Missing on the first run: starts empty
+	config.set_value("audio", bus, volume)
+	config.save(SETTINGS_PATH)
+
+
+func _load_volumes() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return
+	for bus: StringName in VOLUME_BUSES:
+		var index: int = AudioServer.get_bus_index(bus)
+		var volume: float = config.get_value("audio", bus, 1.0)
+		if index >= 0:
+			AudioServer.set_bus_volume_db(index, linear_to_db(volume))
+			AudioServer.set_bus_mute(index, volume <= 0.0)
+
+
+func _route_to_effects(node: Node) -> void:
+	if node is AudioStreamPlayer3D and (node as AudioStreamPlayer3D).bus == &"Master":
+		(node as AudioStreamPlayer3D).bus = EFFECTS_BUS
+	elif node is AudioStreamPlayer and (node as AudioStreamPlayer).bus == &"Master":
+		(node as AudioStreamPlayer).bus = EFFECTS_BUS
 
 
 ## Play `id` at `at` on this machine only.
@@ -105,6 +164,7 @@ func play(id: StringName, at: Vector3) -> void:
 	player.pitch_scale = SOUNDS[id][3]
 	player.unit_size = UNIT_SIZE
 	player.max_distance = MAX_DISTANCE
+	player.bus = EFFECTS_BUS
 	player.finished.connect(player.queue_free)
 	add_child(player)
 	player.global_position = at
@@ -127,6 +187,7 @@ func play_loop(id: StringName, parent: Node3D) -> AudioStreamPlayer3D:
 	player.volume_db = SOUNDS[id][2]
 	player.unit_size = UNIT_SIZE
 	player.max_distance = MAX_DISTANCE
+	player.bus = EFFECTS_BUS
 	player.autoplay = true
 	parent.add_child(player)
 	return player
@@ -147,6 +208,7 @@ func play_ambience(id: StringName) -> void:
 	_ambience = AudioStreamPlayer.new()
 	_ambience.stream = stream
 	_ambience.volume_db = AMBIENCES[id][1]
+	_ambience.bus = MUSIC_BUS
 	add_child(_ambience)
 	_ambience.play()
 
@@ -178,6 +240,7 @@ func play_music(id: StringName) -> void:
 	_music = AudioStreamPlayer.new()
 	_music.stream = stream
 	_music.volume_db = MUSIC_SILENT_DB
+	_music.bus = MUSIC_BUS
 	_music.process_mode = Node.PROCESS_MODE_ALWAYS  # Keeps playing on the pause menu
 	add_child(_music)
 	_music.play()

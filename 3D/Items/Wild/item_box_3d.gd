@@ -314,4 +314,4 @@ static func _grip_of(scene: PackedScene) -> Weapon3D.Grip:
 
 
 func _label(player: PlayerClass3D) -> String:
-	return "P%d" % (player.slot.index + 1) if player.slot else String(player.name)
+	return player.slot.label() if player.slot else String(player.name)

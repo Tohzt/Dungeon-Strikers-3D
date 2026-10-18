@@ -502,14 +502,14 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 		wear_once()
 
 
-## Half away from the wielder, half along the blade's travel, so a slash
+## Half away_dir from the wielder, half along the blade's travel, so a slash
 ## sends things off to the side it was swung toward.
-func _swing_hit_direction(away: Vector3) -> Vector3:
+func _swing_hit_direction(away_dir: Vector3) -> Vector3:
 	var travel := Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
-	away.y = 0.0
-	if travel.length() < 0.5 or away.length() < 0.01:
-		return away
-	return away.normalized() + travel.normalized()
+	away_dir.y = 0.0
+	if travel.length() < 0.5 or away_dir.length() < 0.01:
+		return away_dir
+	return away_dir.normalized() + travel.normalized()
 
 
 ## Whether this and `other` pair up for a special (see WeaponCombo3D): the
@@ -634,6 +634,7 @@ func is_holding_pose() -> bool:
 func _release_from_hand() -> void:
 	freeze = not simulates()
 	process_physics_priority = 0
+	visible = not away and not holstered  # It may have been hidden in a ball carrier's hand
 	_landed = false
 	_touched_world = false
 	_touched_floor = false
@@ -875,13 +876,13 @@ static func _on_team_of(body: Node3D, breaker: Node3D) -> bool:
 func drop() -> void:
 	if not wielder:
 		return
-	var away: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	var toss_dir: Vector3 = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 	unequip()
 	if Net.match_synced:
 		_net_dropped.rpc()
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
-	apply_central_impulse((away + Vector3.UP * 1.5).normalized() * DROP_IMPULSE * mass)
+	apply_central_impulse((toss_dir + Vector3.UP * 1.5).normalized() * DROP_IMPULSE * mass)
 
 
 @rpc("any_peer", "reliable")

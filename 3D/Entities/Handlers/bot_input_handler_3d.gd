@@ -75,10 +75,12 @@ var _attack_heavy: bool = false
 var _interact_gap_left: float = 0.0
 ## Holding Throw to charge a shot: seconds left before letting go.
 var _throw_press_left: float = 0.0
-## Where to face, when it isn't _attack_target (a shot's target).
-var _look_point: Variant = null
-## Where the shot being charged is aimed.
-var _shot_aim: Vector3 = Vector3.ZERO
+## Which way the shot being charged goes. Kept as a direction, not a point:
+## we keep running while charging, and could run past a point.
+var _shot_dir: Vector3 = Vector3.ZERO
+## The charge is on Shoot (at the goal, aimed for us) rather than Throw
+## (along our aim: passes, and throwing it on).
+var _shooting: bool = false
 var _perk_wait: float = 0.0
 var _intermission_time: float = 0.0
 
@@ -113,7 +115,6 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	_attack_target = null
 	_want_attack = false
 	_want_interact = false
-	_look_point = null
 
 	if game.phase == Game3D_Class.Phase.INTERMISSION:
 		_think_intermission(player, game)
@@ -256,8 +257,7 @@ func _carry_ball(player: PlayerClass3D) -> void:
 	var in_front: bool = ball is Skull3D or _in_front_of_goal(player, aim_at)
 	_move_target = aim_at if in_front else aim_at + _goal_front(aim_at) * FRONT_DISTANCE
 	if _throw_press_left > 0.0:
-		_look_point = _shot_aim  # Mid-charge: keep aiming where we meant to
-		return
+		return  # Mid-charge: _steer keeps aiming where we meant to
 	var dist: float = _flat_dist_to(player, aim_at)
 	var seconds_left: float = player.carry / PlayerClass3D.CARRY_DRAIN_PER_SEC
 	var enemy: PlayerClass3D = _nearest_enemy(player, Global.Game3D)
@@ -269,7 +269,7 @@ func _carry_ball(player: PlayerClass3D) -> void:
 			_start_throw(player, aim_at, NavPath.direction(player, aim_at))
 		return
 	if in_front and (dist < POINT_BLANK or (dist < SHOT_RANGE and _clear_line(player, aim_at))):
-		_start_throw(player, aim_at, aim_at - player.global_position)
+		_start_throw(player, aim_at, aim_at - player.global_position, true)
 	elif seconds_left < PlayerClass3D.THROW_CHARGE_MAX_DURATION + 0.2 or cornered:
 		# Can't hold on: pass it up the field, or send it on toward the goal
 		var mate: PlayerClass3D = _pass_target(player, aim_at, dist)
@@ -309,14 +309,14 @@ func _pass_target(player: PlayerClass3D, goal: Vector3, our_dist: float) -> Play
 	return best
 
 
-## Hold Throw long enough to reach `target`, facing along `dir`, as far as
-## the meter allows.
-func _start_throw(player: PlayerClass3D, target: Vector3, dir: Vector3) -> void:
+## Hold Throw (or Shoot, a `shot` at the goal) long enough to reach
+## `target`, facing along `dir`, as far as the meter allows.
+func _start_throw(player: PlayerClass3D, target: Vector3, dir: Vector3, shot: bool = false) -> void:
 	dir.y = 0.0
 	if dir.length() < 0.01:
 		dir = player.global_basis.z
-	_shot_aim = player.global_position + dir.normalized() * 5.0
-	_look_point = _shot_aim
+	_shot_dir = dir.normalized()
+	_shooting = shot
 	var charge: float = clampf(_flat_dist_to(player, target) * SHOT_CHARGE_PER_METRE, SHOT_MIN_CHARGE, 1.0)
 	var hold: float = charge * PlayerClass3D.THROW_CHARGE_MAX_DURATION
 	# Let go before the meter tosses it for us
@@ -419,10 +419,8 @@ func _steer(player: PlayerClass3D, _delta: float) -> void:
 	move_dir = dir.normalized() if dir.length() > 0.1 else Vector3.ZERO
 	move_dodge = dist > SPRINT_DISTANCE
 
-	if _look_point != null:
-		var look: Vector3 = (_look_point as Vector3) - player.global_position
-		look.y = 0.0
-		look_dir = look.normalized() if look.length() > 0.1 else Vector3.ZERO
+	if _throw_press_left > 0.0 and player.carries_ball():
+		look_dir = _shot_dir
 	elif _attack_target and is_instance_valid(_attack_target):
 		var look: Vector3 = _attack_target.global_position - player.global_position
 		look.y = 0.0
@@ -444,12 +442,15 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 			_attack_press_left = heavy.charge_time + 0.1
 			_attack_heavy = true
 		_attack_gap_left = _attack_press_left + randf_range(ATTACK_GAP.x, ATTACK_GAP.y)
-	var pressing: bool = _attack_press_left > 0.0
+	# Carrying, Light and Heavy throw and pass the ball: leave them be
+	var pressing: bool = _attack_press_left > 0.0 and not player.carries_ball()
 	light_held = pressing and not _attack_heavy
 	heavy_held = pressing and _attack_heavy
 	# A shot: Throw held while it charges, let go once it's long enough
 	_throw_press_left -= delta
-	throw_held = _throw_press_left > 0.0 and player.carries_ball()
+	var charging: bool = _throw_press_left > 0.0 and player.carries_ball()
+	throw_held = charging and not _shooting
+	shoot_held = charging and _shooting
 	if not player.carries_ball():
 		_throw_press_left = 0.0
 

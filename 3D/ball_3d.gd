@@ -60,6 +60,11 @@ var _burn_sound: AudioStreamPlayer3D = null
 const OUT_OF_BOUNDS_Y := -10.0
 const CATCH_SPEED := 1.5
 const CATCH_POP := 1.0
+## Walls are springy: coming off one, the ball keeps this much of the speed
+## it hit it with (the floor keeps its own, duller bounce).
+const WALL_BOUNCE := 0.85
+## Its velocity the step before, to see how hard it hit a wall.
+var _last_velocity: Vector3 = Vector3.ZERO
 
 func _ready() -> void:
 	# Update collision mask to detect weapons and entities
@@ -103,6 +108,34 @@ func _physics_process(delta: float) -> void:
 		Global.Game3D.ball_fell(self)
 	_update_curve(delta)
 	_send_state()
+
+
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if Net.decides() and not holder:
+		_bounce_off_walls(state)
+	_last_velocity = state.linear_velocity
+
+
+## A wall it just ran into sends it back out at WALL_BOUNCE of the speed it
+## came in at, whatever the physics engine made of the hit.
+func _bounce_off_walls(state: PhysicsDirectBodyState3D) -> void:
+	for i in state.get_contact_count():
+		var collider: Object = state.get_contact_collider_object(i)
+		if not (collider is StaticBody3D or collider is GridMap):
+			continue
+		# Out of the wall: from where it touches to the ball's middle
+		var normal: Vector3 = (state.transform.origin - state.get_contact_local_position(i)).normalized()
+		if absf(normal.y) > 0.7:
+			continue  # Floor, ramp or ceiling
+		normal.y = 0.0
+		normal = normal.normalized()
+		var into: float = _last_velocity.dot(normal)
+		if into >= -0.5:
+			continue  # Already leaving it, or barely touching
+		var velocity: Vector3 = state.linear_velocity
+		velocity -= normal * velocity.dot(normal)
+		state.linear_velocity = velocity - normal * into * WALL_BOUNCE
+		return
 
 
 # ===== NETWORK =====

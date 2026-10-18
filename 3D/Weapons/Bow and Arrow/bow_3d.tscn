@@ -21,6 +21,7 @@ script = ExtResource("1_crossbow")
 swing_sound = &"swing_club"
 plays_swipe_animation = false
 arrow_scene = ExtResource("5_arrow")
+fire_interval = 0.4
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 grip = 3

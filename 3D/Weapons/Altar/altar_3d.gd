@@ -482,7 +482,7 @@ func _reward_given(player_name: String, is_left: bool, weapon_name: String) -> v
 	if not player:
 		return
 	if not _is_ours(player):
-		var label: String = "P%d" % (player.slot.index + 1) if player.slot else player_name
+		var label: String = player.slot.label() if player.slot else player_name
 		game.scoreboard.announce("%s raided %s's altar!" % [label, Players.team_name(owner_team)],
 			player.slot.color if player.slot else Color.WHITE)
 

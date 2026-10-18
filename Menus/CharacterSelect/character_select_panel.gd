@@ -8,6 +8,11 @@ class_name CharacterSelectPanel extends PanelContainer
 ## (or a button press on a player's own device) changes, then calls
 ## show_choice(). Mouse input is only taken while `interactive`, so in the
 ## local lobby only the keyboard & mouse player's panel answers the mouse.
+##
+## Over the lineup is the player's name (show_name), in the font it has
+## over their head in a match: click it to type a new one, or reroll a
+## random one. The name field takes clicks on every panel, so whoever is at
+## the keyboard can name players on controllers too.
 
 ## A team tab was clicked.
 signal team_picked(team: int)
@@ -15,15 +20,20 @@ signal team_picked(team: int)
 signal character_picked(character: int)
 ## One of the arrows beside the name was clicked (-1 or 1).
 signal character_stepped(step: int)
+## A name was typed in (sent as it's typed, and again when it's done).
+signal name_typed(text: String)
+## The reroll button was clicked: wants a new random name.
+signal name_rerolled
 
 const TAB_HEIGHT := 32
 const NAME_FONT_SIZE := 22
 const SMALL_FONT_SIZE := 15
+const PLAYER_NAME_FONT_SIZE := 24
 
 var interactive: bool = true:
 	set(value):
 		interactive = value
-		for button: Button in _tabs + [_prev, _next]:
+		for button: Button in _tabs + [_prev, _next, _reroll]:
 			button.mouse_filter = Control.MOUSE_FILTER_STOP if value else Control.MOUSE_FILTER_IGNORE
 ## Whether its buttons take keyboard/controller focus (single player and
 ## online: the menus' own navigation reaches them). Off in the local lobby,
@@ -31,7 +41,7 @@ var interactive: bool = true:
 var focusable: bool = true:
 	set(value):
 		focusable = value
-		for button: Button in _tabs + [_prev, _next]:
+		for button: Button in _tabs + [_prev, _next, _reroll]:
 			button.focus_mode = Control.FOCUS_ALL if value else Control.FOCUS_NONE
 
 ## Whether the team tabs show (off when the team can't change, e.g. mid-match).
@@ -41,12 +51,23 @@ var teams_shown: bool = true:
 		if _tabs_row:
 			_tabs_row.visible = value and not _empty.visible
 
+## Whether the name field shows (off where the name can't change, e.g.
+## mid-match).
+var names_shown: bool = true:
+	set(value):
+		names_shown = value
+		if _player_name_row:
+			_player_name_row.visible = value and not _empty.visible
+
 var team: int = -1
 var character: int = -1
 
 var _stage_size: Vector2
 var _style: StyleBoxFlat
 var _header: Label
+var _player_name_row: HBoxContainer
+var _player_name: LineEdit
+var _reroll: Button
 var _tabs_row: HBoxContainer
 var _tabs: Array[Button] = []
 var _stage_box: SubViewportContainer
@@ -77,6 +98,30 @@ func _init(stage_size: Vector2 = Vector2(300, 240)) -> void:
 
 	_header = _label(SMALL_FONT_SIZE)
 	column.add_child(_header)
+
+	_player_name_row = HBoxContainer.new()
+	_player_name_row.add_theme_constant_override("separation", 6)
+	column.add_child(_player_name_row)
+	_player_name = LineEdit.new()
+	_player_name.max_length = PlayerNames.MAX_LENGTH
+	_player_name.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_player_name.placeholder_text = "Your name"
+	_player_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Only by clicking: menu navigation (and each seat's own device in the
+	# local lobby) steers the rest of the panel
+	_player_name.focus_mode = Control.FOCUS_CLICK
+	_player_name.add_theme_font_override("font", NameTag.font())
+	_player_name.add_theme_font_size_override("font_size", PLAYER_NAME_FONT_SIZE)
+	_player_name.text_changed.connect(func(text: String) -> void: name_typed.emit(text))
+	_player_name.text_submitted.connect(func(_text: String) -> void: _player_name.release_focus())
+	# Done typing: the menu may have tidied the name up meanwhile
+	_player_name.focus_exited.connect(func() -> void: name_typed.emit(_player_name.text))
+	_player_name_row.add_child(_player_name)
+	_reroll = Button.new()
+	_reroll.text = "Reroll"
+	_reroll.tooltip_text = "Random name (Y on a controller)"
+	_reroll.pressed.connect(func() -> void: name_rerolled.emit())
+	_player_name_row.add_child(_reroll)
 
 	_tabs_row = HBoxContainer.new()
 	_tabs_row.add_theme_constant_override("separation", 6)
@@ -119,6 +164,19 @@ func set_header(text: String) -> void:
 	_header.visible = text != ""
 
 
+## Show `text` as the player's name, in `color` (their team's). Left alone
+## while it's being typed in, so the caret doesn't jump.
+func show_name(text: String, color: Color) -> void:
+	if not _player_name.has_focus():
+		_player_name.text = text
+	_player_name.add_theme_color_override("font_color", color.lightened(0.45))
+
+
+## Whether the name is being typed in, so the menu can leave the keys alone.
+func is_typing() -> bool:
+	return _player_name.has_focus()
+
+
 ## Show `new_team`'s lineup with `new_character` picked, tinted in the
 ## team's color.
 func show_choice(new_team: int, new_character: int) -> void:
@@ -151,6 +209,9 @@ func _set_empty(on: bool) -> void:
 	_empty.visible = on
 	_stage_box.visible = not on
 	_tabs_row.visible = not on and teams_shown
+	_player_name_row.visible = not on and names_shown
+	if on and _player_name.has_focus():
+		_player_name.release_focus()
 	_name_row.visible = not on
 	_kit.visible = not on
 	if on and _viewport:

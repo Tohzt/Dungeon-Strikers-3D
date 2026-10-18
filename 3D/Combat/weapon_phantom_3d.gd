@@ -45,14 +45,14 @@ var _shape := SphereShape3D.new()
 
 ## Send `from_weapon` out on `with_move`'s action, along `dir`.
 static func launch(with_move: WeaponMove3D, from_weapon: Weapon3D, by: Node3D, dir: Vector3, real: bool,
-		sign: float = 1.0) -> WeaponPhantom3D:
+		spin_sign: float = 1.0) -> WeaponPhantom3D:
 	var phantom := WeaponPhantom3D.new()
 	phantom.mode = Mode.ORBIT if with_move.action == WeaponMove3D.Action.ORBIT else Mode.BOOMERANG
 	phantom.move = with_move
 	phantom.weapon = from_weapon
 	phantom.wielder = by
 	phantom.deals_damage = real
-	phantom.orbit_sign = sign
+	phantom.orbit_sign = spin_sign
 	dir.y = 0.0
 	phantom._dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
 	var behavior: WeaponBehavior3D = from_weapon.Behavior

@@ -48,9 +48,9 @@ var slots: Array[PlayerSlot] = []
 ## with the match start (see Net.start_match).
 var team_count: int = TEAM_COUNTS[0]
 ## Level for the next match. Online, sent with the match start like team_count.
-var map: MatchMap.Map = MatchMap.MAPS[0]
+var map: MatchMap.Map = MatchMap.MAPS[0] as MatchMap.Map
 ## What every boss drops in the next match.
-var boss_drop: BossDrop.Kind = MatchMap.DROPS[0]
+var boss_drop: BossDrop.Kind = MatchMap.DROPS[0] as BossDrop.Kind
 ## Offline: seat bots until the match has this many players (0 = no bots).
 ## Always a whole number of players per team; see bot_fill_options().
 ## Starts at a full 4v4.
@@ -76,6 +76,9 @@ func join(device: int, team: int = -1, index: int = -1, character: int = -1) -> 
 	slot.device = device
 	_assign_team(slot, team if team >= 0 else team_for_seat(slot.index))
 	slot.character = Roster.for_team(character if character >= 0 else default_character(slot.index), slot.team)
+	# Whoever's at the keyboard is likely the one who typed the saved name
+	var saved: String = PlayerNames.saved() if slot.uses_keyboard_mouse() else ""
+	slot.display_name = saved if saved != "" else PlayerNames.random(slot_names())
 	slots.append(slot)
 	_register_actions(slot)
 	slot_joined.emit(slot)
@@ -92,6 +95,7 @@ func add_bot() -> PlayerSlot:
 	slot.is_bot = true
 	_assign_team(slot, smallest_team(slot_teams()))
 	slot.character = unused_character(slot.team)
+	slot.display_name = PlayerNames.random(slot_names())
 	slots.append(slot)
 	slot_joined.emit(slot)
 	return slot
@@ -204,6 +208,31 @@ func teams_with_bots(total: int, seated: Array[int]) -> Array[int]:
 	while teams.size() < total:
 		teams.append(smallest_team(teams))
 	return teams
+
+
+# ===== NAMES =====
+
+## Everyone seated's names.
+func slot_names() -> Array[String]:
+	var names: Array[String] = []
+	for slot: PlayerSlot in slots:
+		names.append(slot.display_name)
+	return names
+
+
+## Rename `slot` (cleaned up; blank gets a random name). `remember` saves
+## it for next time (see PlayerNames.saved), for a name someone typed.
+func set_player_name(slot: PlayerSlot, text: String, remember: bool = false) -> void:
+	var clean: String = PlayerNames.clean(text)
+	slot.display_name = clean if clean != "" else PlayerNames.random(slot_names())
+	if remember and clean != "":
+		PlayerNames.save(clean)
+	slot_changed.emit(slot)
+
+
+## Give `slot` a different random name.
+func reroll_name(slot: PlayerSlot) -> void:
+	set_player_name(slot, PlayerNames.random(slot_names()))
 
 
 # ===== CHARACTERS =====

@@ -79,11 +79,13 @@ var hitstop: float = 0.0
 
 # ===== CARRYING THE BALL =====
 # Interact picks up a ball in reach. Carrying it drains the carry meter
-# (shown on the HUD); Throw charges and throws it where we aim, Shoot (E /
-# LT) charges and shoots it at the goal we attack (a skull: at our altar),
-# and an empty meter tosses it forward on its own. Locked on (teammates
-# can be locked on to while carrying), Shoot passes to a teammate or
-# attacks an enemy with the ball instead. The meter refills while we don't carry.
+# (shown on the HUD) and puts the weapons in our hands out of sight.
+# Light (or Throw) charges and throws it the way we face, Heavy passes it
+# straight to the nearest teammate, Shoot (E / LT) charges and shoots it at
+# the goal we attack (a skull: at our altar), and an empty meter tosses it
+# forward on its own. Locked on (teammates can be locked on to while
+# carrying), Shoot passes to a teammate or attacks an enemy with the ball
+# instead. The meter refills while we don't carry.
 signal carry_changed(new_carry: float, max_carry: float)
 const CARRY_MAX := 100.0
 ## A full meter lasts this many seconds of carrying.
@@ -104,6 +106,10 @@ const BALL_SHOT_SPEED := 16.0
 const BALL_SHOT_LIFT := 0.12
 ## A pass flies at least this fast, keeping low so it reaches them.
 const BALL_PASS_MIN_SPEED := 10.0
+## Heavy's pass to the nearest teammate: this fast per metre to them, up to
+## BALL_PASS_MAX_SPEED.
+const BALL_PASS_SPEED_PER_M := 1.2
+const BALL_PASS_MAX_SPEED := 22.0
 const BALL_PASS_LIFT := 0.05
 ## A ball attack's damage, from no charge to full.
 const BALL_ATTACK_DAMAGE_MIN := 8.0
@@ -118,9 +124,6 @@ var carry: float = CARRY_MAX:
 var held_ball: Ball3D = null
 ## Asked to throw (online, until the server lets go).
 var _ball_thrown: bool = false
-## The Throw press under way began while carrying: it's for the ball, so
-## letting go without it (stripped mid-charge) throws nothing.
-var _throw_for_ball: bool = false
 ## Hit while carrying: the ball pops loose along the hit this fast.
 const BALL_FUMBLE_SPEED := 5.0
 
@@ -151,7 +154,7 @@ const KNOCKBACK_FRICTION := 18.0  # How fast a shove slides to a stop on the gro
 const KNOCKBACK_AIR_FRICTION := 4.0
 const KNOCKBACK_CONTROL_LOSS := 10.0  # Shove speed at which walking control bottoms out
 const KNOCKBACK_MIN_CONTROL := 0.25
-const KNOCKBACK_WALL_BOUNCE := 0.5  # Fraction of a shove kept when bouncing off a wall
+const KNOCKBACK_WALL_BOUNCE := 0.75  # Fraction of a shove kept when bouncing off a wall
 var knockback: Vector3 = Vector3.ZERO
 
 # Bumping into other players: both get shoved apart, harder the faster you
@@ -385,7 +388,8 @@ func _physics_process(delta: float) -> void:
 
 	if Input_Handler.interact:
 		Input_Handler.interact = false
-		if not _grab_nearest_ball() and not _pick_up_nearest_weapon():
+		# Carrying, our hands are full: no taking weapons
+		if not carries_ball() and not _grab_nearest_ball() and not _pick_up_nearest_weapon():
 			_take_from_nearest_stand()
 	_update_carry(delta)
 
@@ -448,6 +452,7 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_timed_perks(delta)  # Every machine, alive or not, so they all agree
+	_show_weapons_in_hand()
 	if is_dead():
 		_update_death(delta)
 		if is_remote:
@@ -780,17 +785,17 @@ func _handle_buttons(busy: bool) -> void:
 		elif button.just_pressed():
 			button.armed = true
 			button.press_time = PlayerArm3D.now()
-			if button == _throw:
-				_throw_for_ball = carries_ball()
+			button.for_ball = carries_ball()
 	if busy:
 		for arm: PlayerArm3D in arms:
 			_end_charge(arm)
 	else:
-		if _light.just_pressed():
+		if _light.just_pressed() and not _light.for_ball:
 			_light_attack()
 		_handle_heavy_button()
 		_handle_throw_button()
 		_handle_shoot_button()
+		_handle_ball_buttons()
 	for button: PlayerArm3D.Press in [_light, _heavy, _throw, _shoot]:
 		if button.just_released():
 			button.armed = false
@@ -806,16 +811,16 @@ func _attacks_with(arm: PlayerArm3D) -> bool:
 ## (a pair take turns, skipping one that's still mid-swing), or an empty one
 ## to punch with.
 func _light_arm() -> PlayerArm3D:
-	var ready: Array[PlayerArm3D] = []
+	var ready_arms: Array[PlayerArm3D] = []
 	for arm: PlayerArm3D in arms:
 		if _attacks_with(arm):
-			ready.append(arm)
-	if ready.is_empty():
+			ready_arms.append(arm)
+	if ready_arms.is_empty():
 		if not held_weapon_right:
 			return right_arm
 		return left_arm if not held_weapon_left else null
-	if ready.size() == 1:
-		return ready[0]
+	if ready_arms.size() == 1:
+		return ready_arms[0]
 	var next: PlayerArm3D = arm_of(not _last_light_left)
 	if next.is_swinging() and not _other_arm(next).is_swinging():
 		next = _other_arm(next)
@@ -881,6 +886,13 @@ func _charging_arm() -> PlayerArm3D:
 
 
 func _handle_heavy_button() -> void:
+	if carries_ball():
+		var charging: PlayerArm3D = _charging_arm()
+		if charging:
+			_end_charge(charging)  # Picked the ball up mid-charge
+		return
+	if _heavy.for_ball:
+		return
 	if _heavy.held and _heavy.armed:
 		var arm: PlayerArm3D = _charging_arm()
 		if not arm:
@@ -1007,7 +1019,7 @@ func _handle_throw_button() -> void:
 	if carries_ball():
 		throw_ball(_pay_throw_charge(_throw.held_for()))
 		return
-	if _throw_for_ball:
+	if _throw.for_ball:
 		return
 	var arm: PlayerArm3D = _throw_arm()
 	if arm:
@@ -1019,6 +1031,18 @@ func _handle_throw_button() -> void:
 func _handle_shoot_button() -> void:
 	if _shoot.just_released() and _shoot.armed and carries_ball():
 		shoot_ball(_pay_throw_charge(_shoot.held_for()))
+
+
+## While carrying: let go of Light to throw the ball the way we face
+## (harder the longer it was held), press Heavy to pass to the nearest
+## teammate.
+func _handle_ball_buttons() -> void:
+	if not carries_ball():
+		return
+	if _light.just_released() and _light.armed and _light.for_ball:
+		throw_ball(_pay_throw_charge(_light.held_for()))
+	elif _heavy.just_pressed() and _heavy.for_ball:
+		pass_ball()
 
 
 ## The hand Throw throws from: the main hand first. A weapon off flying
@@ -1111,6 +1135,39 @@ func shoot_ball(charge: float) -> void:
 			damage = lerp(BALL_ATTACK_DAMAGE_MIN, BALL_ATTACK_DAMAGE_MAX, charge)
 	elif Global.Game3D:
 		target = Global.Game3D.shot_target(self, held_ball)
+	_launch_ball_at(target, speed, lift, shot, damage)
+
+
+## Heavy while carrying: pass straight to the nearest teammate, hard enough
+## to reach them. With nobody to pass to, it's a plain throw.
+func pass_ball() -> void:
+	if not carries_ball():
+		return
+	var mate: PlayerClass3D = _nearest_teammate()
+	if not mate:
+		throw_ball(0.5)
+		return
+	var speed: float = clampf(global_position.distance_to(mate.global_position) * BALL_PASS_SPEED_PER_M,
+		BALL_PASS_MIN_SPEED, BALL_PASS_MAX_SPEED)
+	_launch_ball_at(mate, speed, BALL_PASS_LIFT, Ball3D.Shot.PASS)
+
+
+## The closest living teammate, if any.
+func _nearest_teammate() -> PlayerClass3D:
+	if not Global.Game3D:
+		return null
+	var best: PlayerClass3D = null
+	for other: PlayerClass3D in Global.Game3D.players:
+		if other == self or not is_instance_valid(other) or other.is_dead() or not Combat.are_teammates(other, self):
+			continue
+		if not best or global_position.distance_to(other.global_position) < global_position.distance_to(best.global_position):
+			best = other
+	return best
+
+
+## Let the ball go at `target` (leading a moving one on a pass or attack),
+## or along our aim without one.
+func _launch_ball_at(target: Node3D, speed: float, lift: float, shot: Ball3D.Shot = Ball3D.Shot.NONE, damage: float = 0.0) -> void:
 	var dir: Vector3 = _get_aim_direction()
 	if target:
 		dir = target.global_position - global_position
@@ -1137,6 +1194,15 @@ func _fumble_ball(dir: Vector3) -> void:
 	_launch_ball(dir * BALL_FUMBLE_SPEED + Vector3.UP * 3.0)
 
 
+## Every machine: what's in our hands is out of sight while we carry a ball
+## (a weapon off flying or holstered stays hidden either way).
+func _show_weapons_in_hand() -> void:
+	var carrying: bool = is_instance_valid(held_ball)
+	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
+		if is_instance_valid(weapon) and weapon.wielder == self:
+			weapon.visible = not carrying and not weapon.away and not weapon.holstered
+
+
 ## Owner: drain the meter while carrying (tossing the ball forward once it's
 ## empty, or when we're knocked about), refill it otherwise.
 func _update_carry(delta: float) -> void:
@@ -1159,6 +1225,8 @@ func _swing_weapon(arm: PlayerArm3D) -> bool:
 	var weapon: Weapon3D = arm.weapon
 	if arm.is_swinging() or weapon.away:
 		return false  # Mid-swing already, or off flying
+	if weapon is CrossbowClass3D and not (weapon as CrossbowClass3D).can_fire():
+		return false  # Still nocking the next shot
 	arm.move = null
 	var draw_time: float = weapon.Properties.swing_windup if weapon.Properties else 0.0
 	if draw_time > 0.0 and weapon.plays_swipe_animation:
@@ -1377,7 +1445,8 @@ func _get_aim_direction() -> Vector3:
 	return Vector3(sin(rotation.y), 0, cos(rotation.y))
 
 
-## Winds the throwing arm back while Throw (or Shoot, with the ball) is held.
+## Winds the throwing arm back while Throw (or Shoot or Light, with the
+## ball) is held.
 func _update_weapon_windups(delta: float) -> void:
 	var throwing: PlayerArm3D = null
 	var press: PlayerArm3D.Press = _throw
@@ -1386,6 +1455,9 @@ func _update_weapon_windups(delta: float) -> void:
 	elif _shoot.held and _shoot.armed and carries_ball():
 		throwing = right_arm
 		press = _shoot
+	elif _light.held and _light.armed and _light.for_ball and carries_ball():
+		throwing = right_arm
+		press = _light
 	for arm: PlayerArm3D in arms:
 		arm.update_windup(delta, arm == throwing, press.press_time, arm.weapon != null or arm == throwing, THROW_CHARGE_MAX_DURATION)
 
@@ -1740,9 +1812,9 @@ func set_leader(leading: bool) -> void:
 
 ## We got a kill (on every machine): the kill_heal perk stat heals us.
 func on_kill() -> void:
-	var heal: float = perk_stat(&"kill_heal") - 1.0
-	if heal > 0.0 and _is_local() and not is_dead():
-		Entity.hp = min(Entity.hp + Entity.hp_max * heal, Entity.hp_max)
+	var heal_fraction: float = perk_stat(&"kill_heal") - 1.0
+	if heal_fraction > 0.0 and _is_local() and not is_dead():
+		Entity.hp = min(Entity.hp + Entity.hp_max * heal_fraction, Entity.hp_max)
 
 
 ## Back to where this player started, fully restored. Anything still held

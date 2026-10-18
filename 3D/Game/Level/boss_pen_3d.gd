@@ -254,22 +254,22 @@ func _add_box(parent: Node3D, center: Vector3, size: Vector3, material: Standard
 	parent.add_child(mesh)
 
 
-## Close (`shut`) or open the gate: bars rise or sink, doors swing.
-func _move_gate(shut: bool) -> void:
+## Close (`closed`) or open the gate: bars rise or sink, doors swing.
+func _move_gate(closed: bool) -> void:
 	if _gate_tween:
 		_gate_tween.kill()
-	_gate_shape.set_deferred(&"disabled", not shut)
+	_gate_shape.set_deferred(&"disabled", not closed)
 	_gate_tween = create_tween()
 	if gate_style == GateStyle.DOORS:
 		_gate_tween.set_parallel()
-		_gate_tween.set_trans(Tween.TRANS_BACK if not shut else Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_gate_tween.set_trans(Tween.TRANS_BACK if not closed else Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		for i in _leaves.size():
 			var side: float = -1.0 if i == 0 else 1.0
-			var angle: float = 0.0 if shut else -side * DOOR_SWING
+			var angle: float = 0.0 if closed else -side * DOOR_SWING
 			_gate_tween.tween_property(_leaves[i], ^"rotation_degrees:y", angle, GATE_MOVE_TIME * 1.5)
 		return
 	_gate_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-	_gate_tween.tween_property(_gate, ^"position:y", 0.0 if shut else -wall_height - 0.1, GATE_MOVE_TIME)
+	_gate_tween.tween_property(_gate, ^"position:y", 0.0 if closed else -wall_height - 0.1, GATE_MOVE_TIME)
 
 
 func _material(color: Color) -> StandardMaterial3D:

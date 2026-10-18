@@ -42,6 +42,9 @@ class Press:
 	## made while busy (rolling, staggered) are swallowed, so letting go
 	## afterwards does nothing.
 	var armed: bool = false
+	## The press began while carrying the ball: it's for the ball, so it
+	## doesn't attack (or throw a weapon), even if the ball's gone by release.
+	var for_ball: bool = false
 
 	func just_pressed() -> bool:
 		return held and not was_held

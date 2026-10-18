@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://c1ybujcli5ex2" path="res://3D/HUD/hud_3d.gd" id="1_hbyoa"]
 [ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Entities/Player/Assets/Skribble Character_Inner.png" id="4_u5h0k"]
+[ext_resource type="Script" path="res://3D/HUD/name_tag.gd" id="5_nametag"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_nobox"]
 
@@ -39,14 +40,11 @@ mouse_filter = 2
 theme_override_constants/separation = 0
 alignment = 1
 
-[node name="HealthBar" type="ProgressBar" parent="Panel/Row/Bars"]
+[node name="NameTag" type="Control" parent="Panel/Row/Bars"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 mouse_filter = 2
-step = 0.01
-value = 45.0
-show_percentage = false
+script = ExtResource("5_nametag")
 
 [node name="CarryBar" type="ProgressBar" parent="Panel/Row/Bars"]
 unique_name_in_owner = true

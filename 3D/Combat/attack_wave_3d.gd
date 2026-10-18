@@ -64,46 +64,46 @@ var _held: Node3D = null
 ## already; `power` scales its damage, knockback and reach (a charge).
 ## `held` is the orb held for it while charging (see hold_orb), to fly off
 ## as it.
-static func emit(spec: AttackWaveSpec3D, from: Node3D, from_weapon: Weapon3D, dir: Vector3, real: bool,
+static func emit(wave_spec: AttackWaveSpec3D, from: Node3D, from_weapon: Weapon3D, dir: Vector3, real: bool,
 		hits: Array[Node] = [], power: float = 1.0, held: Node3D = null) -> AttackWave3D:
 	var wave := AttackWave3D.new()
-	wave.spec = spec
+	wave.spec = wave_spec
 	wave._held = held
-	wave.color = from_weapon.tint(spec.color) if from_weapon else spec.color
+	wave.color = from_weapon.tint(wave_spec.color) if from_weapon else wave_spec.color
 	wave.attacker = from
 	wave.weapon = from_weapon
 	wave.deals_damage = real
 	wave._hits = hits
 	var behavior: WeaponBehavior3D = from_weapon.Behavior if from_weapon else null
 	var weapon_power: float = from_weapon.power if from_weapon else 1.0
-	wave.damage = (behavior.get_damage() if behavior else 20.0) * spec.damage_scale * weapon_power * power
-	wave.knockback = (behavior.knockback_force if behavior else 8.0) * spec.knockback_scale * weapon_power * power
-	wave.reach = spec.reach * power
+	wave.damage = (behavior.get_damage() if behavior else 20.0) * wave_spec.damage_scale * weapon_power * power
+	wave.knockback = (behavior.knockback_force if behavior else 8.0) * wave_spec.knockback_scale * weapon_power * power
+	wave.reach = wave_spec.reach * power
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
-	wave._dir = dir.rotated(Vector3.UP, deg_to_rad(spec.angle_offset))
-	wave._delay = spec.delay
+	wave._dir = dir.rotated(Vector3.UP, deg_to_rad(wave_spec.angle_offset))
+	wave._delay = wave_spec.delay
 	from.get_parent().add_child(wave)
 	wave._origin = from.global_position
 	wave._place_at_start()
-	wave.visible = spec.delay <= 0.0
+	wave.visible = wave_spec.delay <= 0.0
 	return wave
 
 
-## An orb that looks like `spec`'s, held where its wave would start in
+## An orb that looks like `orb_spec`'s, held where its wave would start in
 ## front of `holder` (along its +Z), growing from nothing over `grow_time`
 ## seconds then throbbing, until it flies off as its wave (see emit) or is
 ## freed. `tint` is its color (its weapon's, see Weapon3D.tint). Null if
 ## nothing's shown.
-static func hold_orb(spec: AttackWaveSpec3D, holder: Node3D, grow_time: float, tint: Color) -> Node3D:
-	if spec.look != &"":
-		return Vfx.attach(spec.look, holder, Vector3(0.0, 0.0, spec.start_offset), grow_time, spec.width, tint)
+static func hold_orb(orb_spec: AttackWaveSpec3D, holder: Node3D, grow_time: float, tint: Color) -> Node3D:
+	if orb_spec.look != &"":
+		return Vfx.attach(orb_spec.look, holder, Vector3(0.0, 0.0, orb_spec.start_offset), grow_time, orb_spec.width, tint)
 	var orb := Node3D.new()
 	var material: StandardMaterial3D = _new_material()
 	material.albedo_color = tint
-	var light: OmniLight3D = _build_orb(spec, orb, material, tint)
+	var light: OmniLight3D = _build_orb(orb_spec, orb, material, tint)
 	light.light_energy = 0.0
-	orb.position = Vector3(0.0, 0.0, spec.start_offset)
+	orb.position = Vector3(0.0, 0.0, orb_spec.start_offset)
 	orb.scale = Vector3.ONE * 0.01
 	holder.add_child(orb)
 	var grow: Tween = orb.create_tween().set_parallel()
@@ -411,16 +411,16 @@ func _build_visual() -> void:
 		add_child(_light)
 
 
-func _add_mesh(mesh: Mesh, basis: Basis, offset: Vector3 = Vector3.ZERO) -> void:
-	_add_mesh_to(_visual, mesh, _material, basis, offset)
+func _add_mesh(mesh: Mesh, mesh_basis: Basis, offset: Vector3 = Vector3.ZERO) -> void:
+	_add_mesh_to(_visual, mesh, _material, mesh_basis, offset)
 
 
-static func _add_mesh_to(parent: Node3D, mesh: Mesh, material: Material, basis: Basis, offset: Vector3 = Vector3.ZERO) -> void:
+static func _add_mesh_to(parent: Node3D, mesh: Mesh, material: Material, mesh_basis: Basis, offset: Vector3 = Vector3.ZERO) -> void:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
 	instance.material_override = material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	instance.transform = Transform3D(basis, offset)
+	instance.transform = Transform3D(mesh_basis, offset)
 	parent.add_child(instance)
 
 

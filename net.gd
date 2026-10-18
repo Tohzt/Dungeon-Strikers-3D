@@ -44,18 +44,19 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 15
+const PROTOCOL_VERSION := 16
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
 var is_host := false
 ## Verified players' peer ids in seat order (leader first). Never the server.
 var peers: Array[int] = []
-## What each player picked in the lobby: peer id -> [team, character]. Kept
+## What each player picked in the lobby: peer id -> [team, character,
+## name] (see PlayerNames). Kept
 ## by the server and sent to everyone with the peer list, along with the
 ## leader's match format (Players.team_count, map and boss_drop).
 var loadouts: Dictionary = {}
-## Bots the leader added in the lobby, as [team, character] each. They sit
+## Bots the leader added in the lobby, as [team, character, name] each. They sit
 ## in the seats after the players' and are run by the server.
 var bots: Array = []
 var in_match := false
@@ -193,9 +194,20 @@ func start_match() -> void:
 ## other instead of on what the server last said.
 func set_loadout(team: int, character: int) -> void:
 	if in_session() and not in_match:
-		loadouts[multiplayer.get_unique_id()] = _clamp_loadout(team, character)
+		var id: int = multiplayer.get_unique_id()
+		loadouts[id] = _clamp_loadout(team, character) + [name_in(loadout_of(id))]
 		peers_changed.emit()
 		_request_loadout.rpc_id(SERVER_ID, team, character)
+
+
+## What we're called (sent to everyone through the server). Blank gets a
+## random name. Applied here straight away, like set_loadout.
+func set_player_name(text: String) -> void:
+	if in_session() and not in_match:
+		var loadout: Array = local_loadout()
+		loadouts[multiplayer.get_unique_id()] = [loadout[0], loadout[1], PlayerNames.clean(text)]
+		peers_changed.emit()
+		_request_name.rpc_id(SERVER_ID, text)
 
 
 ## Leader only: seat a bot on the smallest team (the server runs it).
@@ -228,14 +240,24 @@ func set_boss_drop(kind: BossDrop.Kind) -> void:
 		_request_boss_drop.rpc_id(SERVER_ID, kind)
 
 
-## [team, character] picked by `peer_id`.
+## [team, character, name] picked by `peer_id`.
 func loadout_of(peer_id: int) -> Array:
-	return loadouts.get(peer_id, [0, 0])
+	return loadouts.get(peer_id, [0, 0, ""])
 
 
-## Our own [team, character].
+## Our own [team, character, name].
 func local_loadout() -> Array:
 	return loadout_of(multiplayer.get_unique_id())
+
+
+## The name in a player's or bot's loadout.
+func name_in(loadout: Array) -> String:
+	return str(loadout[2]) if loadout.size() > 2 else ""
+
+
+## Everyone in the session's names, players then bots.
+func _taken_names() -> Array:
+	return (loadouts.values() + bots).map(name_in)
 
 
 ## A team in play, and a character that team can play.
@@ -330,7 +352,7 @@ func _close_session() -> void:
 	peers.clear()
 	loadouts.clear()
 	bots.clear()
-	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0], MatchMap.DROPS[0])
+	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0] as MatchMap.Map, MatchMap.DROPS[0] as BossDrop.Kind)
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -370,7 +392,8 @@ func _add_loadout(id: int) -> void:
 	for loadout: Array in loadouts.values() + bots:
 		teams.append(loadout[0])
 	var team: int = Players.smallest_team(teams)
-	loadouts[id] = [team, Roster.for_team(Players.default_character(peers.find(id)), team)]
+	loadouts[id] = [team, Roster.for_team(Players.default_character(peers.find(id)), team),
+		PlayerNames.random(_taken_names())]
 
 
 ## Tell the joiner why, then drop them (after a beat so the message arrives).
@@ -512,7 +535,17 @@ func _version_mismatch(version: int) -> String:
 func _request_loadout(team: int, character: int) -> void:
 	var id: int = multiplayer.get_remote_sender_id()
 	if is_server and not in_match and peers.has(id):
-		loadouts[id] = _clamp_loadout(team, character)
+		loadouts[id] = _clamp_loadout(team, character) + [name_in(loadout_of(id))]
+		_broadcast_peers()
+
+
+@rpc("any_peer", "reliable")
+func _request_name(text: String) -> void:
+	var id: int = multiplayer.get_remote_sender_id()
+	if is_server and not in_match and peers.has(id):
+		var clean: String = PlayerNames.clean(text)
+		var loadout: Array = loadout_of(id)
+		loadouts[id] = [loadout[0], loadout[1], clean if clean != "" else PlayerNames.random(_taken_names())]
 		_broadcast_peers()
 
 
@@ -541,7 +574,7 @@ func _request_boss_drop(kind: BossDrop.Kind) -> void:
 func _request_add_bot() -> void:
 	if _from_leader_in_lobby() and seat_count() < MAX_PLAYERS:
 		var team: int = Players.smallest_team(seat_teams())
-		bots.append([team, _unused_character(team)])
+		bots.append([team, _unused_character(team), PlayerNames.random(_taken_names())])
 		_broadcast_peers()
 
 

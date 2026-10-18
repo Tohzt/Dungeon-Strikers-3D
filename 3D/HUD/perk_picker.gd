@@ -130,7 +130,7 @@ func show_waiting(players: Array[PlayerClass3D], heading: String = "Choose a per
 		return
 	var names: PackedStringArray = []
 	for waiting: PlayerClass3D in players:
-		names.append("P%d" % (waiting.slot.index + 1) if waiting.slot else String(waiting.name))
+		names.append(waiting.slot.label() if waiting.slot else String(waiting.name))
 	waiting_label.text = "%s\nWaiting on: %s" % [heading, ", ".join(names)]
 	waiting_label.show()
 
@@ -189,7 +189,7 @@ func _relayout() -> void:
 				hand.tween.kill()
 			hand.root.queue_free()
 		_build_hand(hand, ui_scale)
-		(_grid if _full_screen else _bottom).add_child(hand.root)
+		(_grid as Container if _full_screen else _bottom as Container).add_child(hand.root)
 		_highlight(hand)
 		hand.tween.custom_step(HIGHLIGHT_TIME)  # Open already highlighted
 	dim.visible = _full_screen and not _hands.is_empty()
@@ -236,7 +236,7 @@ func _build_hand(hand: Hand, ui_scale: float) -> void:
 	hand.root = root
 
 	var relic: bool = hand.perks.all(func(perk: Perk) -> bool: return perk.category == Perk.Category.RELIC)
-	var title := _label("Player %d, choose a %s" % [player.slot.index + 1 if player.slot else 1, "relic" if relic else "perk"],
+	var title := _label("%s, choose a %s" % [player.slot.label() if player.slot else "Player 1", "relic" if relic else "perk"],
 		int(44 * ui_scale), color, 0.0)
 	title.add_theme_constant_override("outline_size", int(10 * ui_scale))
 	root.add_child(title)

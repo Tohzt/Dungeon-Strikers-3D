@@ -11,6 +11,9 @@ class_name CrossbowClass3D extends WeaponClass3D
 @export var muzzle_height_offset: float = 0.0
 ## What a shot sounds like (an Sfx.SOUNDS id).
 @export var fire_sound: StringName = &"bow_release"
+## Fastest it can shoot again (seconds), however fast Light is tapped.
+@export var fire_interval: float = 0.5
+var _next_fire_msec: int = 0
 
 ## The shot that breaks it carries its full break burst, bursting where it
 ## lands; the weapon itself then shatters in this much of one.
@@ -27,6 +30,7 @@ func attack(aim_direction: Vector3) -> void:
 	_fire_arrow(muzzle, aim_direction, true)
 	if Net.match_synced:
 		_net_fire.rpc(muzzle, aim_direction)
+	_reload()
 	wear()  # Each shot is a use
 
 
@@ -41,7 +45,17 @@ func fire_heavy(aim_direction: Vector3, move: WeaponMove3D) -> void:
 	_fire_arrow(muzzle, aim_direction, true, move)
 	if Net.match_synced:
 		_net_fire_heavy.rpc(muzzle, aim_direction)
+	_reload()
 	wear()
+
+
+## Whether fire_interval has passed since the last shot.
+func can_fire() -> bool:
+	return Time.get_ticks_msec() >= _next_fire_msec
+
+
+func _reload() -> void:
+	_next_fire_msec = Time.get_ticks_msec() + int(fire_interval * 1000.0)
 
 
 ## `real` arrows hit things; online, everyone else's copy of a shot is just

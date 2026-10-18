@@ -114,7 +114,7 @@ func _grant_hand(player_name: String, hand: PackedInt32Array) -> void:
 	_add_hand(player_name, hand)
 	var player: PlayerClass3D = _player_named(player_name)
 	if player and Global.Game3D:
-		var label: String = "P%d" % (player.slot.index + 1) if player.slot else player_name
+		var label: String = player.slot.label() if player.slot else player_name
 		Global.Game3D.scoreboard.announce("%s slew the boss! A perk awaits at their altar" % label,
 			player.slot.color if player.slot else Color.WHITE)
 

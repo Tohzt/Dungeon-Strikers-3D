@@ -16,6 +16,17 @@ const SKELETON_IDLE := &"Special/Skeletons_Idle"
 ## Played once after the flourish by a human (skeletons go straight to ready).
 const CHEER := &"Simulation/Cheering"
 const BLEND := 0.2
+## Now and then each figure breaks off from its idle (or ready pose) for one
+## of these, or its own flourish, then goes back to it. Seconds between.
+const HUMAN_FIDGETS: Array[StringName] = [
+	&"Simulation/Cheering", &"Simulation/Waving", &"General/Interact", &"General/Use_Item",
+	&"General/PickUp", &"Simulation/Push_Ups",
+]
+const SKELETON_FIDGETS: Array[StringName] = [
+	&"Special/Skeletons_Taunt", &"Special/Skeletons_Taunt_Longer", &"Simulation/Waving",
+	&"General/Interact",
+]
+const FIDGET_GAP := Vector2(4.0, 10.0)
 
 ## The bodies are shrunk in a match too (see player_3d.tscn), but weapons
 ## aren't, so the weapons are scaled back up to match.
@@ -47,6 +58,9 @@ class Figure:
 	## How it stands when it isn't picked out.
 	var home_turn: float
 	var idle: StringName
+	## Seconds until it next breaks off for a fidget.
+	var fidget_in: float
+	var last_fidget: StringName
 
 
 var team: int = -1
@@ -118,6 +132,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	for figure: Figure in _figures:
+		figure.fidget_in -= delta
+		if figure.fidget_in <= 0.0 and figure.anim.current_animation == _rest_clip(figure):
+			_fidget(figure)
 	var target_x: float = _focused_figure().home.x if _focused_figure() else 0.0
 	_camera_x = lerpf(_camera_x, target_x, clampf(delta * CAMERA_FOLLOW, 0.0, 1.0))
 	_place_camera()
@@ -190,6 +208,7 @@ func _make_figure(character: int) -> Figure:
 		figure.anim.add_animation_library(library_name, _all_libraries()[library_name])
 	figure.anim.animation_finished.connect(_on_clip_finished.bind(figure))
 	_play(figure, figure.idle)
+	_wait_to_fidget(figure)
 	# Out of step with each other, so the row doesn't bob as one
 	figure.anim.seek(randf() * figure.anim.current_animation_length, true)
 	return figure
@@ -242,11 +261,14 @@ func _focus(character: int) -> void:
 	if old:
 		_step(old, old.home, 1.0, old.home_turn)
 		_play(old, old.idle)
+		_wait_to_fidget(old)
 	var figure: Figure = _focused_figure()
 	if not figure:
 		return
 	_step(figure, figure.home + Vector3(0, 0, FOCUS_FORWARD), FOCUS_SCALE, 0.0)
+	figure.last_fidget = &""
 	_play(figure, Roster.flourish_of(character))
+	_wait_to_fidget(figure)
 	var spot_at := figure.home + Vector3(0, 0, FOCUS_FORWARD)
 	var tween: Tween = create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(_spot, "position", spot_at + Vector3.UP * 5.0, FOCUS_TIME)
@@ -277,16 +299,38 @@ func _play(figure: Figure, clip: StringName) -> void:
 
 
 ## Clips don't loop on their own: idles start over, and the focused figure
-## goes flourish -> (cheer, for a human) -> its ready pose, over and over.
+## goes flourish -> (cheer, for a human) -> its ready pose. A fidget goes
+## back to whichever of those it broke off from.
 func _on_clip_finished(clip: StringName, figure: Figure) -> void:
-	if figure.character != focused:
-		_play(figure, figure.idle)
-		return
-	var ready_clip: StringName = Roster.ready_clip_of(figure.character)
-	if clip == Roster.flourish_of(figure.character) and Roster.side_of(figure.character) == Roster.HUMANS:
+	if figure.character == focused and clip == Roster.flourish_of(figure.character) \
+			and figure.last_fidget != clip and Roster.side_of(figure.character) == Roster.HUMANS:
 		_play(figure, CHEER)
-	else:
-		_play(figure, ready_clip)
+		return
+	_play(figure, _rest_clip(figure))
+
+
+## What it stands in between fidgets: its ready pose once picked out, else
+## its idle.
+func _rest_clip(figure: Figure) -> StringName:
+	return Roster.ready_clip_of(figure.character) if figure.character == focused else figure.idle
+
+
+func _wait_to_fidget(figure: Figure) -> void:
+	figure.fidget_in = randf_range(FIDGET_GAP.x, FIDGET_GAP.y)
+
+
+## Break off for a random fidget (never the same one twice running).
+func _fidget(figure: Figure) -> void:
+	var pool: Array[StringName] = []
+	pool.assign(SKELETON_FIDGETS if Roster.side_of(figure.character) == Roster.SKELETONS else HUMAN_FIDGETS)
+	pool.append(Roster.flourish_of(figure.character))
+	pool = pool.filter(func(clip: StringName) -> bool:
+		return clip != figure.last_fidget and figure.anim.has_animation(clip))
+	_wait_to_fidget(figure)
+	if pool.is_empty():
+		return
+	figure.last_fidget = pool.pick_random()
+	_play(figure, figure.last_fidget)
 
 
 static func _all_libraries() -> Dictionary[StringName, AnimationLibrary]:

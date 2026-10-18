@@ -23,6 +23,7 @@ fire_sound = &"ice_bolt"
 plays_swipe_animation = false
 arrow_scene = ExtResource("bolt")
 arrow_speed = 30.0
+fire_interval = 0.32
 muzzle_forward_offset = 0.3
 muzzle_height_offset = 0.3
 swing_clip = &"CombatRanged/Ranged_Magic_Shoot"

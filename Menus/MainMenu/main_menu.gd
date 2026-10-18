@@ -7,6 +7,9 @@ extends Control
 ## panel (CharacterSelectPanel) showing the team's lineup in 3D; the host
 ## also picks the format: map, boss drop and how many bots fill the teams
 ## (up to 4v4).
+## Everyone gets a random name (PlayerNames) they can type over on their
+## panel or reroll (Y on a controller, R on the keyboard); it's their name
+## and health bar in the match.
 ## Joined players go into the Players autoload, which Game3D spawns from.
 
 const MIN_LOBBY_PLAYERS := 2
@@ -75,6 +78,7 @@ var copy_feedback: Tween
 ## Single player's picks, used when they choose a device to start on.
 var solo_team_choice: int = 0
 var solo_character_choice: int = 0
+var solo_name_choice: String = ""
 ## Local lobby: which way each joypad's left stick is pushed (-1, 0, 1), so
 ## holding it changes character once rather than every frame.
 var stick_dirs: Dictionary[int, int] = {}
@@ -90,6 +94,9 @@ func _ready() -> void:
 	Players.leave_all()
 	if not back_in_lobby:
 		Net.leave()
+	solo_name_choice = PlayerNames.saved()
+	if solo_name_choice == "":
+		solo_name_choice = PlayerNames.random()
 
 	%SinglePlayerButton.pressed.connect(_show.bind(single_player, %KeyboardMouse))
 	%LocalMultiplayerButton.pressed.connect(_show.bind(lobby, start_button))
@@ -189,7 +196,8 @@ func _go_back() -> void:
 
 func _start_single_player(device: int) -> void:
 	Players.leave_all()
-	Players.join(device, solo_team_choice, -1, solo_character_choice)
+	var slot: PlayerSlot = Players.join(device, solo_team_choice, -1, solo_character_choice)
+	slot.display_name = solo_name_choice
 	_start_game()
 
 
@@ -199,6 +207,19 @@ func _step_solo_character(step: int) -> void:
 
 func _pick_solo_character(character: int) -> void:
 	solo_character_choice = Roster.for_team(character, solo_team_choice)
+	_refresh_lobby()
+
+
+func _type_solo_name(text: String) -> void:
+	var clean: String = PlayerNames.clean(text)
+	if clean != "":
+		solo_name_choice = clean
+		PlayerNames.save(clean)
+	_refresh_lobby()
+
+
+func _reroll_solo_name() -> void:
+	solo_name_choice = PlayerNames.random([solo_name_choice])
 	_refresh_lobby()
 
 
@@ -221,6 +242,8 @@ func _build_panels() -> void:
 	solo_panel.team_picked.connect(_pick_solo_team)
 	solo_panel.character_picked.connect(_pick_solo_character)
 	solo_panel.character_stepped.connect(_step_solo_character)
+	solo_panel.name_typed.connect(_type_solo_name)
+	solo_panel.name_rerolled.connect(_reroll_solo_name)
 
 	for i in LOCAL_SEATS:
 		var panel := CharacterSelectPanel.new(LOBBY_STAGE_SIZE)
@@ -230,6 +253,8 @@ func _build_panels() -> void:
 		panel.team_picked.connect(_on_seat_team_picked.bind(i))
 		panel.character_picked.connect(_on_seat_character_picked.bind(i))
 		panel.character_stepped.connect(_on_seat_character_stepped.bind(i))
+		panel.name_typed.connect(_on_seat_name_typed.bind(i))
+		panel.name_rerolled.connect(_on_seat_name_rerolled.bind(i))
 		seats.add_child(panel)
 		seat_panels.append(panel)
 
@@ -240,6 +265,8 @@ func _build_panels() -> void:
 	online_panel.character_picked.connect(func(character: int) -> void:
 		Net.set_loadout(Net.local_loadout()[0], character))
 	online_panel.character_stepped.connect(_step_online_character)
+	online_panel.name_typed.connect(_type_online_name)
+	online_panel.name_rerolled.connect(Net.set_player_name.bind(""))
 	online_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	online_status.custom_minimum_size = Vector2(440, 0)
 
@@ -268,6 +295,20 @@ func _on_seat_character_stepped(step: int, i: int) -> void:
 	var slot: PlayerSlot = _seat_slot(i)
 	if slot:
 		Players.cycle_character(slot, step)
+
+
+## Typed in at the keyboard; remembered if it's the keyboard player's own.
+## Blank while typing is left for them to finish.
+func _on_seat_name_typed(text: String, i: int) -> void:
+	var slot: PlayerSlot = _seat_slot(i)
+	if slot and (PlayerNames.clean(text) != "" or not seat_panels[i].is_typing()):
+		Players.set_player_name(slot, text, slot.uses_keyboard_mouse())
+
+
+func _on_seat_name_rerolled(i: int) -> void:
+	var slot: PlayerSlot = _seat_slot(i)
+	if slot:
+		Players.reroll_name(slot)
 
 
 # ===== PICKERS =====
@@ -314,6 +355,9 @@ func _input(event: InputEvent) -> void:
 		_lobby_stick_input(event)
 	if not event.is_pressed() or event.is_echo():
 		return
+	# Typing a name: the keys are letters, not lobby controls
+	if event is InputEventKey and _typing():
+		return
 	var device: int = Players.device_of(event)
 	if device == Players.NO_DEVICE:
 		return
@@ -324,6 +368,23 @@ func _input(event: InputEvent) -> void:
 	elif single_player.visible and _team_step(event) != 0:
 		_pick_solo_team(solo_team_choice + _team_step(event))
 		accept_event()
+	elif single_player.visible and _is_reroll_press(event):
+		_reroll_solo_name()
+		accept_event()
+
+
+## A name field has the keyboard.
+func _typing() -> bool:
+	return get_viewport().gui_get_focus_owner() is LineEdit
+
+
+## Y on a controller, R on the keyboard: a new random name.
+func _is_reroll_press(event: InputEvent) -> bool:
+	if event is InputEventJoypadButton:
+		return event.button_index == JOY_BUTTON_Y
+	if event is InputEventKey:
+		return event.physical_keycode == KEY_R
+	return false
 
 
 ## Consume join/leave presses so they don't also click the focused button.
@@ -342,6 +403,9 @@ func _lobby_input(event: InputEvent, device: int) -> void:
 		accept_event()
 	elif slot and _team_step(event) != 0:
 		Players.cycle_team(slot, _team_step(event))
+		accept_event()
+	elif slot and _is_reroll_press(event):
+		Players.reroll_name(slot)
 		accept_event()
 
 
@@ -399,9 +463,18 @@ func _online_lobby_input(event: InputEvent, device: int) -> void:
 	elif _team_step(event) != 0:
 		_step_online_team(_team_step(event))
 		accept_event()
+	elif device == online_device and _is_reroll_press(event):
+		Net.set_player_name("")
+		accept_event()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and _typing():
+		# Esc stops typing rather than leaving the screen
+		if Players.is_back_press(event):
+			get_viewport().gui_get_focus_owner().release_focus()
+			accept_event()
+		return
 	if event.is_pressed() and not event.is_echo() and Players.is_back_press(event) and not home.visible:
 		_go_back()
 		accept_event()
@@ -488,6 +561,7 @@ func _refresh_lobby() -> void:
 			panel.set_header("P%d  %s" % [i + 1, Players.device_name(slot.device)])
 			panel.interactive = slot.uses_keyboard_mouse()
 			panel.show_choice(slot.team, slot.character)
+			panel.show_name(slot.display_name, slot.color)
 		else:
 			panel.set_header("P%d" % (i + 1))
 			panel.show_empty("Press A or Enter to join")
@@ -505,8 +579,8 @@ func _refresh_lobby() -> void:
 		start_button.text = "Start (2+ teams)"
 	else:
 		start_button.text = "Start"
-	var seats: int = maxi(Players.slots.size(), Players.bot_fill_count if bots else MIN_LOBBY_PLAYERS)
-	var lobby_match: Array[int] = Players.teams_with_bots(seats, seated)
+	var seat_count: int = maxi(Players.slots.size(), Players.bot_fill_count if bots else MIN_LOBBY_PLAYERS)
+	var lobby_match: Array[int] = Players.teams_with_bots(seat_count, seated)
 	lobby_teams.text = "Teams: " + Players.format_name(lobby_match)
 	lobby_bots.text = _bots_text(lobby_match)
 	for button: Button in [solo_map, lobby_map]:
@@ -518,10 +592,11 @@ func _refresh_lobby() -> void:
 	solo_teams.text = "Teams: " + Players.format_name(solo_match)
 	solo_bots.text = _bots_text(solo_match)
 	solo_panel.show_choice(solo_team_choice, solo_character_choice)
+	solo_panel.show_name(solo_name_choice, Players.team_color(solo_team_choice))
 
 
 ## Who's on each team in the local lobby, and how many bots join them, e.g.
-## "Humans: P1, P3 + 2 bots     Skeletons: P2 + 3 bots".
+## "Humans: Bonk, Pip + 2 bots     Skeletons: Grub + 3 bots".
 func _roster_text() -> String:
 	var seated: Array[int] = Players.slot_teams()
 	var sizes: Array[int] = Players.team_sizes(Players.teams_with_bots(Players.bot_fill_count, seated))
@@ -530,7 +605,7 @@ func _roster_text() -> String:
 		var names: Array[String] = []
 		for slot: PlayerSlot in Players.slots:
 			if slot.team == team:
-				names.append("P%d" % (slot.index + 1))
+				names.append(slot.label())
 		var bot_count: int = sizes[team] - names.size()
 		var text: String = ", ".join(names) if not names.is_empty() else ""
 		if bot_count > 0:
@@ -591,6 +666,7 @@ func _join() -> void:
 ## Copy the code straight away so it's ready to paste to friends.
 func _on_net_hosted(_code: String) -> void:
 	online_device = Players.NO_DEVICE
+	_send_saved_name()
 	_show(online_lobby, online_start)
 	_on_copy_code()
 
@@ -598,7 +674,23 @@ func _on_net_hosted(_code: String) -> void:
 func _on_net_joined(_code: String) -> void:
 	online_device = Players.NO_DEVICE
 	%JoinConfirm.disabled = false
+	_send_saved_name()
 	_show(online_lobby, %OnlineLeave)
+
+
+## The server starts us on a random name; go by the one we last typed.
+func _send_saved_name() -> void:
+	if PlayerNames.saved() != "":
+		Net.set_player_name(PlayerNames.saved())
+
+
+## Blank while typing is left for them to finish.
+func _type_online_name(text: String) -> void:
+	var clean: String = PlayerNames.clean(text)
+	if clean != "":
+		PlayerNames.save(clean)
+	if clean != "" or not online_panel.is_typing():
+		Net.set_player_name(clean)
 
 
 func _on_net_failed(reason: String) -> void:
@@ -630,12 +722,14 @@ func _refresh_online_lobby() -> void:
 			var id: int = Net.peers[i]
 			var loadout: Array = Net.loadout_of(id)
 			online_card_styles[i].bg_color = Players.team_color(loadout[0]).darkened(0.35)
-			var text: String = "P%d  %s%s" % [i + 1, "Host" if i == 0 else "Guest", " (You)" if id == my_id else ""]
+			var text: String = "P%d  %s  (%s%s)" % [i + 1, Net.name_in(loadout), "Host" if i == 0 else "Guest",
+				", You" if id == my_id else ""]
 			online_card_labels[i].text = text + "\n" + Players.character_name(loadout[1])
 		elif bot < Net.bots.size():
 			var loadout: Array = Net.bots[bot]
 			online_card_styles[i].bg_color = Players.team_color(loadout[0]).darkened(0.35)
-			online_card_labels[i].text = "P%d  Bot\n%s" % [i + 1, Players.character_name(loadout[1])]
+			online_card_labels[i].text = "P%d  %s  (Bot)\n%s" % [i + 1, Net.name_in(loadout),
+				Players.character_name(loadout[1])]
 		else:
 			online_card_styles[i].bg_color = EMPTY_CARD_COLOR
 			online_card_labels[i].text = "Waiting for player..."
@@ -656,6 +750,7 @@ func _refresh_online_lobby() -> void:
 		else Players.device_name(online_device)))
 	if online_lobby.visible:
 		online_panel.show_choice(mine[0], mine[1])
+		online_panel.show_name(Net.name_in(mine), Players.team_color(mine[0]))
 	if online_device == Players.NO_DEVICE:
 		online_status.text = "Press A or Enter on the device you'll play with."
 	elif Net.seat_count() >= MIN_LOBBY_PLAYERS and not split:
@@ -709,7 +804,8 @@ func _on_match_started() -> void:
 	Players.leave_all()
 	var device: int = online_device if online_device != Players.NO_DEVICE else last_device
 	var mine: Array = Net.local_loadout()
-	Players.join(device, mine[0], Net.local_seat(), mine[1])
+	var slot: PlayerSlot = Players.join(device, mine[0], Net.local_seat(), mine[1])
+	slot.display_name = Net.name_in(mine)
 	_start_game()
 
 

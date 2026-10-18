@@ -119,4 +119,4 @@ func _after_given() -> void:
 
 
 func _label(player: PlayerClass3D) -> String:
-	return "P%d" % (player.slot.index + 1) if player.slot else String(player.name)
+	return player.slot.label() if player.slot else String(player.name)

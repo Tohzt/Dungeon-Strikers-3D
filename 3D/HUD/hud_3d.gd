@@ -2,13 +2,17 @@ class_name HUD3D extends CanvasLayer
 @export var player: PlayerClass3D
 
 @onready var panel:       PanelContainer = $Panel
-@onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
+## The player's name, filled in their team color as far as their health
+## goes (see NameTag).
+@onready var name_tag:    NameTag        = $Panel/Row/Bars/NameTag
 ## The blue bar: the player's carry meter (see PlayerClass3D.carry).
 @onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
 @onready var player_icon: TextureRect    = $Panel/Row/PlayerIcon
 
 ## Gap between the HUD panel and the screen edges.
 const MARGIN := 16
+const NAME_FONT_SIZE := 30
+const NAME_BORDER := 9
 
 var signals_connected: bool = false
 ## "Knocked out: 7s" under the bars while the player is down (knockout modes).
@@ -32,6 +36,10 @@ func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
 	_corner = corners[corner % corners.size()]
 	panel.set_anchors_and_offsets_preset(_corner, Control.PRESET_MODE_MINSIZE, MARGIN)
 	player_icon.modulate = slot.color
+	name_tag.font_size = NAME_FONT_SIZE
+	name_tag.border = NAME_BORDER
+	name_tag.color = slot.color
+	name_tag.text = slot.label()
 	if not _down_label:
 		_down_label = Label.new()
 		_down_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
@@ -62,8 +70,7 @@ func _connect_signals(eb: Node) -> void:
 	_on_hp_changed(eb.hp, eb.hp_max)
 
 func _on_hp_changed(new_hp: float, max_hp: float) -> void:
-	health_bar.max_value = max_hp
-	health_bar.value = new_hp
+	name_tag.fraction = new_hp / max_hp if max_hp > 0.0 else 0.0
 
 func _on_carry_changed(new_carry: float, max_carry: float) -> void:
 	carry_bar.max_value = max_carry
@@ -94,6 +101,7 @@ func _update_picker() -> void:
 func _make_picker() -> void:
 	_picker = CharacterSelectPanel.new(PICKER_STAGE_SIZE)
 	_picker.teams_shown = false
+	_picker.names_shown = false
 	_picker.focusable = false
 	_picker.interactive = player.slot.uses_keyboard_mouse()
 	_picker.set_header("Get back up as...")

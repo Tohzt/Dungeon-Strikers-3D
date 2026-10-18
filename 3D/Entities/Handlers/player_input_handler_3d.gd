@@ -7,7 +7,8 @@ var look_dir: Vector3 = Vector3.ZERO
 ## (left click / RB) attacks on press, heavy (right click / LB) charges while
 ## held and goes off on release, and Throw (Q / Y) charges a throw of the
 ## weapon in hand (or the ball we carry), and Shoot (E / LT) charges a shot
-## of the carried ball at the goal. Bots press them too.
+## of the carried ball at the goal. Carrying the ball, light throws it and
+## heavy passes it (see PlayerClass3D.pass_ball). Bots press them too.
 var light_held: bool = false
 var heavy_held: bool = false
 var throw_held: bool = false

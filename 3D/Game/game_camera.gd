@@ -50,6 +50,12 @@ var can_zoom: bool = true
 ## wall there), so the camera gets out of the way before they reach the
 ## wall, by as much as that wall's height actually calls for.
 @export var wall_lead: float = 2.0
+## A wall toward the bottom of the screen within this distance starts the
+## tilt early: by how much standing right at it would need, ramping in...
+@export var tilt_start_distance: float = 9.0
+## ...to all of that from this distance in, so the camera is already as far
+## over as that wall will ever need before they reach it.
+@export var full_tilt_distance: float = 3.5
 @export_range(0.0, 60.0) var top_down_extra_pitch: float = 40.0  # Most degrees added to the usual downward tilt (never past straight down)
 @export var top_down_ease: float = 4.0  # How quickly the tilt (and slide) follows
 ## Furthest the view slides out over the field, past full tilt, to see a
@@ -70,6 +76,12 @@ var top_down_blend: float = 0.0  # 0 = usual angle, 1 = fully tilted
 var wall_shift: float = 0.0  # How far the view has slid out over the field (see wall_max_shift)
 var aim_offset: Vector3 = Vector3.ZERO  # Eased controller look-ahead
 var context_shift: Vector3 = Vector3.ZERO  # Eased slide toward what's focused on (see context_max_shift)
+## Where the view was last centred (before any wall slide), so the wall
+## checks see the players from where the camera really is, not as if it
+## were centred on each of them (the mouse pull alone moves it a long way
+## when zoomed out).
+var _view_center: Vector3
+var _has_view_center: bool = false
 ## The player's chosen zoom (scroll wheel); the camera never frames tighter.
 var zoom_fov: float
 ## Jumped to the players yet (so the match doesn't open on an empty room).
@@ -284,6 +296,7 @@ func _process(delta: float) -> void:
 	# Eases back in rather than snapping once the focus ends, or the group
 	# shrinks to one.
 	context_shift = context_shift.lerp(Vector3.ZERO, clamp(delta * context_ease, 0.0, 1.0))
+	_set_view_center(look_target + context_shift)
 	var ideal_pos: Vector3 = _ideal_position(look_target + context_shift + _wall_offset())
 	# Slid out from a wall: widen to keep the player on screen.
 	var target_fov: float = zoom_fov
@@ -380,44 +393,83 @@ func _wall_offset() -> Vector3:
 	return -_toward_camera() * wall_shift
 
 
+func _set_view_center(center: Vector3) -> void:
+	_view_center = center
+	_has_view_center = true
+
+
 ## What it takes to see `who` over the walls: x is the least tilt (0-1),
 ## y (only if `may_shift`, and only at full tilt) the least slide out over
-## the field. Each found by halving its range a few times.
+## the field. The tilt also leads a wall ahead toward the bottom of the
+## screen (see tilt_start_distance), so it's done before they get there.
 func _wall_need(who: Node3D, may_shift: bool) -> Vector2:
 	var exclude: Array[RID] = []
 	if who is CollisionObject3D:
 		exclude.append((who as CollisionObject3D).get_rid())
-	var from: Vector3 = _sight_point(who, exclude)
-	if not _hidden_by_wall(from, who, exclude, 0.0, 0.0):
-		return Vector2.ZERO
-	if not _hidden_by_wall(from, who, exclude, 1.0, 0.0):
-		var low: float = 0.0
-		var high: float = 1.0
-		for i: int in 5:
-			var mid: float = (low + high) * 0.5
-			if _hidden_by_wall(from, who, exclude, mid, 0.0):
-				low = mid
-			else:
-				high = mid
-		return Vector2(high, 0.0)
-	if not may_shift or _hidden_by_wall(from, who, exclude, 1.0, wall_max_shift):
-		return Vector2(1.0, wall_max_shift if may_shift else 0.0)
+	var at: Vector3 = who.global_position
+	var view_offset: Vector3 = _view_center - at if _has_view_center else Vector3.ZERO
+	view_offset.y = 0.0
+	var from: Vector3 = _sight_point(at, exclude)
+	var blend: float = max(_tilt_need(from, at, view_offset, exclude), _wall_ahead_need(at, view_offset, exclude))
+	if blend < 1.0 or not may_shift or not _hidden_by_wall(from, at, view_offset, exclude, 1.0, 0.0):
+		return Vector2(blend, 0.0)
+	if _hidden_by_wall(from, at, view_offset, exclude, 1.0, wall_max_shift):
+		return Vector2(1.0, wall_max_shift)
 	var low_shift: float = 0.0
 	var high_shift: float = wall_max_shift
 	for i: int in 5:
 		var mid_shift: float = (low_shift + high_shift) * 0.5
-		if _hidden_by_wall(from, who, exclude, 1.0, mid_shift):
+		if _hidden_by_wall(from, at, view_offset, exclude, 1.0, mid_shift):
 			low_shift = mid_shift
 		else:
 			high_shift = mid_shift
 	return Vector2(1.0, high_shift)
 
 
-## Where to check `who` can be seen from: wall_ray_height up and wall_lead
+## The least tilt (0-1) that sees `from` over the walls with the view
+## centred `view_offset` from `at`: 1 if even full tilt doesn't. Found by
+## halving its range a few times.
+func _tilt_need(from: Vector3, at: Vector3, view_offset: Vector3, exclude: Array[RID]) -> float:
+	if not _hidden_by_wall(from, at, view_offset, exclude, 0.0, 0.0):
+		return 0.0
+	if _hidden_by_wall(from, at, view_offset, exclude, 1.0, 0.0):
+		return 1.0
+	var low: float = 0.0
+	var high: float = 1.0
+	for i: int in 6:
+		var mid: float = (low + high) * 0.5
+		if _hidden_by_wall(from, at, view_offset, exclude, mid, 0.0):
+			low = mid
+		else:
+			high = mid
+	return high
+
+
+## For the nearest wall toward the bottom of the screen within
+## tilt_start_distance: the tilt standing right against it would need,
+## ramped in from tilt_start_distance to full at full_tilt_distance. A wall
+## low enough to see over needs none, however close.
+func _wall_ahead_need(at: Vector3, view_offset: Vector3, exclude: Array[RID]) -> float:
+	var origin: Vector3 = at + Vector3.UP * wall_ray_height
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + _toward_camera() * tilt_start_distance, wall_mask, exclude)
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return 0.0
+	var hit_pos: Vector3 = hit.position
+	var distance: float = origin.distance_to(hit_pos)
+	# Standing just short of the wall, seen from where the view would be.
+	var at_wall: Vector3 = Vector3(hit_pos.x, at.y, hit_pos.z) - _toward_camera() * 0.3
+	var from: Vector3 = at_wall + Vector3.UP * wall_ray_height
+	var need: float = _tilt_need(from, at_wall, view_offset, exclude)
+	var ramp: float = 1.0 - smoothstep(full_tilt_distance, max(tilt_start_distance, full_tilt_distance + 0.01), distance)
+	return need * ramp
+
+
+## Where to check `at` can be seen from: wall_ray_height up and wall_lead
 ## toward the bottom of the screen, or halfway to a wall that's closer than
-## twice that, so the camera is already out of the way when they reach it.
-func _sight_point(who: Node3D, exclude: Array[RID]) -> Vector3:
-	var origin: Vector3 = who.global_position + Vector3.UP * wall_ray_height
+## twice that.
+func _sight_point(at: Vector3, exclude: Array[RID]) -> Vector3:
+	var origin: Vector3 = at + Vector3.UP * wall_ray_height
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + _toward_camera() * wall_lead * 2.0, wall_mask, exclude)
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
@@ -426,10 +478,10 @@ func _sight_point(who: Node3D, exclude: Array[RID]) -> Vector3:
 
 
 ## Whether a wall cuts the line of sight from `from` to where the camera
-## would be at tilt `blend`, centred `shift` out over the field from `who`.
-## Counts a sight line starting inside a wall.
-func _hidden_by_wall(from: Vector3, who: Node3D, exclude: Array[RID], blend: float, shift: float) -> bool:
-	var eye: Vector3 = _ideal_position_for(who.global_position - _toward_camera() * shift, _tilted_basis(blend))
+## would be at tilt `blend`, centred `view_offset` from `at` and slid
+## `shift` out over the field. Counts a sight line starting inside a wall.
+func _hidden_by_wall(from: Vector3, at: Vector3, view_offset: Vector3, exclude: Array[RID], blend: float, shift: float) -> bool:
+	var eye: Vector3 = _ideal_position_for(at + view_offset - _toward_camera() * shift, _tilted_basis(blend))
 	var query := PhysicsRayQueryParameters3D.create(from, eye, wall_mask, exclude)
 	query.hit_from_inside = true
 	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
@@ -452,6 +504,7 @@ func _frame_group(points: Array[Vector3], anchor: Vector3, delta: float) -> void
 	var desired_shift: Vector3 = _bounds_center(points) - anchor
 	desired_shift.y = 0.0
 	context_shift = context_shift.lerp(desired_shift.limit_length(context_max_shift), clamp(delta * context_ease, 0.0, 1.0))
+	_set_view_center(anchor + context_shift)
 	var ideal_pos: Vector3 = _ideal_position(anchor + context_shift + _wall_offset())
 	fov = lerp(fov, _fov_to_fit(points, ideal_pos, group_padding), clamp(delta * group_zoom_speed, 0.0, 1.0))
 	global_position = global_position.lerp(ideal_pos, delta * follow_speed)
