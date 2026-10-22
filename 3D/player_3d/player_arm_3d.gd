@@ -132,6 +132,16 @@ func is_drawing() -> bool:
 	return draw_time > 0.0
 
 
+## In the part of the swing that hits: its clip's strike (phase 1-2, see
+## swing_phase), held there through a hit-stop or a spin. Not the wind-up
+## or recovery, and not while springing back.
+func is_striking() -> bool:
+	if swing_time <= 0.0 or rebound > 0.0:
+		return false
+	var phase: float = swing_phase()
+	return phase >= 1.0 and phase <= 2.0
+
+
 ## Start a swing `duration` seconds long, its clip from phase `from`.
 func begin_swing(duration: float, from: float = QUICK_SWING_PHASE) -> void:
 	swing_time = duration

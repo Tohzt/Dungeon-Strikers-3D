@@ -19,7 +19,6 @@ axis_lock_angular_z = true
 mass = 2.2
 script = ExtResource("script")
 swing_sound = &"swing_halberd"
-vertical_swing = true
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 grip = 3

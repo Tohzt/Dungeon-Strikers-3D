@@ -90,6 +90,16 @@ static func emit(wave_spec: AttackWaveSpec3D, from: Node3D, from_weapon: Weapon3
 	return wave
 
 
+## Make this (just emitted) wave an echo of its attack (the double_cast
+## perk stats): it sets off `after` seconds later than it would have, and
+## hits `power` times as hard.
+func make_echo(after: float, power: float) -> void:
+	_delay += after
+	damage *= power
+	knockback *= power
+	visible = false
+
+
 ## An orb that looks like `orb_spec`'s, held where its wave would start in
 ## front of `holder` (along its +Z), growing from nothing over `grow_time`
 ## seconds then throbbing, until it flies off as its wave (see emit) or is
@@ -125,6 +135,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Its sender left the match (online): even `attacker is ...` errors on a
+	# freed node, which would stop the wave here for good
+	if not is_instance_valid(attacker):
+		attacker = null
 	if _delay > 0.0:
 		_delay -= delta
 		# Sets off from wherever its sender is by then
@@ -179,12 +193,21 @@ func _move(delta: float) -> void:
 		return
 	if spec.shape == AttackWaveSpec3D.Shape.RING:
 		return  # Spreads in place
+	_home(delta)
 	var from: Vector3 = global_position
 	var to: Vector3 = from + _dir * step
 	if not spec.through_walls and _wall_between(from, to):
 		_end()
 		return
 	global_position = to
+
+
+## The homing perk stat: turn a little toward the nearest enemy ahead.
+func _home(delta: float) -> void:
+	var turned: Vector3 = Combat.home(get_world_3d(), global_position, _dir, attacker, delta)
+	if turned != _dir:
+		_dir = turned
+		global_transform = Transform3D(_facing_basis(), global_position)
 
 
 ## A wall in the way, at the wave's middle height (a shockwave's, a little

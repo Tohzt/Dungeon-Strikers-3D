@@ -33,6 +33,9 @@ var _shot_left: float = 0.0
 ## Team (PlayerSlot.team) of the last player to play the ball, -1 = nobody
 ## yet. Kept by whoever simulates it; four-team goals credit this team.
 var last_team: int = -1
+## Name of the last player to play the ball ("" = nobody yet), who gets
+## the goal in the match stats (see MatchStats). Kept like last_team.
+var last_player: String = ""
 ## Online: the server sends where it is; clients play it back.
 var _motion := NetMotion.new()
 
@@ -164,7 +167,7 @@ func receive_impulse(impulse: Vector3) -> void:
 	if holder:
 		return
 	if Net.decides():
-		apply_central_impulse(impulse)
+		_kick(impulse / mass)
 	else:
 		_request_push.rpc_id(Net.SERVER_ID, impulse)
 
@@ -172,7 +175,24 @@ func receive_impulse(impulse: Vector3) -> void:
 @rpc("any_peer", "reliable")
 func _request_push(impulse: Vector3) -> void:
 	if Net.is_server:
-		apply_central_impulse(impulse)
+		_kick(impulse / mass)
+
+
+## Server/offline: a hit or shove sends it off at `velocity`, without
+## stacking on speed it already has that way. Otherwise a player running into
+## it (whose body already carries it along at their speed) and then hitting it
+## would send it off at both speeds added up. Speed it has the other way, or
+## sideways, is still met by the hit as before.
+func _kick(velocity: Vector3) -> void:
+	var flat := Vector3(velocity.x, 0.0, velocity.z)
+	var current: Vector3 = linear_velocity
+	var result := Vector3(current.x, 0.0, current.z)
+	if flat.length() > 0.01:
+		var dir: Vector3 = flat.normalized()
+		var along: float = result.dot(dir)
+		result += dir * (max(along, flat.length()) - along) if along > 0.0 else flat
+	result.y = max(current.y, velocity.y) if current.y > 0.0 and velocity.y > 0.0 else current.y + velocity.y
+	linear_velocity = result
 
 
 ## `player` played the ball (shoved, shot or bumped it), so a goal now
@@ -196,6 +216,7 @@ func _set_last_team(player_name: String) -> void:
 	var player: PlayerClass3D = Global.Game3D.player_named(player_name) if Global.Game3D else null
 	if player and player.slot:
 		last_team = player.slot.team
+		last_player = player_name
 	# An Ablaze player's touch lights it (see PlayerStatus3D)
 	if player and player.status and player.status.has_buff(&"ablaze"):
 		_ignite(PlayerStatus3D.ABLAZE_BALL_BURN, player_name)
@@ -238,6 +259,7 @@ func grab(player: PlayerClass3D) -> void:
 	_shot = Shot.NONE
 	if player.slot:
 		last_team = player.slot.team
+		last_player = String(player.name)
 	_motion.clear()  # Play back from the release, not before the grab
 	player.on_ball_grabbed(self)
 	_curve_left = 0.0
@@ -378,7 +400,7 @@ func _caught_by(player: PlayerClass3D) -> void:
 # ===== WEAPON EFFECTS =====
 
 ## A weapon hit the ball (see WeaponBehavior3D.hit_ball): `velocity` is
-## added to its own, or replaces it if `exact`; `curve` pulls it sideways for
+## added to its own (see _kick), or replaces it if `exact`; `curve` pulls it sideways for
 ## a moment; above 0, `ignite_time` sets it burning.
 func receive_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker: Node3D) -> void:
 	if holder:
@@ -397,7 +419,10 @@ func _request_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_
 
 func _apply_weapon_hit(velocity: Vector3, exact: bool, curve: Vector3, ignite_time: float, attacker_name: String) -> void:
 	_set_last_team(attacker_name)
-	linear_velocity = velocity if exact else linear_velocity + velocity
+	if exact:
+		linear_velocity = velocity
+	else:
+		_kick(velocity)
 	_curve = curve
 	_curve_left = CURVE_TIME if not curve.is_zero_approx() else 0.0
 	if ignite_time > 0.0:

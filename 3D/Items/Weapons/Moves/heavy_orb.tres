@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3 uid="uid://cocpl0ag4fgbm"]
 
-[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
-[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+[ext_resource type="Script" uid="uid://dy2wxxyaigmo2" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" uid="uid://bq7wksvk2nxc7" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
 
 [sub_resource type="Resource" id="wave_0"]
 script = ExtResource("2_wave")
@@ -17,14 +17,14 @@ pop = 4.0
 ball_scale = 2.0
 burst_radius = 3.0
 held_while_charging = true
-color = Color(0.72, 0.45, 1.0, 0.85)
+color = Color(0.72, 0.45, 1, 0.85)
 look = &"dark_ball"
 end_look = &"dark_blast"
 
 [resource]
 script = ExtResource("1_move")
 charge_time = 0.7
-swings = false
 clip = &"CombatRanged/Ranged_Magic_Shoot"
-sound = &"ice_bolt"
+swings = false
 waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])
+sound = &"ice_bolt"

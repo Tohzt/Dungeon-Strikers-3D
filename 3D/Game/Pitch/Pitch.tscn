@@ -78,6 +78,7 @@ intermissions = false
 kills_win = false
 goals_to_win = 5
 goals_take_kills = false
+goal_spawn_distance = 12.0
 
 [node name="Tools" type="Node" parent="."]
 script = ExtResource("3_gq62a")
@@ -211,6 +212,17 @@ weapon_scene = ExtResource("7_al1ea")
 transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, 0, -1.22465e-16, 0, -1, 0, 0, 30)
 owner_team = -1
 weapon_scene = ExtResource("7_al1ea")
+
+[node name="GoalAltar1" parent="." instance=ExtResource("13_uepvo")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -42.8, 0, 0)
+cycle_time = 20.0
+opens_perks = false
+
+[node name="GoalAltar2" parent="." instance=ExtResource("13_uepvo")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 42.8, 0, 0)
+owner_team = 1
+cycle_time = 20.0
+opens_perks = false
 
 [node name="BossPen" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -44.06)

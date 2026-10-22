@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://q6gtgqc5r26i"]
 
 [ext_resource type="Script" uid="uid://c1ybujcli5ex2" path="res://3D/HUD/hud_3d.gd" id="1_hbyoa"]
-[ext_resource type="Texture2D" uid="uid://bt3cn2bx00oq1" path="res://Entities/Player/Assets/Skribble Character_Inner.png" id="4_u5h0k"]
 [ext_resource type="Script" path="res://3D/HUD/name_tag.gd" id="5_nametag"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_nobox"]
@@ -22,15 +21,6 @@ theme_override_styles/panel = SubResource("StyleBoxEmpty_nobox")
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
-
-[node name="PlayerIcon" type="TextureRect" parent="Panel/Row"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(72, 72)
-layout_mode = 2
-mouse_filter = 2
-texture = ExtResource("4_u5h0k")
-expand_mode = 1
-stretch_mode = 5
 
 [node name="Bars" type="VBoxContainer" parent="Panel/Row"]
 custom_minimum_size = Vector2(160, 0)

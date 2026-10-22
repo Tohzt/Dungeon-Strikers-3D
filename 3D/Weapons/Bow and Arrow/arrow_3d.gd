@@ -116,11 +116,17 @@ func fire(direction: Vector3, speed: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_flying:
-		return
+	# Its shooter left the match (online): even `shooter is ...` errors on a
+	# freed node
+	if not is_instance_valid(shooter):
+		shooter = null
+	# Timed out even once it's stopped flying, in case a landing was cut
+	# short before it got to _finish()
 	_age += delta
 	if _age > max_lifetime:
 		_finish()
+		return
+	if not is_flying:
 		return
 	if _hit_world():
 		Sfx.play(wall_sound, global_position)
@@ -129,7 +135,19 @@ func _physics_process(delta: float) -> void:
 		return
 	if linear_velocity.length_squared() < 0.01:
 		return
+	_home(delta)
 	_align_to_velocity(linear_velocity)
+
+
+## The shooter's homing perk stat: turn a little toward the nearest enemy
+## ahead, keeping speed (and any rise or fall).
+func _home(delta: float) -> void:
+	var flat := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
+	if flat.length_squared() < 0.01:
+		return
+	var turned: Vector3 = Combat.home(get_world_3d(), global_position, flat.normalized(), shooter, delta)
+	turned *= flat.length()
+	linear_velocity = Vector3(turned.x, linear_velocity.y, turned.z)
 
 
 ## The arrowhead: the front of the shaft along its flight direction.

@@ -7,7 +7,6 @@ class_name HUD3D extends CanvasLayer
 @onready var name_tag:    NameTag        = $Panel/Row/Bars/NameTag
 ## The blue bar: the player's carry meter (see PlayerClass3D.carry).
 @onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
-@onready var player_icon: TextureRect    = $Panel/Row/PlayerIcon
 
 ## Gap between the HUD panel and the screen edges.
 const MARGIN := 16
@@ -15,6 +14,11 @@ const NAME_FONT_SIZE := 30
 const NAME_BORDER := 9
 
 var signals_connected: bool = false
+## "PERK READY (R)" under the bars while the player has a hand waiting
+## (see PerkDirector.grant_hand); their open_perks button opens it, and
+## puts it away again.
+var _perk_label: Label
+const PERK_READY_COLOR := Color(1.0, 0.8, 0.3)
 ## "Knocked out: 7s" under the bars while the player is down (knockout modes).
 var _down_label: Label
 ## While a killed player is down: who they'll get back up as (see
@@ -35,7 +39,6 @@ func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
 		Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]
 	_corner = corners[corner % corners.size()]
 	panel.set_anchors_and_offsets_preset(_corner, Control.PRESET_MODE_MINSIZE, MARGIN)
-	player_icon.modulate = slot.color
 	name_tag.font_size = NAME_FONT_SIZE
 	name_tag.border = NAME_BORDER
 	name_tag.color = slot.color
@@ -45,6 +48,14 @@ func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
 		_down_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
 		_down_label.hide()
 		$Panel/Row/Bars.add_child(_down_label)
+	if not _perk_label:
+		_perk_label = Label.new()
+		_perk_label.add_theme_color_override("font_color", PERK_READY_COLOR)
+		_perk_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		_perk_label.add_theme_constant_override("outline_size", 6)
+		_perk_label.add_theme_font_size_override("font_size", 20)
+		_perk_label.hide()
+		$Panel/Row/Bars.add_child(_perk_label)
 
 func _process(_delta: float) -> void:
 	if _down_label and player:
@@ -54,6 +65,7 @@ func _process(_delta: float) -> void:
 			_down_label.text = "%s: %ds" % [what, ceili(player.dead_time)]
 	if player:
 		_update_picker()
+		_update_perk_button()
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)
@@ -75,6 +87,29 @@ func _on_hp_changed(new_hp: float, max_hp: float) -> void:
 func _on_carry_changed(new_carry: float, max_carry: float) -> void:
 	carry_bar.max_value = max_carry
 	carry_bar.value = new_carry
+
+
+# ===== PERKS =====
+
+## Show when a hand is waiting, and open (or put away) the cards on the
+## player's open_perks press. Not during a draft or intermission: those
+## open the cards themselves.
+func _update_perk_button() -> void:
+	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
+	var usable: bool = perks != null and player.slot != null and player.is_local_person() \
+			and not player.is_dead() and not perks.in_draft and not perks.in_intermission
+	var waiting: int = perks.hands_waiting(player) if usable else 0
+	_perk_label.visible = waiting > 0 and not perks.is_picking(player)
+	if _perk_label.visible:
+		var button: String = "R" if player.slot.uses_keyboard_mouse() else "D-pad Up"
+		_perk_label.text = "PERK READY%s (%s)" % [" x%d" % waiting if waiting > 1 else "", button]
+		_perk_label.modulate.a = 0.65 + 0.35 * sin(Time.get_ticks_msec() / 1000.0 * 5.0)
+	if not usable or not Input.is_action_just_pressed(player.slot.action(&"open_perks")):
+		return
+	if perks.is_picking(player):
+		perks.close_for(player)
+	elif perks.can_open(player):
+		perks.open_for(player)
 
 
 # ===== CHARACTER PICK WHILE DOWN =====
@@ -115,6 +150,8 @@ func _make_picker() -> void:
 		shift = -shift
 	_picker.offset_top += shift
 	_picker.offset_bottom += shift
+	# Hidden until _update_picker shows it, filled with the current pick
+	_picker.hide()
 
 
 func _step_pick(step: int) -> void:

@@ -20,6 +20,8 @@ signal player_killed(victim: PlayerClass3D, killer: PlayerClass3D)
 signal match_won(team: int)
 
 const BOT_INPUT := preload("res://3D/Entities/Handlers/bot_input_handler_3d.gd")
+## Seconds the winner's banner shows before the stats screen (MatchStatsScreen).
+const STATS_DELAY := 3.0
 ## Which side of the arena each team starts on and defends (its goal and
 ## altar): Blue left, Red right, Green nearest the camera, Yellow far.
 const TEAM_SIDES: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.BACK, Vector3.FORWARD]
@@ -82,8 +84,6 @@ enum Phase {
 ## Knockouts: each knockout adds this many seconds to the next one's wait
 ## (respawn_delay for the first).
 @export var knockout_delay_growth: float = 3.0
-## Offline: seconds after the win before the match restarts.
-@export var restart_delay: float = 6.0
 @export_group("Goals")
 ## Goals a team needs to win the match (0 = goals don't win). The
 ## scoreboard shows goals instead of kills when this is set.
@@ -122,12 +122,19 @@ var scores: Dictionary[int, int] = {}
 ## Player kills per team, for every team in the match. Decides the winner.
 var kills: Dictionary[int, int] = {}
 var match_over: bool = false
+## Server/offline: everyone's kills, goals, damage... for the stats screen.
+var stats := MatchStats.new()
 ## First player, kept for code that only knows about one.
 var Player: PlayerClass3D:
 	get: return players[0] if not players.is_empty() else null
 
 func _enter_tree() -> void:
 	Global.Game3D = self
+	# The lobby's Score to Win: goals where this level is won by goals, else kills
+	if goals_to_win > 0:
+		goals_to_win = Players.score_to_win
+	else:
+		kills_to_win = Players.score_to_win
 	# Before the level's bosses are ready, so they show the right drop
 	_set_boss_drops(self)
 
@@ -400,6 +407,9 @@ func score_goal(team: int, scored_ball: Ball3D) -> void:
 	if not balls.has(scored_ball):
 		return  # Already counted
 	var new_score: int = scores.get(team, 0) + 1
+	var scorer: PlayerClass3D = player_named(scored_ball.last_player)
+	if scorer and _team_of(scorer) == team and not match_over:
+		stats.add(scorer, &"goals")
 	# Behind on kills: take one back from the leader
 	var erased_team: int = _top_team_ahead_of(team) if goals_take_kills else -1
 	Net.everywhere(_goal_scored, team, new_score, scored_ball.name, erased_team)
@@ -492,6 +502,9 @@ func _resolve_death(victim_name: String, killer_name: String) -> void:
 	# No credit for team kills or once the match is decided
 	if killer and (match_over or killer == victim or _team_of(killer) == _team_of(victim)):
 		killer = null
+	if not match_over:
+		stats.add(victim, &"deaths")
+		stats.add(killer, &"kills")
 	var new_kills: int = kills.get(_team_of(killer), 0) + 1 if killer else -1
 	var sent_killer: String = String(killer.name) if killer else ""
 	Net.everywhere(_player_died, victim_name, sent_killer, new_kills)
@@ -526,11 +539,53 @@ func _win(team: int, reason: String = "") -> void:
 		text += "\n" + reason
 	scoreboard.show_winner(text, _team_color(team))
 	match_won.emit(team)
+	if Net.decides():
+		Net.everywhere(_show_stats, team, text, stats.rows(players))
 	if Net.in_session():
 		Net.finish_match()  # Back to the lobby (the server decides when)
+
+
+## On every machine, once the match is won: after STATS_DELAY, everyone's
+## stats (MatchStats.rows) over the winner's banner. Offline the match waits
+## there for Play Again; online the server sends everyone to the lobby.
+@rpc("authority", "call_local", "reliable")
+func _show_stats(team: int, title: String, rows: Array) -> void:
+	if Net.is_server:
 		return
-	await get_tree().create_timer(restart_delay).timeout
-	get_tree().reload_current_scene()
+	await get_tree().create_timer(STATS_DELAY).timeout
+	scoreboard.hide_winner()
+	var local_names: Array[String] = []
+	for player: PlayerClass3D in huds:
+		local_names.append(String(player.name))
+	var screen := MatchStatsScreen.new()
+	add_child(screen)
+	screen.setup(rows, team, title, scores if goals_to_win > 0 else kills, "goals" if goals_to_win > 0 else "kills", local_names)
+	if not Net.in_session():
+		get_tree().paused = true
+
+
+## A hit on `victim` (a player or boss) took `amount` HP, credited to
+## `attacker` in the stats if they're on another team. Called by whoever
+## decides the hit: a player's owner, or the boss's server; online a
+## player's owner passes it on to the server.
+func record_damage(victim: Node3D, attacker: Node3D, amount: float) -> void:
+	if not attacker is PlayerClass3D or attacker == victim or amount <= 0.0 or match_over:
+		return
+	if victim is PlayerClass3D and _team_of(victim) == _team_of(attacker):
+		return
+	if Net.decides():
+		stats.add(attacker, &"boss_damage" if victim is Boss3D else &"damage", amount)
+	elif Net.match_synced and victim is PlayerClass3D:
+		_report_damage.rpc_id(Net.SERVER_ID, String(attacker.name), amount)
+
+
+@rpc("any_peer", "reliable")
+func _report_damage(attacker_name: String, amount: float) -> void:
+	if not Net.is_server:
+		return
+	var victim: PlayerClass3D = rpc_sender()
+	if victim:
+		record_damage(victim, player_named(attacker_name), amount)
 
 
 ## Where a bot should be heading when nothing's in its face: a boss to
@@ -686,6 +741,7 @@ func return_ball(ball: Ball3D) -> void:
 	if not balls.has(ball):
 		return
 	ball.last_team = -1
+	ball.last_player = ""
 	# Called from the net's physics callback, so move it once the step is done
 	_move_ball_to_middle.call_deferred(ball)
 	Net.everywhere(_ball_returned)
@@ -750,6 +806,8 @@ func _track_boss(boss: Boss3D) -> void:
 
 func _on_boss_defeated(killer: PlayerClass3D, boss: Boss3D) -> void:
 	bosses.erase(boss)
+	if Net.decides() and not match_over:
+		stats.add(killer, &"boss_kills")
 	_update_music()
 	_reward_boss_kill(killer)
 	_update_phase()

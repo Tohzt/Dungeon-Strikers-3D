@@ -74,7 +74,13 @@ func can_give_to(player: PlayerClass3D) -> bool:
 ## Whether `player` could take a weapon here once in reach (bots use this to
 ## pick a stand to walk to): one they have a free hand for.
 func has_weapon_for(player: PlayerClass3D) -> bool:
-	return _is_stocked() and _may_take(player) and player.free_hand_for(_stock_grip()) != null
+	return _is_stocked() and _may_take(player) \
+		and (not _stock_needs_hand() or player.free_hand_for(_stock_grip()) != null)
+
+
+## Whether what's handed out next goes in a hand (an altar's perk doesn't).
+func _stock_needs_hand() -> bool:
+	return true
 
 
 ## Which hand(s) the weapon handed out here goes in.
@@ -122,7 +128,8 @@ func _request_take(is_left: bool) -> void:
 
 ## Server: give `player` the weapon if there's still one for them.
 func _decide_take(player: PlayerClass3D, is_left: bool) -> void:
-	if _is_stocked() and player and _may_take(player) and player.can_hold_grip(_stock_grip(), is_left):
+	if _is_stocked() and player and _may_take(player) \
+			and (not _stock_needs_hand() or player.can_hold_grip(_stock_grip(), is_left)):
 		_given.rpc(player.name, is_left, _next_weapon_name())
 
 
@@ -134,6 +141,8 @@ func _given(player_name: String, is_left: bool, weapon_name: String) -> void:
 	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player and scene:
 		_hand_weapon(scene, _given_rarity, player, is_left, weapon_name, display_anchor.global_transform)
+	elif player:
+		_hand_other(player)
 	_after_given()
 
 
@@ -157,6 +166,12 @@ func _take_stock() -> PackedScene:
 		_display.visible = false
 	_given_rarity = rarity
 	return weapon_scene
+
+
+## Every machine: what _take_stock() handed out wasn't a weapon (an
+## altar's perk); give it to `player`.
+func _hand_other(_player: PlayerClass3D) -> void:
+	pass
 
 
 ## Seconds the stand stays empty after its weapon is taken.

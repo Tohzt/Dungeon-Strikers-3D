@@ -18,6 +18,7 @@ extends Node
 ## spread across the teams in order (see team_for_seat), and bots join
 ## whichever team is smallest. The format also picks the level (map) and
 ## what every boss drops (boss_drop); see MatchMap for which go together.
+## score_to_win is the goals (or kills, on levels without goals) to win.
 
 signal slot_joined(slot: PlayerSlot)
 signal slot_left(slot: PlayerSlot)
@@ -38,6 +39,10 @@ const TEAM_COLORS: Array[Color] = [
 ## Matches TEAM_COLORS. The first two are the sides (see Roster).
 const TEAM_NAMES: Array[String] = ["Humans", "Skeletons", "Green", "Yellow"]
 
+## Choices for score_to_win.
+const MIN_SCORE_TO_WIN := 1
+const MAX_SCORE_TO_WIN := 20
+
 ## Team counts a match can be played with (see team_count). Humans vs
 ## Skeletons is two teams; the 4-team format still works but is hidden
 ## until it has sides of its own: add 4 back here to offer it.
@@ -51,6 +56,9 @@ var team_count: int = TEAM_COUNTS[0]
 var map: MatchMap.Map = MatchMap.MAPS[0] as MatchMap.Map
 ## What every boss drops in the next match.
 var boss_drop: BossDrop.Kind = MatchMap.DROPS[0] as BossDrop.Kind
+## Points to win the next match: goals where the level is won by goals,
+## kills otherwise (see Game3D). Online, sent with the match start too.
+var score_to_win: int = 5
 ## Offline: seat bots until the match has this many players (0 = no bots).
 ## Always a whole number of players per team; see bot_fill_options().
 ## Starts at a full 4v4.
@@ -321,10 +329,15 @@ func set_boss_drop(kind: BossDrop.Kind) -> void:
 
 ## The whole format at once, as the online leader picked it (already
 ## consistent, so nothing gives way).
-func set_match_format(count: int, new_map: MatchMap.Map, kind: BossDrop.Kind) -> void:
+func set_match_format(count: int, new_map: MatchMap.Map, kind: BossDrop.Kind, score: int) -> void:
 	map = new_map
 	boss_drop = kind
+	set_score_to_win(score)
 	set_team_count(count)
+
+
+func set_score_to_win(score: int) -> void:
+	score_to_win = clampi(score, MIN_SCORE_TO_WIN, MAX_SCORE_TO_WIN)
 
 
 func next_map() -> MatchMap.Map:

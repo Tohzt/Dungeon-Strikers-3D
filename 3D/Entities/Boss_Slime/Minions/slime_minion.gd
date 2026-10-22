@@ -105,7 +105,7 @@ func launch(launch_velocity: Vector3) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not Net.decides() or is_dead:
+	if not Net.decides() or is_dead or PerkDirector.halted():
 		return
 	_state_time += delta
 	_lunge_cooldown = max(_lunge_cooldown - delta, 0.0)

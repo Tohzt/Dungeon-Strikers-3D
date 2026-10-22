@@ -41,6 +41,8 @@ const ONLINE_STAGE_SIZE := Vector2(360, 300)
 @onready var solo_drop: Button = %SoloDrop
 @onready var lobby_map: Button = %LobbyMap
 @onready var lobby_drop: Button = %LobbyDrop
+@onready var solo_score: Button = %SoloScore
+@onready var lobby_score: Button = %LobbyScore
 @onready var online: Control = %Online
 @onready var host_setup: Control = %HostSetup
 @onready var join_setup: Control = %JoinSetup
@@ -58,6 +60,7 @@ const ONLINE_STAGE_SIZE := Vector2(360, 300)
 @onready var online_bots: Button = %OnlineBots
 @onready var online_map: Button = %OnlineMap
 @onready var online_drop: Button = %OnlineDrop
+@onready var online_score: Button = %OnlineScore
 
 ## Last joypad that sent input, so "Controller" picks the pad that pressed it.
 var last_joypad: int = -1
@@ -113,6 +116,10 @@ func _ready() -> void:
 		button.pressed.connect(_cycle_map)
 	for button: Button in [solo_drop, lobby_drop, online_drop]:
 		button.pressed.connect(_cycle_boss_drop)
+		# Every map plays with the ball for now; see MatchMap.BALL_NEEDS_GOALS
+		button.visible = false
+	for button: Button in [solo_score, lobby_score, online_score]:
+		_setup_cycler(button, _step_score_to_win)
 	lobby_bots.pressed.connect(_toggle_bots)
 	solo_bots.pressed.connect(_toggle_bots)
 	_setup_cycler(online_bots, _step_online_bots)
@@ -514,13 +521,29 @@ func _cycle_boss_drop() -> void:
 	_refresh_lobby()
 
 
-## Map and Boss Drop button labels for the current format.
+## Score to Win button: one more (step 1) or fewer (step -1) point to win,
+## wrapping around.
+func _step_score_to_win(step: int) -> void:
+	var span: int = Players.MAX_SCORE_TO_WIN - Players.MIN_SCORE_TO_WIN + 1
+	var score: int = Players.MIN_SCORE_TO_WIN + posmod(Players.score_to_win - Players.MIN_SCORE_TO_WIN + step, span)
+	if online_lobby.visible:
+		Net.set_score_to_win(score)
+		return
+	Players.set_score_to_win(score)
+	_refresh_lobby()
+
+
+## Map, Boss Drop and Score to Win button labels for the current format.
 func _map_text() -> String:
 	return "Map: " + MatchMap.name_of(Players.map)
 
 
 func _drop_text() -> String:
 	return "Boss Drop: " + MatchMap.drop_name(Players.boss_drop)
+
+
+func _score_text() -> String:
+	return "Score to Win:  <  %d  >" % Players.score_to_win
 
 
 ## Bots button: cycle the match size bots fill up to (Off, 1v1, 2v2, ...).
@@ -587,6 +610,8 @@ func _refresh_lobby() -> void:
 		button.text = _map_text()
 	for button: Button in [solo_drop, lobby_drop]:
 		button.text = _drop_text()
+	for button: Button in [solo_score, lobby_score]:
+		button.text = _score_text()
 
 	var solo_match: Array[int] = Players.teams_with_bots(Players.bot_fill_count, [solo_team_choice])
 	solo_teams.text = "Teams: " + Players.format_name(solo_match)
@@ -736,10 +761,11 @@ func _refresh_online_lobby() -> void:
 	online_start.visible = Net.is_host
 	# Only the leader picks the format (it's sent with the match start), but
 	# everyone sees it
-	for button: Button in [online_teams, online_bots, online_map, online_drop]:
+	for button: Button in [online_teams, online_bots, online_map, online_drop, online_score]:
 		button.disabled = not Net.is_host
 	online_map.text = _map_text()
 	online_drop.text = _drop_text()
+	online_score.text = _score_text()
 	online_bots.text = "Bots:  <  %d  >" % Net.bots.size()
 	var teams: Array[int] = Net.seat_teams()
 	var split: bool = Players.team_split(teams) != ""
@@ -767,7 +793,7 @@ func _refresh_online_lobby() -> void:
 func _chain_online_focus() -> void:
 	var chain: Array[Control] = []
 	for button: Button in [online_panel.first_focus(), online_teams, online_bots, online_map, online_drop,
-			online_start, %OnlineLeave]:
+			online_score, online_start, %OnlineLeave]:
 		if button.visible and not button.disabled:
 			chain.append(button)
 	for i in chain.size():

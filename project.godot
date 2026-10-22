@@ -28,12 +28,13 @@ Players="*res://players.gd"
 Net="*res://net.gd"
 Sfx="*res://sfx.gd"
 Vfx="*res://vfx.gd"
+Cursor="*res://cursor.gd"
 
 [debug]
 
 gdscript/warnings/directory_rules={
-"res://addons": 0,
-"res://Assets/VFX": 0
+"res://Assets/VFX": 0,
+"res://addons": 0
 }
 gdscript/warnings/untyped_declaration=1
 
@@ -230,6 +231,12 @@ target={
 , Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":8,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
+open_perks={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":114,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":11,"pressure":0.0,"pressed":false,"script":null)
+]
+}
 target_scroll={
 "deadzone": 0.21,
 "events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":4,"canceled":false,"pressed":false,"double_click":false,"script":null)
@@ -260,6 +267,7 @@ target_scroll={
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
+anti_aliasing/quality/msaa_3d=2
 textures/decals/filter=0
 textures/light_projectors/filter=0
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)

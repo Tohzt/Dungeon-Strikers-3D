@@ -1,7 +1,8 @@
 class_name Perk extends Resource
 ## One rogue-lite upgrade a player can take at their altar between rounds.
 ## Its effect is a set of stat modifiers (see PerkSet for what each stat
-## does); taking the same perk again stacks it.
+## does); taking the same perk again stacks it. A relic can also be evolved
+## into: owning everything in its evolves_from swaps them for it.
 
 enum Category {
 	OFFENSE,   ## Offered to whoever landed the killing blow on the boss
@@ -39,6 +40,22 @@ const CATEGORY_COLORS: Dictionary[Category, Color] = {
 ## is +25% damage and {"damage_taken": -0.15} is 15% less damage taken.
 ## See PerkSet.STATS for the names.
 @export var mods: Dictionary[StringName, float] = {}
+## What evolves into this (see PerkSet.evolve): two perks, or one listed
+## once meaning two of it. Empty = nothing does. Perks only (an Array[Perk]
+## here would be the script referring to itself, which leaks it).
+@export var evolves_from: Array[Resource] = []
+
+
+## Everything that's used up to evolve into this: evolves_from, with a
+## lone entry doubled.
+func ingredients() -> Array[Perk]:
+	var needed: Array[Perk] = []
+	for ingredient: Resource in evolves_from:
+		if ingredient is Perk:
+			needed.append(ingredient)
+	if needed.size() == 1:
+		needed.append(needed[0])
+	return needed
 
 
 func category_name() -> String:

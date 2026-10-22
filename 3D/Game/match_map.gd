@@ -37,9 +37,13 @@ const HAS_GOALS: Array[Map] = [Map.ARENA, Map.PITCH]
 ## ball), so any drop setting fits.
 const NO_DROPS: Array[Map] = [Map.RACE, Map.PITCH]
 
-## Drops the host can pick, in the order the lobby's Boss button cycles.
+## Drops the host can pick, in the order the lobby's Boss button cycles
+## (that button is hidden for now: every map plays with the ball).
 ## Each will get its own boss later; for now the one boss drops any of them.
-const DROPS: Array[BossDrop.Kind] = [BossDrop.Kind.SKULL, BossDrop.Kind.BALL]
+const DROPS: Array[BossDrop.Kind] = [BossDrop.Kind.BALL, BossDrop.Kind.SKULL]
+## Whether a ball needs a map with goals (see fits). Off while every map
+## plays with the ball; turn back on with the Boss Drop button.
+const BALL_NEEDS_GOALS := false
 const DROP_NAMES: Dictionary[BossDrop.Kind, String] = {
 	BossDrop.Kind.NONE: "None",
 	BossDrop.Kind.SKULL: "Skull",
@@ -65,7 +69,7 @@ static func max_teams(map: Map) -> int:
 ## Whether `map` can host a match of `team_count` teams where bosses drop `drop`.
 static func fits(map: Map, team_count: int, drop: BossDrop.Kind) -> bool:
 	return team_count <= MAX_TEAMS[map] \
-		and (drop != BossDrop.Kind.BALL or HAS_GOALS.has(map) or NO_DROPS.has(map))
+		and (not BALL_NEEDS_GOALS or drop != BossDrop.Kind.BALL or HAS_GOALS.has(map) or NO_DROPS.has(map))
 
 
 ## The first map (in MAPS order) that fits, or ARENA if none does.

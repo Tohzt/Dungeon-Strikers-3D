@@ -2,10 +2,6 @@ class_name WeaponClass3D extends Weapon3D
 ## A melee weapon held in the hand and swung by the arm's attack clip. A
 ## fast swing leaves a trail behind the blade (see WeaponTrail3D).
 
-## Swung as an overhead chop: only the downstroke (the first part of the
-## swing) can hit, not the recovery (see PlayerClass3D.CHOP_DOWNSTROKE).
-@export var vertical_swing: bool = false
-
 var trail: WeaponTrail3D = null
 
 

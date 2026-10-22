@@ -14,6 +14,8 @@ class_name CrossbowClass3D extends WeaponClass3D
 ## Fastest it can shoot again (seconds), however fast Light is tapped.
 @export var fire_interval: float = 0.5
 var _next_fire_msec: int = 0
+## Firing an echo (see _echo): an ordinary shot, never the breaking one.
+var _echoing: bool = false
 
 ## The shot that breaks it carries its full break burst, bursting where it
 ## lands; the weapon itself then shatters in this much of one.
@@ -30,6 +32,7 @@ func attack(aim_direction: Vector3) -> void:
 	_fire_arrow(muzzle, aim_direction, true)
 	if Net.match_synced:
 		_net_fire.rpc(muzzle, aim_direction)
+	_echo(aim_direction)
 	_reload()
 	wear()  # Each shot is a use
 
@@ -45,8 +48,34 @@ func fire_heavy(aim_direction: Vector3, move: WeaponMove3D) -> void:
 	_fire_arrow(muzzle, aim_direction, true, move)
 	if Net.match_synced:
 		_net_fire_heavy.rpc(muzzle, aim_direction)
+	_echo(aim_direction, move)
 	_reload()
 	wear()
+
+
+## The wielder's double_cast perk stats: maybe fire the same shot again a
+## moment later (PlayerClass3D.ECHO_DELAY), from wherever the muzzle is by
+## then, PlayerClass3D.ECHO_POWER as hard. It costs no use and isn't the
+## breaking shot. `heavy` is the heavy move it echoes, if it was one.
+func _echo(aim_direction: Vector3, heavy: WeaponMove3D = null) -> void:
+	if wielder is PlayerClass3D and wielder.rolls_echo(heavy != null):
+		get_tree().create_timer(PlayerClass3D.ECHO_DELAY).timeout.connect(_fire_echo.bind(aim_direction, heavy))
+
+
+func _fire_echo(aim_direction: Vector3, heavy: WeaponMove3D) -> void:
+	if not wielder or not is_inside_tree():
+		return
+	var muzzle: Vector3 = global_position \
+		+ aim_direction.normalized() * muzzle_forward_offset \
+		+ Vector3.UP * muzzle_height_offset
+	_echoing = true
+	_fire_arrow(muzzle, aim_direction, true, heavy)
+	_echoing = false
+	if Net.match_synced:
+		if heavy:
+			_net_fire_heavy.rpc(muzzle, aim_direction)
+		else:
+			_net_fire.rpc(muzzle, aim_direction)
 
 
 ## Whether fire_interval has passed since the last shot.
@@ -74,7 +103,11 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool, heavy: Wea
 		arrow.enlarge(heavy.shot_scale)
 		speed *= heavy.shot_speed_scale
 	# The shot that breaks it is the big one (see Weapon3D.is_last_use)
-	if is_last_use():
+	if _echoing:
+		arrow.damage *= PlayerClass3D.ECHO_POWER
+		arrow.knockback *= PlayerClass3D.ECHO_POWER
+		arrow.impact_impulse *= PlayerClass3D.ECHO_POWER
+	elif is_last_use():
 		arrow.damage *= FINAL_DAMAGE_MULTIPLIER
 		arrow.knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		arrow.enlarge(1.6)

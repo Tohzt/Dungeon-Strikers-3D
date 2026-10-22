@@ -195,6 +195,11 @@ func _tint(fx: Node3D, color: Color, secondary: bool = true) -> void:
 func _start(fx: Node3D, id: StringName, speed: float) -> void:
 	match EFFECTS[id][1]:
 		Kind.ONE_SHOT:
+			# It frees itself when "main" finishes, which a looping one
+			# never does (the claw's is made to loop): it would stay for good
+			var main: Animation = fx.get_node("AnimationPlayer").get_animation(&"main")
+			if main:
+				main.loop_mode = Animation.LOOP_NONE
 			fx.set(&"one_shot", true)
 			fx.set(&"speed_scale", speed)
 			fx.finished.connect(fx.queue_free)

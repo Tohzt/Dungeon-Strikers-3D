@@ -52,12 +52,19 @@ var can_zoom: bool = true
 @export var wall_lead: float = 2.0
 ## A wall toward the bottom of the screen within this distance starts the
 ## tilt early: by how much standing right at it would need, ramping in...
-@export var tilt_start_distance: float = 9.0
+@export var tilt_start_distance: float = 16.0
 ## ...to all of that from this distance in, so the camera is already as far
 ## over as that wall will ever need before they reach it.
-@export var full_tilt_distance: float = 3.5
+@export var full_tilt_distance: float = 6.0
+## Moving toward that wall counts as already being this many seconds of
+## that movement closer, so running at it tilts sooner than walking.
+@export var tilt_velocity_lead: float = 0.4
 @export_range(0.0, 60.0) var top_down_extra_pitch: float = 40.0  # Most degrees added to the usual downward tilt (never past straight down)
-@export var top_down_ease: float = 4.0  # How quickly the tilt (and slide) follows
+@export var top_down_ease: float = 4.0  # How quickly the tilt (and slide) eases back
+@export var top_down_in_ease: float = 6.0  # How quickly it tilts further over (quicker, so it keeps up with a sprint)
+## A ball within this distance of a player also tilts the view to be seen
+## over a wall (tilt only: it never moves or widens the view).
+@export var ball_tilt_range: float = 12.0
 ## Furthest the view slides out over the field, past full tilt, to see a
 ## player over a wall.
 @export var wall_max_shift: float = 10.0
@@ -354,7 +361,7 @@ func _place_on_targets() -> void:
 
 
 ## Ease the tilt toward top-down, just enough to see every player (and a
-## ball framed at a goal) over any wall in the way, and slide out over the field if even
+## ball near one, or framed at a goal) over any wall in the way, and slide out over the field if even
 ## full tilt isn't enough to see a player. Tilts about the camera's own
 ## right axis, so it only ever pitches, never turns.
 func _update_tilt(targets: Array[Node3D], delta: float) -> void:
@@ -364,15 +371,36 @@ func _update_tilt(targets: Array[Node3D], delta: float) -> void:
 		var need: Vector2 = _wall_need(t, true)
 		goal_blend = max(goal_blend, need.x)
 		goal_shift = max(goal_shift, need.y)
-	# The ball only while it's framed at a goal (see _focus_points); elsewhere
-	# it never moves the view.
+	# A ball near a player, or framed at a goal (see _focus_points). It only
+	# ever tilts the view, never slides it.
+	var tilt_balls: Array[Ball3D] = _balls_near(targets)
 	for goal: Node3D in get_tree().get_nodes_in_group("Goal"):
 		for ball: Ball3D in _balls_at_goal(goal, targets):
-			goal_blend = max(goal_blend, _wall_need(ball, false).x)
-	var weight: float = clamp(delta * top_down_ease, 0.0, 1.0)
-	top_down_blend = lerp(top_down_blend, goal_blend, weight)
-	wall_shift = lerp(wall_shift, goal_shift, weight)
+			if not ball in tilt_balls:
+				tilt_balls.append(ball)
+	for ball: Ball3D in tilt_balls:
+		goal_blend = max(goal_blend, _wall_need(ball, false).x)
+	var in_weight: float = clamp(delta * top_down_in_ease, 0.0, 1.0)
+	var out_weight: float = clamp(delta * top_down_ease, 0.0, 1.0)
+	top_down_blend = lerp(top_down_blend, goal_blend, in_weight if goal_blend > top_down_blend else out_weight)
+	wall_shift = lerp(wall_shift, goal_shift, in_weight if goal_shift > wall_shift else out_weight)
 	view_basis = _tilted_basis(top_down_blend)
+
+
+## The balls within ball_tilt_range of any of `targets`.
+func _balls_near(targets: Array[Node3D]) -> Array[Ball3D]:
+	var balls: Array[Ball3D] = []
+	if not Global.Game3D:
+		return balls
+	for ball: Ball3D in Global.Game3D.balls:
+		if not is_instance_valid(ball) or not ball.is_inside_tree():
+			continue
+		var ball_flat: Vector2 = _flat(ball.global_position)
+		for t: Node3D in targets:
+			if _flat(t.global_position).distance_to(ball_flat) <= ball_tilt_range:
+				balls.append(ball)
+				break
+	return balls
 
 
 ## The starting rotation pitched `blend` (0-1) of the way to its furthest
@@ -410,7 +438,7 @@ func _wall_need(who: Node3D, may_shift: bool) -> Vector2:
 	var view_offset: Vector3 = _view_center - at if _has_view_center else Vector3.ZERO
 	view_offset.y = 0.0
 	var from: Vector3 = _sight_point(at, exclude)
-	var blend: float = max(_tilt_need(from, at, view_offset, exclude), _wall_ahead_need(at, view_offset, exclude))
+	var blend: float = max(_tilt_need(from, at, view_offset, exclude), _wall_ahead_need(who, view_offset, exclude))
 	if blend < 1.0 or not may_shift or not _hidden_by_wall(from, at, view_offset, exclude, 1.0, 0.0):
 		return Vector2(blend, 0.0)
 	if _hidden_by_wall(from, at, view_offset, exclude, 1.0, wall_max_shift):
@@ -447,22 +475,36 @@ func _tilt_need(from: Vector3, at: Vector3, view_offset: Vector3, exclude: Array
 
 ## For the nearest wall toward the bottom of the screen within
 ## tilt_start_distance: the tilt standing right against it would need,
-## ramped in from tilt_start_distance to full at full_tilt_distance. A wall
-## low enough to see over needs none, however close.
-func _wall_ahead_need(at: Vector3, view_offset: Vector3, exclude: Array[RID]) -> float:
+## ramped in from tilt_start_distance to full at full_tilt_distance (nearer
+## the faster `who` is heading for it, see tilt_velocity_lead). A wall low
+## enough to see over needs none, however close.
+func _wall_ahead_need(who: Node3D, view_offset: Vector3, exclude: Array[RID]) -> float:
+	var at: Vector3 = who.global_position
+	var lead: float = max(_ground_velocity(who).dot(_toward_camera()), 0.0) * tilt_velocity_lead
 	var origin: Vector3 = at + Vector3.UP * wall_ray_height
-	var query := PhysicsRayQueryParameters3D.create(origin, origin + _toward_camera() * tilt_start_distance, wall_mask, exclude)
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + _toward_camera() * (tilt_start_distance + lead), wall_mask, exclude)
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
 		return 0.0
 	var hit_pos: Vector3 = hit.position
-	var distance: float = origin.distance_to(hit_pos)
+	var distance: float = origin.distance_to(hit_pos) - lead
 	# Standing just short of the wall, seen from where the view would be.
 	var at_wall: Vector3 = Vector3(hit_pos.x, at.y, hit_pos.z) - _toward_camera() * 0.3
 	var from: Vector3 = at_wall + Vector3.UP * wall_ray_height
 	var need: float = _tilt_need(from, at_wall, view_offset, exclude)
 	var ramp: float = 1.0 - smoothstep(full_tilt_distance, max(tilt_start_distance, full_tilt_distance + 0.01), distance)
 	return need * ramp
+
+
+## How fast `who` is moving along the ground.
+func _ground_velocity(who: Node3D) -> Vector3:
+	var v: Vector3 = Vector3.ZERO
+	if who is CharacterBody3D:
+		v = (who as CharacterBody3D).velocity
+	elif who is RigidBody3D:
+		v = (who as RigidBody3D).linear_velocity
+	v.y = 0.0
+	return v
 
 
 ## Where to check `at` can be seen from: wall_ray_height up and wall_lead

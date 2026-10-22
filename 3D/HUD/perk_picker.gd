@@ -30,11 +30,17 @@ const SCALE_TWO := 0.62
 const SCALE_MANY := 0.48
 const SCALE_COMPACT := 0.5
 const HAND_GAP := 48.0
+## A mid-round pick sits this far up from the bottom of the screen, or
+## this far above the boss's health bar while it's showing.
+const BOTTOM_MARGIN := 24.0
+const ABOVE_BOSS_BAR := 12.0
 ## A hand's title, hint and spacing at scale 1, on top of its cards.
 const HAND_CHROME_HEIGHT := 140.0
 ## Kept clear around the hands, plus room for the waiting line under them.
 const SCREEN_MARGIN := 40.0
 const WAITING_ROOM := 72.0
+## A card's evolution hint (see PerkCatalog.evolution_hint).
+const EVOLVE_COLOR := Color(1.0, 0.78, 0.25)
 
 @onready var dim: ColorRect = $Dim
 @onready var waiting_label: Label = $Waiting
@@ -76,7 +82,7 @@ func _ready() -> void:
 	_bottom.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_bottom.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_bottom.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_bottom.offset_bottom = -24.0
+	_bottom.offset_bottom = -BOTTOM_MARGIN
 	_bottom.add_theme_constant_override("separation", int(HAND_GAP))
 	_bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bottom)
@@ -136,6 +142,7 @@ func show_waiting(players: Array[PlayerClass3D], heading: String = "Choose a per
 
 
 func _process(delta: float) -> void:
+	_bottom.offset_bottom = -_bottom_clearance()
 	for hand: Hand in _hands.duplicate():
 		if not is_instance_valid(hand.player):
 			continue
@@ -149,6 +156,17 @@ func _process(delta: float) -> void:
 		elif _just_pressed(hand, &"interact") or _just_pressed(hand, &"attack") \
 				or _just_pressed(hand, &"attack_light") or _just_pressed(hand, &"attack_heavy"):
 			chosen.emit(hand.player, hand.selected)
+
+
+## How far up from the bottom of the screen a mid-round pick sits: clear of
+## the boss's health bar while it's showing.
+func _bottom_clearance() -> float:
+	var game: Game3D_Class = Global.Game3D
+	var bar: Control = game.boss_health_bar.root if game and game.boss_health_bar else null
+	if not bar or not bar.is_visible_in_tree():
+		return BOTTOM_MARGIN
+	var screen_height: float = get_viewport().get_visible_rect().size.y
+	return maxf(screen_height - bar.get_global_rect().position.y + ABOVE_BOSS_BAR, BOTTOM_MARGIN)
 
 
 func _just_pressed(hand: Hand, base: StringName) -> bool:
@@ -248,8 +266,10 @@ func _build_hand(hand: Hand, ui_scale: float) -> void:
 	root.add_child(row)
 
 	var uses_mouse: bool = player.Input_Handler and player.Input_Handler.uses_mouse()
-	var hint := _label("A / D or point, click to take" if uses_mouse else "Left / Right to browse, Attack to take",
-		int(20 * ui_scale), Color(0.8, 0.8, 0.8), 0.0)
+	var hint_text: String = "A / D or point, click to take" if uses_mouse else "Left / Right to browse, Attack to take"
+	if not _full_screen:
+		hint_text += ", %s to put away" % ("R" if uses_mouse else "D-pad Up")
+	var hint := _label(hint_text, int(20 * ui_scale), Color(0.8, 0.8, 0.8), 0.0)
 	root.add_child(hint)
 
 	hand.cards.clear()
@@ -264,6 +284,8 @@ func _build_hand(hand: Hand, ui_scale: float) -> void:
 		var card: PanelContainer = _make_card(player, hand.perks[i], ui_scale)
 		card.position = margin / 2.0
 		card.size = card_size
+		# It can grow while its text is still unwrapped; back to its own size
+		card.reset_size.call_deferred()
 		holder.add_child(card)
 		hand.cards.append(card)
 		# A bar under the chosen card, in the picker's color
@@ -340,6 +362,10 @@ func _make_card(player: PlayerClass3D, perk: Perk, ui_scale: float) -> PanelCont
 	var description := _label(perk.description, int(20 * ui_scale), Color(0.85, 0.85, 0.85), wrap_width)
 	description.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(description)
+	var catalog: PerkCatalog = Global.Game3D.perks.catalog if Global.Game3D else null
+	var evolution: String = catalog.evolution_hint(perk) if catalog else ""
+	if evolution != "":
+		column.add_child(_label("Evolves:\n" + evolution, int(16 * ui_scale), EVOLVE_COLOR, wrap_width))
 	var owned: int = player.perks.count(perk)
 	if owned > 0:
 		column.add_child(_label("Owned x%d" % owned, int(16 * ui_scale), Color(0.95, 0.8, 0.4), wrap_width))

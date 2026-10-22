@@ -70,7 +70,7 @@ var _player_name: LineEdit
 var _reroll: Button
 var _tabs_row: HBoxContainer
 var _tabs: Array[Button] = []
-var _stage_box: SubViewportContainer
+var _stage_box: ScreenResViewport
 var _viewport: SubViewport
 var _stage: CharacterStage3D
 var _name_row: HBoxContainer
@@ -127,8 +127,7 @@ func _init(stage_size: Vector2 = Vector2(300, 240)) -> void:
 	_tabs_row.add_theme_constant_override("separation", 6)
 	column.add_child(_tabs_row)
 
-	_stage_box = SubViewportContainer.new()
-	_stage_box.stretch = true
+	_stage_box = ScreenResViewport.new()
 	_stage_box.custom_minimum_size = stage_size
 	_stage_box.gui_input.connect(_on_stage_input)
 	column.add_child(_stage_box)
@@ -180,6 +179,7 @@ func is_typing() -> bool:
 ## Show `new_team`'s lineup with `new_character` picked, tinted in the
 ## team's color.
 func show_choice(new_team: int, new_character: int) -> void:
+	_ensure_stage()
 	_set_empty(false)
 	if _tabs.size() != Players.team_count:
 		_build_tabs()
@@ -193,7 +193,6 @@ func show_choice(new_team: int, new_character: int) -> void:
 		_tabs[i].modulate = Color.WHITE if i == team else Color(1, 1, 1, 0.55)
 	_name.text = Roster.name_of(character)
 	_kit.text = Roster.kit_name_of(character)
-	_ensure_stage()
 	_stage.show_choice(team, character)
 
 
@@ -225,13 +224,13 @@ func _set_empty(on: bool) -> void:
 func _ensure_stage() -> void:
 	if _stage:
 		return
-	_viewport = SubViewport.new()
+	_viewport = _stage_box.viewport
 	_viewport.own_world_3d = true
 	_viewport.msaa_3d = Viewport.MSAA_4X
-	_viewport.size = Vector2i(_stage_size)
-	_stage_box.add_child(_viewport)
 	_stage = CharacterStage3D.new()
 	_viewport.add_child(_stage)
+	# Only renders once its texture is drawn: don't wait for a relayout
+	_stage_box.queue_redraw()
 
 
 func _build_tabs() -> void:

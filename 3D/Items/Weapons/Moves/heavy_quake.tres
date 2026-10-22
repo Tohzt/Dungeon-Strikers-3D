@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponMove3D" format=3]
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3 uid="uid://bd43x13kbe1o"]
 
-[ext_resource type="Script" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
-[ext_resource type="Script" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
+[ext_resource type="Script" uid="uid://dy2wxxyaigmo2" path="res://3D/Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" uid="uid://bq7wksvk2nxc7" path="res://3D/Combat/attack_wave_spec.gd" id="2_wave"]
 
 [sub_resource type="Resource" id="wave_0"]
 script = ExtResource("2_wave")
@@ -21,6 +21,6 @@ color = Color(0.95, 0.8, 0.55, 0.85)
 script = ExtResource("1_move")
 charge_time = 0.7
 clip = &"CombatMelee/Melee_1H_Attack_Chop"
+waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])
 sound = &"boss_stomp"
 shake = 0.45
-waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])

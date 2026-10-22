@@ -239,7 +239,10 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not Net.decides():
 		return
-	if not is_awake or is_defeated or Net.waiting_for_load():
+	if not is_awake or is_defeated or Net.waiting_for_load() or PerkDirector.halted():
+		if PerkDirector.halted():
+			velocity.x = 0.0
+			velocity.z = 0.0
 		_apply_gravity(delta)
 		move_and_slide()
 		_send_state()
@@ -705,6 +708,8 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 		_poise_damage += damage
 		_poise_reset_wait = poise_reset_delay
 		_poise_broken = _poise_damage >= poise_max
+	if Global.Game3D:
+		Global.Game3D.record_damage(self, attacker, minf(damage, hp))
 	_set_hp(hp - damage)
 	if hp <= 0.0:
 		var killer: String = String(attacker.name) if attacker is PlayerClass3D else ""

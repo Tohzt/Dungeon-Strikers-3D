@@ -44,7 +44,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 16
+const PROTOCOL_VERSION := 19
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -54,7 +54,7 @@ var peers: Array[int] = []
 ## What each player picked in the lobby: peer id -> [team, character,
 ## name] (see PlayerNames). Kept
 ## by the server and sent to everyone with the peer list, along with the
-## leader's match format (Players.team_count, map and boss_drop).
+## leader's match format (Players.team_count, map, boss_drop and score_to_win).
 var loadouts: Dictionary = {}
 ## Bots the leader added in the lobby, as [team, character, name] each. They sit
 ## in the seats after the players' and are run by the server.
@@ -75,8 +75,8 @@ var _request := ""
 var _loaded: Array[int] = []
 var _all_loaded_sent := false
 ## Seconds after a match is won before the server sends everyone back to
-## the lobby (enough to read the result).
-const LOBBY_RETURN_DELAY := 8.0
+## the lobby (enough to read the result and everyone's stats).
+const LOBBY_RETURN_DELAY := 20.0
 ## Server only: each map's scene, loaded once at startup so Start is quick.
 var _map_scenes: Dictionary[MatchMap.Map, PackedScene] = {}
 
@@ -234,6 +234,12 @@ func set_map(map: MatchMap.Map) -> void:
 		_request_map.rpc_id(SERVER_ID, map)
 
 
+## Leader only: the goals (or kills) that win the match.
+func set_score_to_win(score: int) -> void:
+	if is_host and not in_match:
+		_request_score_to_win.rpc_id(SERVER_ID, score)
+
+
 ## Leader only: what the bosses drop.
 func set_boss_drop(kind: BossDrop.Kind) -> void:
 	if is_host and not in_match:
@@ -352,7 +358,7 @@ func _close_session() -> void:
 	peers.clear()
 	loadouts.clear()
 	bots.clear()
-	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0] as MatchMap.Map, MatchMap.DROPS[0] as BossDrop.Kind)
+	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0] as MatchMap.Map, MatchMap.DROPS[0] as BossDrop.Kind, 5)
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -377,13 +383,13 @@ func _broadcast_peers() -> void:
 	peers_changed.emit()
 
 
-## [team_count, map, boss_drop], as sent to everyone.
+## [team_count, map, boss_drop, score_to_win], as sent to everyone.
 func _format() -> Array:
-	return [Players.team_count, Players.map, Players.boss_drop]
+	return [Players.team_count, Players.map, Players.boss_drop, Players.score_to_win]
 
 
 func _apply_format(format: Array) -> void:
-	Players.set_match_format(format[0], format[1], format[2])
+	Players.set_match_format(format[0], format[1], format[2], format[3])
 
 
 ## A new player starts on the smallest team, as the seat's usual character.
@@ -571,6 +577,13 @@ func _request_boss_drop(kind: BossDrop.Kind) -> void:
 
 
 @rpc("any_peer", "reliable")
+func _request_score_to_win(score: int) -> void:
+	if _from_leader_in_lobby():
+		Players.set_score_to_win(score)
+		_broadcast_peers()
+
+
+@rpc("any_peer", "reliable")
 func _request_add_bot() -> void:
 	if _from_leader_in_lobby() and seat_count() < MAX_PLAYERS:
 		var team: int = Players.smallest_team(seat_teams())
@@ -613,8 +626,9 @@ func _format_changed() -> void:
 func _request_start() -> void:
 	if is_server and not in_match and peers and multiplayer.get_remote_sender_id() == peers[0] \
 			and _teams_split():
-		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s)." % [access_code,
-			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop)])
+		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s, first to %d)." % [access_code,
+			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop),
+			Players.score_to_win])
 		_to_session(_start_match, _format())
 
 

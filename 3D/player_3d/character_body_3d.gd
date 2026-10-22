@@ -78,7 +78,8 @@ var _combo := PlayerCombo3D.new(self)
 var hitstop: float = 0.0
 
 # ===== CARRYING THE BALL =====
-# Interact picks up a ball in reach. Carrying it drains the carry meter
+# Rolling or sliding into a ball picks it up (so does Interact, for a ball in
+# reach). Carrying it drains the carry meter
 # (shown on the HUD) and puts the weapons in our hands out of sight.
 # Light (or Throw) charges and throws it the way we face, Heavy passes it
 # straight to the nearest teammate, Shoot (E / LT) charges and shoots it at
@@ -95,7 +96,14 @@ const CARRY_REGEN_PER_SEC := 100.0 / 4.0
 ## Need this much to pick the ball up.
 const CARRY_MIN_TO_GRAB := 25.0
 const BALL_REACH := 2.0
-## Walking speed while carrying, times normal (sprinting still works).
+## A roll or slide picks up a ball this close, flat (closer than BALL_REACH,
+## so it has to actually go into it). Checked where the roll is about to
+## take us, so we get it before our body knocks it away.
+const ROLL_GRAB_REACH := 1.4
+## Asked for a ball during this roll or slide already (online, the answer
+## takes a moment; this keeps it to one ask).
+var _roll_grab_asked: bool = false
+## Walking speed while carrying, times normal (no sprinting either).
 const CARRY_SPEED := 0.85
 ## Throw speed (scaled by the throw charge), and how much it rises.
 const BALL_THROW_SPEED := 14.0
@@ -139,10 +147,6 @@ var _dash_time: float = 0.0
 var _dash_velocity: Vector3 = Vector3.ZERO
 
 const ROTATION_SPEED = 10.0
-
-## A chop (a vertical_swing weapon like the axe) can only hit over this share
-## of its swing: the downstroke, not the recovery.
-const CHOP_DOWNSTROKE := 0.5
 
 # Knockback: shoves (bumps, punches, hits) live in their own velocity that's
 # added on top of walking and slides to a stop, instead of being overwritten
@@ -213,11 +217,17 @@ var roll_iframes: float = 0.0
 var roll_dir: Vector3 = Vector3.ZERO
 var is_backstep: bool = false
 var _roll_cooldown: float = 0.0
+## The dodge_counter perk: rolling through a hit hits harder for this long.
+const COUNTER_TIME := 2.0
+const COUNTER_FX_COLOR := Color(1.0, 0.8, 0.3)
+## Owner only: seconds left of a dodge_counter's extra damage.
+var _counter_time: float = 0.0
 
 # Slide tackle: dodging while sprinting (or just after letting go of a
 # controller's dodge button, since holding it is the sprint) slides in feet first instead of rolling. It has no iframes,
 # but anyone it sweeps is knocked down (see _knock_down) unless their raised
-# shield takes it or they roll through it; anything else gets kicked.
+# shield takes it or they roll through it; anything else gets kicked (but a
+# ball we can carry is scooped up instead, see _roll_into_ball).
 const SLIDE_DURATION := 0.6
 const SLIDE_SPEED := 15.0
 const SLIDE_END_SPEED_RATIO := 0.25  # Slows to this share of SLIDE_SPEED by the end
@@ -413,6 +423,8 @@ func _physics_process(delta: float) -> void:
 		move = _dash_velocity
 	velocity.x = move.x + knockback.x + lunge.x
 	velocity.z = move.z + knockback.z + lunge.z
+	if roll_time > 0.0:
+		_roll_into_ball(delta)
 
 	# Face the aim direction if aiming (works while standing still too),
 	# otherwise face the direction we're trying to walk (not the shove).
@@ -453,6 +465,7 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_timed_perks(delta)  # Every machine, alive or not, so they all agree
 	_show_weapons_in_hand()
+	_update_cursor()
 	if is_dead():
 		_update_death(delta)
 		if is_remote:
@@ -734,6 +747,8 @@ func _exit_tree() -> void:
 	for weapon: Weapon3D in kit:
 		if is_instance_valid(weapon):
 			weapon.queue_free()
+	if _owns_cursor:
+		Cursor.reset()
 
 
 # ===== BUTTONS =====
@@ -759,6 +774,10 @@ var _charge_fx: Node3D = null
 var _charge_fx_held: bool = false
 ## A legendary heavy's blast (see _emit_move) lands this far ahead (m).
 const LEGENDARY_BLAST_AHEAD := 1.8
+## The double_cast perk stats: an echoed attack's waves (or shot, see
+## CrossbowClass3D) go off again this long after, this many times as hard.
+const ECHO_DELAY := 0.18
+const ECHO_POWER := 0.6
 ## A held orb let go of, about to fly off as its heavy strikes (see _emit_move).
 var _launching_orb: Node3D = null
 ## How long it waits for that strike before fizzling.
@@ -770,6 +789,50 @@ const CHARGE_FX_START := 0.35
 const CHARGE_FX_SIZE := 0.6
 ## Their color on a common weapon (rarer ones take their rarity's).
 const CHARGE_FX_COLOR := Color(1.0, 0.85, 0.5)
+
+
+# ===== CURSOR =====
+# The mouse player's cursor shows what they're doing with their weapon (see
+# the Cursor autoload): a light swing, a heavy charging up, charged, or
+# going off, or a throw winding up.
+
+## Whether we're the one tinting the cursor (a person here on the mouse).
+var _owns_cursor: bool = false
+
+
+func _update_cursor() -> void:
+	var owns: bool = not is_remote and is_local_person() and Input_Handler != null \
+		and Input_Handler.uses_mouse()
+	if not owns:
+		if _owns_cursor:
+			Cursor.reset()
+		_owns_cursor = false
+		return
+	_owns_cursor = true
+	if is_dead():
+		Cursor.reset()
+		return
+	var charging: PlayerArm3D = _charging_arm()
+	if charging:
+		if charging.charged:
+			Cursor.show_state(Cursor.State.CHARGED)
+		else:
+			Cursor.show_state(Cursor.State.CHARGING, charging.charge)
+		return
+	var light: bool = _combo.is_running()
+	for arm: PlayerArm3D in arms:
+		if not arm.is_swinging():
+			continue
+		if arm.move and arm.move_heavy:
+			Cursor.show_state(Cursor.State.HEAVY)
+			return
+		light = true
+	if light:
+		Cursor.show_state(Cursor.State.LIGHT)
+	elif _throw.held and _throw.armed:
+		Cursor.show_state(Cursor.State.THROW)
+	else:
+		Cursor.reset()
 
 
 ## Read the buttons and act on them. While `busy` they do nothing, and
@@ -969,7 +1032,8 @@ func _net_charged(is_left: bool, on: bool) -> void:
 ## charges, growing till it's ready (see Weapon3D.charge_anchor); or, for a
 ## heavy that holds its orb (see AttackWaveSpec3D.held_while_charging), the
 ## orb grows in front of us instead, to fly off as it strikes. Stopping
-## lets the sparks fade out; a held orb not `cut` waits to be launched.
+## `cut` short takes either away at once; otherwise the sparks fade out and
+## a held orb waits to be launched.
 func _show_charging(on: bool, is_left: bool, cut: bool = true) -> void:
 	if is_instance_valid(_charge_fx) and _charge_fx_held and not on and not cut:
 		_launching_orb = _charge_fx
@@ -978,7 +1042,8 @@ func _show_charging(on: bool, is_left: bool, cut: bool = true) -> void:
 		orb.create_tween().tween_callback(func() -> void:
 			if orb.get_parent() and orb.get_parent().get_instance_id() == holder:
 				orb.queue_free()).set_delay(LAUNCH_WAIT)
-	elif is_instance_valid(_charge_fx) and _charge_fx_held:
+	elif is_instance_valid(_charge_fx) and (_charge_fx_held or cut):
+		# Gone at once: released, they'd hang in the air where the weapon was
 		_charge_fx.queue_free()
 	elif is_instance_valid(_charge_fx):
 		Vfx.release(_charge_fx)
@@ -1066,14 +1131,15 @@ func carry_point() -> Vector3:
 	return global_position + global_basis.z * 0.8 + Vector3.UP * 0.4
 
 
-## Whether we could pick `ball` up now.
+## Whether we could pick `ball` up now. Mid-roll is fine (see
+## _roll_into_ball); knocked about isn't.
 func can_grab_ball(ball: Ball3D, reach: float = BALL_REACH) -> bool:
-	return not ball.holder and not is_dead() and not is_busy() and not is_instance_valid(held_ball) \
+	return not ball.holder and not is_dead() and not _knocked_about() and not is_instance_valid(held_ball) \
 		and carry >= CARRY_MIN_TO_GRAB and global_position.distance_to(ball.global_position) <= reach
 
 
-## Interact: pick up the nearest ball in reach. Returns whether we are (or,
-## online, have asked to).
+## Interact: pick up the nearest ball within `reach`. Returns whether we are
+## (or, online, have asked to).
 func _grab_nearest_ball() -> bool:
 	if not Global.Game3D:
 		return false
@@ -1085,6 +1151,27 @@ func _grab_nearest_ball() -> bool:
 	if nearest:
 		nearest.request_grab(self)
 	return nearest != null
+
+
+## Mid-roll or slide, before this step's move: scoop up a ball we're about
+## to run into (once per roll).
+func _roll_into_ball(delta: float) -> void:
+	if _roll_grab_asked or carries_ball() or not Global.Game3D:
+		return
+	var ahead: Vector3 = global_position + velocity * delta
+	for ball: Ball3D in Global.Game3D.balls:
+		if not is_instance_valid(ball) or not ball.is_inside_tree() or not can_grab_ball(ball, INF):
+			continue
+		var to: Vector3 = ball.global_position - ahead
+		if Vector2(to.x, to.z).length() <= ROLL_GRAB_REACH and absf(to.y) < 1.5:
+			_scoop(ball)
+			return
+
+
+func _scoop(ball: Ball3D) -> void:
+	_roll_grab_asked = true
+	_slide_hits.append(ball)  # The slide doesn't also kick it away
+	ball.request_grab(self)
 
 
 ## Every machine (see Ball3D.grab).
@@ -1203,6 +1290,12 @@ func _show_weapons_in_hand() -> void:
 			weapon.visible = not carrying and not weapon.away and not weapon.holstered
 
 
+## Staggered, knocked down or held: no picking the ball up, and a carried
+## one gets tossed. (Rolling is fine, see _roll_into_ball.)
+func _knocked_about() -> bool:
+	return stagger_time > 0.0 or knockdown_time > 0.0 or status.held()
+
+
 ## Owner: drain the meter while carrying (tossing the ball forward once it's
 ## empty, or when we're knocked about), refill it otherwise.
 func _update_carry(delta: float) -> void:
@@ -1210,7 +1303,7 @@ func _update_carry(delta: float) -> void:
 		held_ball = null
 	if carries_ball():
 		carry -= CARRY_DRAIN_PER_SEC * delta
-		if carry <= 0.0 or is_busy():
+		if carry <= 0.0 or _knocked_about():
 			_launch_ball(global_basis.z * BALL_TOSS_SPEED + Vector3.UP * 2.0)
 	elif not held_ball:
 		carry += CARRY_REGEN_PER_SEC * delta
@@ -1268,9 +1361,8 @@ func strike(arm: PlayerArm3D, step: WeaponComboStep3D = null) -> float:
 		arm.swing_spin = spin
 	elif move and move.clip != &"":
 		arm.swing_clip = move.clip
-	var window: float = duration * CHOP_DOWNSTROKE if _chops(arm) and not spin else duration
 	if swings:
-		weapon.start_swing(window, step.damage_scale if step else 1.0)
+		weapon.start_swing(duration, step.damage_scale if step else 1.0)
 	var lunge_scale: float = (step.lunge_scale if step else 1.0) * (move.lunge_scale if move else 1.0)
 	if lunge_scale > 0.0:
 		_lunge(SWING_LUNGE_SPEED * lunge_scale)
@@ -1288,9 +1380,10 @@ func _update_swing_draws(delta: float) -> void:
 			strike(arm)
 
 
-## That arm holds a weapon that chops (see WeaponClass3D.vertical_swing).
-func _chops(arm: PlayerArm3D) -> bool:
-	return arm.weapon is WeaponClass3D and arm.weapon.vertical_swing
+## Whether a held weapon's swing is in its strike, the only part that hits
+## (see PlayerArm3D.is_striking and Weapon3D._wielder_striking).
+func is_weapon_striking(weapon: Weapon3D) -> bool:
+	return arm_of(weapon == held_weapon_left).is_striking()
 
 
 ## A held weapon's swing connected (see Weapon3D._swing_contact).
@@ -1315,6 +1408,7 @@ func _cancel_attacks() -> void:
 	_combo.cancel()
 	_dash_time = 0.0
 	for arm: PlayerArm3D in arms:
+		_end_charge(arm, true)  # Takes its sparks or held orb with it, everywhere
 		arm.cancel()
 
 
@@ -1362,25 +1456,36 @@ func _strike_move(arm: PlayerArm3D, move: WeaponMove3D) -> void:
 	var dir: Vector3 = _get_aim_direction()
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else global_basis.z
-	_emit_move(arm.weapon, move, dir, true, arm.move_heavy)
+	var echo: bool = not move.waves.is_empty() and rolls_echo(arm.move_heavy)
+	_emit_move(arm.weapon, move, dir, true, arm.move_heavy, echo)
 	if Net.match_synced:
-		_net_strike_move.rpc(arm.is_left, arm.move_heavy, dir)
+		_net_strike_move.rpc(arm.is_left, arm.move_heavy, dir, echo)
 
 
 @rpc("any_peer", "reliable")
-func _net_strike_move(is_left: bool, heavy: bool, dir: Vector3) -> void:
+func _net_strike_move(is_left: bool, heavy: bool, dir: Vector3, echo: bool) -> void:
 	if multiplayer.get_remote_sender_id() != get_multiplayer_authority():
 		return
 	var weapon: Weapon3D = arm_of(is_left).weapon
 	var move: WeaponMove3D = (_heavy_move_of(arm_of(is_left)) if heavy else weapon.light_move) if weapon else null
 	if move:
-		_emit_move(weapon, move, dir, false, heavy)
+		_emit_move(weapon, move, dir, false, heavy, echo)
+
+
+## Owner: whether an attack (a `heavy` one?) goes off twice, by the
+## double_cast perk stats (see ECHO_DELAY).
+func rolls_echo(heavy: bool) -> bool:
+	var chance: float = perk_stat(&"double_cast") - 1.0
+	if heavy:
+		chance += perk_stat(&"heavy_double_cast") - 1.0
+	return chance > 0.0 and randf() < chance
 
 
 ## `move`'s waves and action from `weapon` along `dir`: `real` ones hit
 ## things, the rest are for show. A rarer weapon's effects take its
 ## rarity's color, and a legendary's `heavy` lands with a blast of fire.
-func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool, heavy: bool) -> void:
+## With `echo`, its waves go off again ECHO_DELAY later, ECHO_POWER as hard.
+func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool, heavy: bool, echo: bool = false) -> void:
 	var hits: Array[Node] = weapon.hits_this_action()
 	var held: Node3D = null
 	if is_instance_valid(_launching_orb) and _launching_orb.get_parent() == self:
@@ -1388,6 +1493,15 @@ func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool, 
 	_launching_orb = null
 	for spec: AttackWaveSpec3D in move.waves:
 		AttackWave3D.emit(spec, self, weapon, dir, real, hits, 1.0, held if spec.held_while_charging else null)
+	if echo:
+		# Its own hit list, so it can land on whoever the first one did
+		var echo_hits: Array[Node] = []
+		for spec: AttackWaveSpec3D in move.waves:
+			AttackWave3D.emit(spec, self, weapon, dir, real, echo_hits).make_echo(ECHO_DELAY, ECHO_POWER)
+		if move.sound != &"":
+			get_tree().create_timer(ECHO_DELAY).timeout.connect(func() -> void:
+				if is_inside_tree():
+					Sfx.play(move.sound, global_position))
 	if move.sound != &"":
 		Sfx.play(move.sound, global_position)
 	if move.shake > 0.0:
@@ -1538,12 +1652,12 @@ func _start_punch(arm: PlayerArm3D) -> void:
 	_lunge(FIST_LUNGE_SPEED)
 
 
-## While a fist is mid-swing, hit whatever it passes through (once each).
+## While a fist is mid-strike, hit whatever it passes through (once each).
 func _update_punches() -> void:
 	for arm: PlayerArm3D in arms:
 		if arm.punching:
 			arm.punching = arm.swing_time > 0.0
-			if arm.punching:
+			if arm.punching and arm.is_striking():
 				_check_fist_hits(arm)
 
 
@@ -1588,7 +1702,10 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 			_net_receive_hit.rpc_id(get_multiplayer_authority(), dir, damage, knockback_velocity, attacker_name, knock_down)
 		return true
 	if roll_iframes > 0.0:
-		return false  # Rolled through it
+		_rolled_through()
+		return false
+	if PerkDirector.halted():
+		return false  # Play's stopped for a draft
 	if attacker is PlayerClass3D and attacker != self:
 		blame(attacker)
 	damage *= perk_stat(&"damage_taken")
@@ -1605,11 +1722,14 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		knockback_velocity.x *= shield.knockback_taken
 		knockback_velocity.z *= shield.knockback_taken
 	var was_in_iframes: bool = Entity.is_in_iframes
+	var hp_before: float = Entity.hp
 	if shield and not was_in_iframes:
 		Sfx.play_everywhere(&"block", shield.global_position)
 		shield.wear()  # Each hit it softens is a use
 	Entity.take_hit(damage, knockback_velocity)
 	_share_iframes(was_in_iframes)
+	if Global.Game3D:
+		Global.Game3D.record_damage(self, attacker, hp_before - maxf(Entity.hp, 0.0))
 	if not was_in_iframes:
 		var look: StringName = &"block" if shield else (&"hit_hard" if damage >= HARD_HIT_DAMAGE else &"hit")
 		Vfx.play_everywhere(look, global_position, dir)
@@ -1626,8 +1746,24 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 	if Entity.hp <= 0:
 		_on_lethal_hit()
 	elif knock_down:
-		_knock_down()
+		_knock_down(attacker)
 	return true
+
+
+## Owner: a hit just missed us mid-roll. With the dodge_counter perk stat,
+## we hit harder for a moment (see counter_multiplier).
+func _rolled_through() -> void:
+	if perk_stat(&"dodge_counter") <= 1.0:
+		return
+	if _counter_time <= 0.0:
+		Vfx.play(&"fire_cast", global_position, global_basis.z, false, 0.8, COUNTER_FX_COLOR)
+		Sfx.play(&"block", global_position)
+	_counter_time = COUNTER_TIME
+
+
+## Owner: what the dodge_counter perk stat does to our damage right now.
+func counter_multiplier() -> float:
+	return perk_stat(&"dodge_counter") if _counter_time > 0.0 else 1.0
 
 
 ## Owner: `attacker` gets the kill if we die soon (see KILL_CREDIT_TIME).
@@ -1638,9 +1774,13 @@ func blame(attacker: PlayerClass3D) -> void:
 
 ## Owner: lose `amount` HP to a status (burning): no shove, no flinch.
 func hurt(amount: float) -> void:
-	if is_dead():
+	if is_dead() or PerkDirector.halted():
 		return
+	var hp_before: float = Entity.hp
 	Entity.hp -= amount * perk_stat(&"damage_taken")
+	# Whoever set us burning (see PlayerStatus3D.apply) dealt it
+	if Global.Game3D:
+		Global.Game3D.record_damage(self, Global.Game3D.player_named(_credited_killer()), hp_before - maxf(Entity.hp, 0.0))
 	if Entity.hp <= 0:
 		_on_lethal_hit()
 
@@ -1898,38 +2038,40 @@ func _try_roll(direction: Vector3) -> void:
 		return
 	if is_busy() or not is_on_floor() or _roll_cooldown > 0.0:
 		return  # Keep it buffered
-	_roll_cooldown = ROLL_COOLDOWN
+	_roll_cooldown = ROLL_COOLDOWN * perk_stat(&"dodge_cooldown")
 	is_slide = not direction.is_zero_approx() and _since_sprint <= SLIDE_SPRINT_GRACE
 	is_backstep = direction.is_zero_approx()
 	Input_Handler.dodge_request_msec = -1
 	_cancel_attacks()
 	lunge = Vector3.ZERO
 	_dash_time = 0.0
+	_roll_grab_asked = false
 	if is_slide:
 		roll_dir = direction
 		roll_duration = SLIDE_DURATION
-		roll_iframes = 0.0
+		roll_iframes = SLIDE_DURATION * (perk_stat(&"slide_iframes") - 1.0)
 		rotation.y = atan2(direction.x, direction.z)
 		_slide_hits.clear()
 	elif is_backstep:
 		roll_dir = -global_transform.basis.z
 		roll_duration = BACKSTEP_DURATION
-		roll_iframes = BACKSTEP_IFRAMES
+		roll_iframes = BACKSTEP_IFRAMES * perk_stat(&"dodge_iframes")
 	else:
 		roll_dir = direction
 		roll_duration = ROLL_DURATION
-		roll_iframes = ROLL_IFRAMES
+		roll_iframes = ROLL_IFRAMES * perk_stat(&"dodge_iframes")
 		rotation.y = atan2(direction.x, direction.z)
 	roll_time = roll_duration
 
 
 func _roll_velocity() -> Vector3:
 	var t: float = 1.0 - roll_time / roll_duration
+	var boost: float = perk_stat(&"dodge_speed")
 	if is_backstep:
-		return roll_dir * BACKSTEP_SPEED * (1.0 - t)
+		return roll_dir * BACKSTEP_SPEED * (1.0 - t) * boost
 	if is_slide:
-		return roll_dir * SLIDE_SPEED * lerp(1.0, SLIDE_END_SPEED_RATIO, t) * perk_stat(&"move_speed")
-	var speed: float = ROLL_SPEED * lerp(1.0, ROLL_END_SPEED_RATIO, t * t) * perk_stat(&"move_speed")
+		return roll_dir * SLIDE_SPEED * lerp(1.0, SLIDE_END_SPEED_RATIO, t) * perk_stat(&"move_speed") * boost
+	var speed: float = ROLL_SPEED * lerp(1.0, ROLL_END_SPEED_RATIO, t * t) * perk_stat(&"move_speed") * boost
 	return roll_dir * speed
 
 
@@ -1937,6 +2079,7 @@ func _update_roll(delta: float) -> void:
 	roll_time = max(roll_time - delta, 0.0)
 	roll_iframes = max(roll_iframes - delta, 0.0)
 	_roll_cooldown = max(_roll_cooldown - delta, 0.0)
+	_counter_time = max(_counter_time - delta, 0.0)
 
 
 ## Mid-slide: sweep whatever's just ahead of our feet, once each. Players
@@ -1946,22 +2089,30 @@ func _check_slide_hits() -> void:
 	for arm: PlayerArm3D in arms:
 		if arm.weapon:
 			exclude.append(arm.weapon.get_rid())
+	var reach: float = SLIDE_REACH * perk_stat(&"slide_reach")
+	_slide_shape.radius = reach
 	# Our origin is about 1m up, so this is around the shins
-	var at: Vector3 = global_position + roll_dir * SLIDE_REACH + Vector3.DOWN * 0.5
+	var at: Vector3 = global_position + roll_dir * reach + Vector3.DOWN * 0.5
 	for body: Node3D in Combat.overlaps(get_world_3d(), _slide_shape, Transform3D(Basis(), at), exclude):
 		if body in _slide_hits:
 			continue
+		if body is Ball3D and not _roll_grab_asked and not carries_ball() and can_grab_ball(body, INF):
+			_scoop(body)
+			continue
 		_slide_hits.append(body)
-		if Combat.strike(body, roll_dir, SLIDE_DAMAGE, SLIDE_KNOCKBACK, SLIDE_POP, SLIDE_OBJECT_IMPULSE, self, true):
+		var damage: float = SLIDE_DAMAGE * perk_stat(&"slide_damage")
+		if Combat.strike(body, roll_dir, damage, SLIDE_KNOCKBACK, SLIDE_POP, SLIDE_OBJECT_IMPULSE, self, true):
 			_shake_view(CameraShake.LIGHT)
 
 
 ## Slide-tackled (owner only, see receive_hit): down we go, unless we're
-## already down or only just got back up.
-func _knock_down() -> void:
+## already down or only just got back up. The tackler's knockdown_time perk
+## stat keeps us down longer.
+func _knock_down(attacker: Node3D = null) -> void:
 	if knockdown_time > 0.0 or _knockdown_immunity > 0.0 or is_dead():
 		return
-	knockdown_time = KNOCKDOWN_DURATION + GETUP_DURATION
+	var down: float = attacker.perk_stat(&"knockdown_time") if attacker is PlayerClass3D else 1.0
+	knockdown_time = KNOCKDOWN_DURATION * down + GETUP_DURATION
 	roll_time = 0.0
 	roll_iframes = 0.0
 	stagger_time = 0.0
@@ -2053,7 +2204,7 @@ func put_on_armor() -> void:
 
 func _update_sprint(direction: Vector3, delta: float) -> void:
 	is_sprinting = Input_Handler.move_dodge and not direction.is_zero_approx() \
-		and not is_busy() and not is_perk_locked()
+		and not is_busy() and not is_perk_locked() and not carries_ball()
 	_since_sprint = 0.0 if is_sprinting else _since_sprint + delta
 
 
@@ -2064,10 +2215,20 @@ func perk_stat(stat_name: StringName) -> float:
 	return perks.stat(stat_name)
 
 
-## Take a perk. Max HP grows at once, keeping how full they were.
+## Take a perk. Max HP grows at once, keeping how full they were. If it
+## completes an evolution (see PerkSet.evolve), that happens too.
 ## Call on every machine.
 func add_perk(perk: Perk) -> void:
 	perks.add(perk)
+	var game: Game3D_Class = Global.Game3D
+	if game and game.perks:
+		var evolved: Perk = perks.evolve(game.perks.catalog)
+		while evolved:
+			game.scoreboard.announce("%s's perks evolved into %s!" % [game._player_label(self), evolved.title],
+				evolved.category_color())
+			Vfx.play(&"fire_cast", global_position, global_basis.z, false, 1.4, evolved.category_color())
+			Sfx.play(&"spell_impact", global_position)
+			evolved = perks.evolve(game.perks.catalog)
 	_on_perks_changed()
 
 

@@ -80,6 +80,10 @@ func show_winner(text: String, color: Color) -> void:
 	_winner.show()
 
 
+func hide_winner() -> void:
+	_winner.hide()
+
+
 func _make_label(text: String, color: Color, size: int) -> Label:
 	var label := Label.new()
 	label.text = text

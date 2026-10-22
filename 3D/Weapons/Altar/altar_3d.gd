@@ -14,6 +14,10 @@ class_name Altar3D extends WeaponStand3D
 ## relic (pick one of two Relic perks, stronger than the usual cards). It floats above the altar and is taken
 ## like the weapons. Play goes on meanwhile, so the other team has a chance
 ## to wipe this one out and steal it; the round only ends once it's claimed.
+## An altar can also cycle its stock (see cycle_time): a weapon nobody
+## takes in a while shatters and another takes its place. Any restock may
+## be a perk instead of a weapon (see perk_chance): taking it deals a hand
+## of perk cards to open whenever you like (the HUD's open_perks button).
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
 ## owner_team value: nobody's, so anyone may take from it.
@@ -53,6 +57,19 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 ## Relic cards (Perk.Category.RELIC, stronger than the rest) a perk relic
 ## offers; its taker picks one.
 @export_range(1, 5) var relic_hand_size: int = 2
+
+@export_group("Cycling")
+## Seconds the newest stock may sit untaken (once charged) before it
+## shatters and the altar stocks another. 0 = it stays until taken.
+@export var cycle_time: float = 0.0
+## Chance each restock is a perk instead of a weapon.
+@export_range(0.0, 1.0) var perk_chance: float = 0.0
+## The hand a perk deals its taker: a card from each category.
+@export var perk_categories: Array[Perk.Category] = [Perk.Category.OFFENSE, Perk.Category.MOBILITY, Perk.Category.GENERAL]
+## Interact opens the cards of a teammate with a hand waiting (for maps
+## whose perks are picked at the altars, at intermission). Off where hands
+## are opened from the HUD, so taking from the altar isn't blocked.
+@export var opens_perks: bool = true
 @export_group("")
 
 @onready var base_mesh: MeshInstance3D = $MeshInstance3D
@@ -61,6 +78,8 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 ## One weapon on display.
 class HeldWeapon:
 	var scene: PackedScene
+	## A perk instead of a weapon (scene is null).
+	var is_perk: bool = false
 	var rarity: int = WeaponRarity.Tier.COMMON
 	## Seconds until it can be taken, out of arming_total.
 	var arming_left: float = 0.0
@@ -82,6 +101,13 @@ var _pending: Array[int] = []
 var _tier_timer: float = 0.0
 ## Gap between held weapons, side by side along the altar.
 const HELD_SPACING := 1.2
+## Seconds the newest stock has sat charged and untaken, toward cycle_time.
+var _idle_time: float = 0.0
+## _stock's pick for a perk instead of a weapon.
+const PERK_PICK := -1
+const PERK_COLOR := Color(0.55, 0.85, 1.0)
+## The stock about to cycle out flickers for this long first.
+const CYCLE_WARNING := 3.0
 ## Floats over the altar while one of its team has perk cards waiting.
 var _perk_sign: Label3D = null
 const PERK_SIGN_HEIGHT := 4.0
@@ -147,6 +173,7 @@ func _process(delta: float) -> void:
 		item.arming_left = max(item.arming_left - delta, 0.0)
 		item.pivot.rotate_y(display_spin_speed * delta)
 	_update_arming_visual()
+	_tick_cycle(delta)
 	_update_perk_sign()
 	_update_reward(delta)
 	_update_pip_pop(delta)
@@ -179,7 +206,7 @@ func _has_perks_for(player: PlayerClass3D) -> bool:
 	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
 	# Bots take their cards on their own (BotInputHandler3D); opening them
 	# here would leave a bot stuck looking at them.
-	if player.slot and player.slot.is_bot:
+	if not opens_perks or (player.slot and player.slot.is_bot):
 		return false
 	return perks != null and perks.can_open(player) and _is_ours(player) and reach.overlaps_body(player)
 
@@ -201,7 +228,7 @@ func _make_perk_sign() -> void:
 
 func _update_perk_sign() -> void:
 	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
-	_perk_sign.visible = perks != null and perks.team_has_offer(owner_team)
+	_perk_sign.visible = opens_perks and perks != null and perks.team_has_offer(owner_team)
 	if _perk_sign.visible:
 		var t: float = Time.get_ticks_msec() / 1000.0
 		_perk_sign.position.y = PERK_SIGN_HEIGHT + sin(t * 3.0) * 0.15
@@ -238,6 +265,12 @@ func _stock_grip() -> Weapon3D.Grip:
 	return weapon.grip if weapon else super()
 
 
+## A perk is taken with no hand free.
+func _stock_needs_hand() -> bool:
+	var item: HeldWeapon = _next_given()
+	return not item or not item.is_perk
+
+
 ## Hands out the next weapon (see _next_given).
 func _take_stock() -> PackedScene:
 	var item: HeldWeapon = _next_given()
@@ -246,21 +279,36 @@ func _take_stock() -> PackedScene:
 	cooldown_left = _cooldown_after_take()
 	_remove_held(item)
 	_given_rarity = item.rarity
-	return item.scene
+	return item.scene  # Null for a perk: see _hand_other
 
 
-## Put tiers[tier_index].weapons[pick] on top, charging for its arming time.
+## Every machine: `player` took a perk. The server (or the offline game)
+## deals them its hand, which waits for them to open it.
+func _hand_other(player: PlayerClass3D) -> void:
+	Sfx.play(&"altar_reward", global_position)
+	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
+	if perks:
+		perks.grant_hand(player, perk_categories)
+
+
+## Put tiers[tier_index].weapons[pick] (or a perk, for PERK_PICK) on top,
+## charging for its arming time.
 func _add_held(tier_index: int, pick: int, tier_rarity: int) -> void:
 	var stocked_tier: AltarTier = tiers[tier_index]
 	var item := HeldWeapon.new()
-	item.scene = stocked_tier.weapons[pick]
+	item.is_perk = pick == PERK_PICK
+	item.scene = null if item.is_perk else stocked_tier.weapons[pick]
 	item.rarity = tier_rarity
 	item.arming_total = stocked_tier.arming_time
 	item.arming_left = item.arming_total
 	item.pivot = Node3D.new()
-	item.pivot.add_child(_make_display_copy(item.scene, item.rarity))
+	if item.is_perk:
+		item.pivot.add_child(_make_gem(PERK_COLOR))
+	else:
+		item.pivot.add_child(_make_display_copy(item.scene, item.rarity))
 	add_child(item.pivot)
 	_held.append(item)
+	_idle_time = 0.0
 	_trim_held()
 
 
@@ -324,16 +372,25 @@ func _after_given() -> void:
 	_restock()
 
 
-## Server/offline: pick a weapon from the current tier and stock it everywhere.
+## Server/offline: pick a weapon (or a perk) from the current tier and
+## stock it everywhere.
 func _restock() -> void:
 	if not Net.decides():
 		return
+	var roll: PackedInt32Array = _roll_stock()
+	if not roll.is_empty():
+		Net.everywhere(_stock, roll[0], roll[1], roll[2])
+
+
+## Server/offline: what to stock next, as [tier, pick, rarity] (pick is
+## PERK_PICK for a perk), or empty if the tier has nothing.
+func _roll_stock() -> PackedInt32Array:
 	var current: AltarTier = _current_tier()
 	if not current or current.weapons.is_empty():
-		return
-	var pick: int = randi() % current.weapons.size()
-	var pick_rarity: int = WeaponRarity.roll(current.rarity_weights)
-	Net.everywhere(_stock, tier, pick, pick_rarity)
+		return PackedInt32Array()
+	var perks_on: bool = Global.Game3D != null and Global.Game3D.perks != null
+	var pick: int = PERK_PICK if perks_on and randf() < perk_chance else randi() % current.weapons.size()
+	return PackedInt32Array([tier, pick, WeaponRarity.roll(current.rarity_weights)])
 
 
 ## Server -> everyone: the next weapon is tiers[tier_index].weapons[pick],
@@ -380,6 +437,51 @@ func _tick_tier_timer(delta: float) -> void:
 		upgrade()
 
 
+# ===== CYCLING =====
+
+## Count how long the newest stock has sat charged and untaken; the server
+## (or the offline game) swaps it out at cycle_time. Paused during a draft.
+func _tick_cycle(delta: float) -> void:
+	if cycle_time <= 0.0 or _held.is_empty():
+		return
+	var counting: bool = _held.back().is_armed() and _pending.is_empty() \
+		and cooldown_left <= 0.0 and not PerkDirector.halted()
+	if counting:
+		_idle_time += delta
+	# The oldest is the one that goes: it blinks for a moment first
+	_flicker(_held[0], counting and cycle_time - _idle_time < CYCLE_WARNING)
+	if not counting or _idle_time < cycle_time or not Net.decides():
+		return
+	if Net.in_session() and not Net.match_synced:
+		return
+	_idle_time = 0.0
+	var roll: PackedInt32Array = _roll_stock()
+	if not roll.is_empty():
+		Net.everywhere(_cycle_stock, roll[0], roll[1], roll[2])
+
+
+## Blink `item` while it's about to shatter (`on`), else show it.
+func _flicker(item: HeldWeapon, on: bool) -> void:
+	item.pivot.visible = not on or fmod(Time.get_ticks_msec() / 1000.0 * 8.0, 1.0) < 0.6
+
+
+## Server -> everyone: the oldest stock shatters, and tiers[tier_index].
+## weapons[pick] (or a perk) takes its place.
+@rpc("authority", "call_local", "reliable")
+func _cycle_stock(tier_index: int, pick: int, pick_rarity: int) -> void:
+	if not _held.is_empty():
+		_shatter(_held[0])
+	_add_held(tier_index, pick, pick_rarity)
+
+
+func _shatter(item: HeldWeapon) -> void:
+	var at: Vector3 = item.pivot.global_position
+	var color: Color = PERK_COLOR if item.is_perk else WeaponRarity.effect_color(item.rarity)
+	Sfx.play(&"weapon_break", at)
+	Vfx.play(&"shatter", at, Vector3.FORWARD, false, 1.0, color)
+	_remove_held(item)
+
+
 func _current_tier() -> AltarTier:
 	if tiers.is_empty():
 		return null
@@ -413,7 +515,7 @@ func start_reward(roll: PackedInt32Array) -> void:
 		_reward_rarity = roll[2]
 		_reward_pivot.add_child(_make_display_copy(_reward_scene, _reward_rarity))
 	else:
-		_reward_pivot.add_child(_make_relic())
+		_reward_pivot.add_child(_make_gem(RELIC_COLOR))
 	add_child(_reward_pivot)
 
 
@@ -487,20 +589,20 @@ func _reward_given(player_name: String, is_left: bool, weapon_name: String) -> v
 			player.slot.color if player.slot else Color.WHITE)
 
 
-## The perk relic's looks: a glowing gem.
-func _make_relic() -> Node3D:
+## A perk's looks (a relic's, or a stocked one's): a glowing gem.
+func _make_gem(color: Color) -> Node3D:
 	var gem := MeshInstance3D.new()
 	var mesh := PrismMesh.new()
 	mesh.size = Vector3(0.5, 0.7, 0.5)
 	var material := StandardMaterial3D.new()
-	material.albedo_color = RELIC_COLOR
+	material.albedo_color = color
 	material.emission_enabled = true
-	material.emission = RELIC_COLOR
+	material.emission = color
 	material.emission_energy_multiplier = 2.5
 	mesh.material = material
 	gem.mesh = mesh
 	var light := OmniLight3D.new()
-	light.light_color = RELIC_COLOR
+	light.light_color = color
 	light.omni_range = 4.0
 	gem.add_child(light)
 	return gem
@@ -519,11 +621,12 @@ func _make_reward_sign() -> void:
 
 
 ## Count the reward down, spin it, and say what it is (and when it's
-## up for grabs to everyone).
+## up for grabs to everyone). Without one, the sign names a stocked perk.
 func _update_reward(delta: float) -> void:
-	_reward_sign.visible = reward != Reward.NONE
 	if reward == Reward.NONE:
+		_update_perk_stock_sign()
 		return
+	_reward_sign.visible = true
 	_reward_left = max(_reward_left - delta, 0.0)
 	_reward_pivot.rotate_y(display_spin_speed * 1.5 * delta)
 	var t: float = Time.get_ticks_msec() / 1000.0
@@ -541,6 +644,15 @@ func _update_reward(delta: float) -> void:
 	else:
 		_reward_sign.text = "%s READY" % what
 		_reward_sign.modulate = RELIC_COLOR
+
+
+func _update_perk_stock_sign() -> void:
+	var item: HeldWeapon = _next_given()
+	_reward_sign.visible = item != null and item.is_perk
+	if not _reward_sign.visible:
+		return
+	_reward_sign.text = "PERK" if item.is_armed() else "PERK  %ds" % ceili(item.arming_left)
+	_reward_sign.modulate = PERK_COLOR
 
 
 # ===== TIER PIPS =====

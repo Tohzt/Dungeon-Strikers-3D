@@ -20,7 +20,6 @@ mass = 1.3
 script = ExtResource("1_script")
 swing_sound = &"swing_axe"
 combo_family = &"heavy"
-vertical_swing = true
 Properties = NodePath("WeaponProperties")
 Behavior = NodePath("WeaponBehavior")
 swing_clip = &"CombatMelee/Melee_1H_Attack_Chop"

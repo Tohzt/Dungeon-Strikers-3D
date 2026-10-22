@@ -425,14 +425,23 @@ func _update_hits(delta: float) -> void:
 		swing_time_left -= delta
 		if is_held and wielder:
 			_track_blade(delta)
-			_hit_overlapping(wielder, _swing_damage_scale, false)
+			var striking: bool = _wielder_striking()
+			if striking:
+				_hit_overlapping(wielder, _swing_damage_scale, false)
 			var was_in_wall: bool = _blade_in_wall
 			_blade_in_wall = Combat.touches_wall(get_world_3d(), Collision.shape, Collision.global_transform)
-			if swing_time_left > 0.0 and _blade_in_wall and not was_in_wall:
+			if striking and swing_time_left > 0.0 and _blade_in_wall and not was_in_wall:
 				Sfx.play_everywhere(&"hit_wall", Collision.global_position)
 				_swing_contact(true)
 	elif is_thrown and linear_velocity.length() > THROWN_HIT_MIN_SPEED:
 		_hit_overlapping(thrower, THROWN_DAMAGE_MULTIPLIER, true)
+
+
+## Whether the swing is in the part that hits. A wielder that knows (a
+## player: only its clip's strike, not the wind-up or recovery) says;
+## otherwise it's the whole window start_swing opened.
+func _wielder_striking() -> bool:
+	return not wielder.has_method(&"is_weapon_striking") or wielder.is_weapon_striking(self)
 
 
 ## How fast the blade itself is moving mid-swing. The swing mostly turns the
