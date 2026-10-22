@@ -4,6 +4,8 @@ Exports/
 .godot/
 .godot/*
 
+Steam/
+Steam/*
 
 # Godot editor leftovers
 *.tmp
