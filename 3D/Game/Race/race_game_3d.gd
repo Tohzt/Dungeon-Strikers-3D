@@ -46,7 +46,7 @@ func _show_countdown(seconds: int) -> void:
 	scoreboard.announce("Find the altar! The gates open soon...", Color.WHITE)
 	await get_tree().create_timer(1.0).timeout
 	for left in range(seconds, 0, -1):
-		scoreboard.announce(str(left), Color(1.0, 0.85, 0.4))
+		scoreboard.call_out(str(left), Color(1.0, 0.85, 0.4))
 		await get_tree().create_timer(1.0).timeout
 
 
@@ -55,7 +55,7 @@ func _open_start_gates() -> void:
 	for node: Node in get_tree().get_nodes_in_group("StartGate"):
 		if node is Door3D:
 			node.open()
-	scoreboard.announce("GO!", Color(0.6, 1.0, 0.5))
+	scoreboard.call_out("GO!", Color(0.6, 1.0, 0.5))
 
 
 ## Server/offline: `player` touched the finish altar.
