@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://q6gtgqc5r26i"]
 
 [ext_resource type="Script" uid="uid://c1ybujcli5ex2" path="res://3D/HUD/hud_3d.gd" id="1_hbyoa"]
-[ext_resource type="Script" path="res://3D/HUD/name_tag.gd" id="5_nametag"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_nobox"]
 
@@ -27,14 +26,17 @@ custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-theme_override_constants/separation = 0
+theme_override_constants/separation = 4
 alignment = 1
 
-[node name="NameTag" type="Control" parent="Panel/Row/Bars"]
+[node name="HealthBar" type="ProgressBar" parent="Panel/Row/Bars"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 mouse_filter = 2
-script = ExtResource("5_nametag")
+step = 0.01
+value = 100.0
+show_percentage = false
 
 [node name="CarryBar" type="ProgressBar" parent="Panel/Row/Bars"]
 unique_name_in_owner = true

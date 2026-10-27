@@ -183,6 +183,7 @@ func _burst(struck: Node) -> void:
 	Sfx.play(&"weapon_break", global_position)
 	WeaponShatter3D.spawn(get_parent(), global_position, burst_color, burst_radius)
 	Vfx.play(&"shatter", global_position, Vector3.FORWARD, false, burst_radius, burst_color)
+	Vfx.play(&"explosion_air", global_position, Vector3.FORWARD, false, burst_radius)
 
 
 func _align_to_velocity(velocity: Vector3) -> void:

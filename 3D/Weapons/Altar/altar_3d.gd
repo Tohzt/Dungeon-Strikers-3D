@@ -18,6 +18,12 @@ class_name Altar3D extends WeaponStand3D
 ## takes in a while shatters and another takes its place. Any restock may
 ## be a perk instead of a weapon (see perk_chance): taking it deals a hand
 ## of perk cards to open whenever you like (the HUD's open_perks button).
+## A shop altar (see `shop`) shows nothing on top: interact opens its shop
+## (ShopMenu3D), where coins buy an upgrade for the buyer's own kit, a
+## breakable weapon (rolled from the current tier, so the stock gets better
+## as the tier goes up), perk cards, and bombs and flasks. All it shows
+## is a quiet hint: its ring glows gold while someone here can afford
+## something, and a coin floats over it while they're in reach.
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
 ## owner_team value: nobody's, so anyone may take from it.
@@ -70,6 +76,37 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 ## whose perks are picked at the altars, at intermission). Off where hands
 ## are opened from the HUD, so taking from the altar isn't blocked.
 @export var opens_perks: bool = true
+
+@export_group("Shop")
+## Sells its stock for coins instead of handing it out (see ShopMenu3D).
+@export var shop: bool = false
+## Sells an upgrade for each buyer's own signature kit (see
+## PlayerClass3D.upgrade_kit), first in the weapons row: one rarity up, or
+## with kit_jump_chance two.
+@export var shop_kit_slot: bool = true
+@export_range(0.0, 1.0) var kit_jump_chance: float = 0.2
+## Breakable weapons on sale at once (any kind). Each sold one is replaced
+## by another from the current tier; a tier-up restocks the whole shop.
+@export_range(0, 4) var shop_weapon_slots: int = 1
+## Perk cards on sale at once (never relics), each taken on the spot.
+## Each sold one is replaced by another.
+@export_range(0, 4) var shop_perk_slots: int = 2
+## Bombs and big flasks on sale at once (see Throwable3D), handed over
+## straight into the buyer's hands. Each is a bomb at bomb_chance, else a
+## flask, and no two alike.
+@export_range(0, 4) var shop_throwable_slots: int = 3
+@export_range(0.0, 1.0) var bomb_chance: float = 0.6
+## Coins a weapon costs, by rarity (Common, Uncommon, Rare, Legendary).
+@export var weapon_prices: Array[int] = [10, 18, 30, 50]
+## Coins a kit upgrade costs, by the rarity it takes the kit to.
+@export var kit_prices: Array[int] = [0, 20, 35, 55]
+@export var perk_price: int = 25
+@export var bomb_price: int = 12
+@export var flask_price: int = 10
+## What a tower repair costs (see set_repair_offer), and the share of the
+## tower's max HP it puts back.
+@export var repair_price: int = 20
+@export_range(0.0, 1.0) var repair_share: float = 0.4
 @export_group("")
 
 @onready var base_mesh: MeshInstance3D = $MeshInstance3D
@@ -140,6 +177,27 @@ const REWARD_SIGN_HEIGHT := 4.9
 const RELIC_COLOR := Color(1.0, 0.8, 0.3)
 const UNGUARDED_COLOR := Color(1.0, 0.25, 0.2)
 
+## Shop: what's on sale, grouped by kind in ShopOffer.Kind order (the
+## menu's rows). The same on every machine.
+var offers: Array[ShopOffer] = []
+## Shop: goes up whenever the stock changes (the menu redraws).
+var shop_version: int = 0
+## Server/offline: the first stock has been rolled.
+var _shop_rolled: bool = false
+## Shop: a repair is on sale (our team has a tower up), after the stock.
+var _repair_offered: bool = false
+## The shop's hint (see the class notes): a coin over the altar, and the
+## ring's own material, to glow without lighting the tier pips too.
+var _shop_coin: Sprite3D = null
+var _shop_ring: StandardMaterial3D = null
+var _shop_glow: float = 0.0
+const SHOP_COIN_HEIGHT := 2.6
+const SHOP_GLOW_SPEED := 4.0
+## Gap between a two-piece kit's weapons in the menu's preview.
+const KIT_PREVIEW_SPACING := 0.7
+## [name, grip, heavy move's name] of each weapon scene, worked out once.
+static var _weapon_info: Dictionary[PackedScene, Array] = {}
+
 
 func _ready() -> void:
 	var first: AltarTier = _current_tier()
@@ -158,7 +216,9 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		_make_perk_sign()
 		_make_reward_sign()
-		if has_first:
+		if shop:
+			_make_shop_hint()
+		elif has_first:
 			_add_held(0, 0, WeaponRarity.Tier.COMMON)
 
 
@@ -178,13 +238,20 @@ func _process(delta: float) -> void:
 	_update_reward(delta)
 	_update_pip_pop(delta)
 	_tick_tier_timer(delta)
+	if shop:
+		_update_shop(delta)
 
 
 # ===== PERKS =====
 
 ## Perk cards come first: if `player` has some waiting, interact opens them.
 func can_give_to(player: PlayerClass3D) -> bool:
-	return _has_perks_for(player) or super(player)
+	if _has_perks_for(player):
+		return true
+	if shop and can_shop(player) and not offers.is_empty():
+		return not player.slot or not player.slot.is_bot or bot_buy_index(player) >= 0 \
+			or (has_reward_for(player))
+	return super(player)
 
 
 func request_take(player: PlayerClass3D) -> bool:
@@ -194,12 +261,19 @@ func request_take(player: PlayerClass3D) -> bool:
 	if has_reward_for(player) and reach.overlaps_body(player):
 		_take_reward(player)
 		return true
+	if shop:
+		return _open_shop(player)
 	return super(player)
 
 
-## The skull's reward comes first, then the stock.
+## The skull's reward comes first, then the stock (a shop's: for a bot,
+## something it can afford).
 func has_weapon_for(player: PlayerClass3D) -> bool:
-	return has_reward_for(player) or super(player)
+	if has_reward_for(player):
+		return true
+	if shop:
+		return player.slot != null and player.slot.is_bot and bot_buy_index(player) >= 0
+	return super(player)
 
 
 func _has_perks_for(player: PlayerClass3D) -> bool:
@@ -373,9 +447,12 @@ func _after_given() -> void:
 
 
 ## Server/offline: pick a weapon (or a perk) from the current tier and
-## stock it everywhere.
+## stock it everywhere. A shop restocks all its weapons instead.
 func _restock() -> void:
 	if not Net.decides():
+		return
+	if shop:
+		_restock_shop()
 		return
 	var roll: PackedInt32Array = _roll_stock()
 	if not roll.is_empty():
@@ -692,6 +769,10 @@ func _update_pip_pop(delta: float) -> void:
 ## Ring grows while the newest weapon charges and glows fully once it's
 ## takeable. Each weapon is see-through until it's armed.
 func _update_arming_visual() -> void:
+	if shop:
+		arming_ring.scale = Vector3.ONE
+		arming_ring.visible = true
+		return
 	arming_ring.visible = not _held.is_empty()
 	if _held.is_empty():
 		return
@@ -721,3 +802,469 @@ func _apply_team_color() -> void:
 	_pip_unlit = StandardMaterial3D.new()
 	_pip_unlit.albedo_color = color.darkened(0.8)
 	_update_tier_pips()
+
+
+# ===== SHOP =====
+
+## What `offer` costs `player` (a kit upgrade costs more the rarer it
+## makes their kit).
+func price_of(offer: ShopOffer, player: PlayerClass3D) -> int:
+	match offer.kind:
+		ShopOffer.Kind.WEAPON:
+			return weapon_prices[clampi(offer.rarity, 0, weapon_prices.size() - 1)] if not weapon_prices.is_empty() else 0
+		ShopOffer.Kind.PERK:
+			return perk_price
+		ShopOffer.Kind.REPAIR:
+			return repair_price
+		ShopOffer.Kind.KIT:
+			return kit_prices[clampi(kit_rarity_after(offer, player), 0, kit_prices.size() - 1)] if not kit_prices.is_empty() else 0
+		ShopOffer.Kind.THROWABLE:
+			return bomb_price if offer.throwable_kind == Throwable3D.Kind.BOMB else flask_price
+	return 0
+
+
+## The rarity a kit offer would take `player`'s kit to.
+func kit_rarity_after(offer: ShopOffer, player: PlayerClass3D) -> int:
+	var from: int = player.kit_rarity if player else WeaponRarity.Tier.COMMON
+	return mini(from + offer.steps, WeaponRarity.Tier.LEGENDARY)
+
+
+## What the menu calls `offer`.
+func offer_title(offer: ShopOffer) -> String:
+	match offer.kind:
+		ShopOffer.Kind.WEAPON:
+			return weapon_info(offer.scene)[0]
+		ShopOffer.Kind.PERK:
+			var perk: Perk = perk_of(offer)
+			return perk.title if perk else "Perk"
+		ShopOffer.Kind.REPAIR:
+			return "Repair Tower"
+		ShopOffer.Kind.KIT:
+			return "Kit Upgrade"
+		ShopOffer.Kind.THROWABLE:
+			return throwable_title(offer)
+	return ""
+
+
+## A throwable offer's name and color, as Throwable3D names it.
+static func throwable_title(offer: ShopOffer) -> String:
+	if offer.throwable_kind == Throwable3D.Kind.FLASK:
+		return Potion.large(offer.variant).title
+	return "%s Bomb" % Bomb3D.NAMES.get(offer.variant as Bomb3D.Type, "")
+
+
+static func throwable_color(offer: ShopOffer) -> Color:
+	if offer.throwable_kind == Throwable3D.Kind.FLASK:
+		return Potion.large(offer.variant).color
+	return Bomb3D.COLORS.get(offer.variant as Bomb3D.Type, Color.WHITE)
+
+
+## A perk offer's card.
+func perk_of(offer: ShopOffer) -> Perk:
+	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
+	if offer.kind != ShopOffer.Kind.PERK or not perks or offer.perk_index < 0 or offer.perk_index >= perks.catalog.perks.size():
+		return null
+	return perks.catalog.perks[offer.perk_index]
+
+
+## [name, grip, heavy move's name ("" = none)] of the weapon `scene` makes.
+static func weapon_info(scene: PackedScene) -> Array:
+	if not scene:
+		return ["Weapon", Weapon3D.Grip.EITHER_HAND, ""]
+	if not _weapon_info.has(scene):
+		var weapon: Weapon3D = scene.instantiate() as Weapon3D
+		var weapon_name: String = weapon.Properties.weapon_name if weapon and weapon.Properties else "Weapon"
+		var heavy: String = ""
+		if weapon and weapon.heavy_move and weapon.heavy_move.resource_path != "":
+			heavy = weapon.heavy_move.resource_path.get_file().get_basename().trim_prefix("heavy_").replace("_", " ").capitalize()
+		_weapon_info[scene] = [weapon_name, weapon.grip if weapon else Weapon3D.Grip.EITHER_HAND, heavy]
+		if weapon:
+			weapon.free()
+	return _weapon_info[scene]
+
+
+## A copy of an offer for looks only (the menu's preview): the weapon, the
+## upgraded kit of `player` (side by side, if it's two), or the bomb or flask.
+func make_preview(offer: ShopOffer, player: PlayerClass3D) -> Node3D:
+	match offer.kind:
+		ShopOffer.Kind.WEAPON:
+			return _make_display_copy(offer.scene, offer.rarity) if offer.scene else null
+		ShopOffer.Kind.KIT:
+			var scenes: Array[PackedScene] = Roster.kit_of(player.slot.character if player.slot else 0)
+			var shown: Array[PackedScene] = []
+			for scene: PackedScene in scenes:
+				if scene:
+					shown.append(scene)
+			if shown.is_empty():
+				return null
+			var group := Node3D.new()
+			for i in shown.size():
+				var copy: Node3D = _make_display_copy(shown[i], kit_rarity_after(offer, player))
+				copy.position.x = (i - (shown.size() - 1) * 0.5) * KIT_PREVIEW_SPACING
+				group.add_child(copy)
+			return group
+		ShopOffer.Kind.THROWABLE:
+			if offer.throwable_kind == Throwable3D.Kind.FLASK:
+				# Wrapped, so the menu's framing counts the model's own scale
+				var holder := Node3D.new()
+				holder.add_child(Potion.model(&"jug", throwable_color(offer), Potion.LARGE_HEIGHT))
+				return holder
+			var bomb := BombModel3D.new()
+			bomb.set_color(throwable_color(offer))
+			return bomb
+	return null
+
+
+## Whether `player` may shop here and is in reach of it.
+func can_shop(player: PlayerClass3D) -> bool:
+	return shop and not player.is_dead() and _may_take(player) and reach.overlaps_body(player)
+
+
+## Whether `player` has the coins for anything on sale.
+func can_afford_any(player: PlayerClass3D) -> bool:
+	for offer: ShopOffer in offers:
+		if price_of(offer, player) <= player.coins and is_useful_to(player, offer):
+			return true
+	return false
+
+
+## Whether `offer` would do `player` any good: a repair only when it's our
+## team's altar and one of our towers is hurt, a kit upgrade until their
+## kit's Legendary, a bomb or flask while their hands are free for it.
+func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
+	match offer.kind:
+		ShopOffer.Kind.REPAIR:
+			return _is_ours(player) and tower_to_repair() != null
+		ShopOffer.Kind.KIT:
+			return player.can_upgrade_kit()
+		ShopOffer.Kind.THROWABLE:
+			return not player.hands_full()
+	return true
+
+
+## The tower a repair here would fix: our team's most hurt one.
+func tower_to_repair() -> Tower3D:
+	return Tower3D.most_damaged_of(get_tree(), owner_team) if owner_team != NEUTRAL else null
+
+
+## Every machine, in the same order: sell repairs (or stop) while our team
+## has a tower up.
+func set_repair_offer(on: bool) -> void:
+	if not shop or on == _repair_offered:
+		return
+	_repair_offered = on
+	if on:
+		offers.append(ShopOffer.repair())
+	else:
+		for i in range(offers.size() - 1, -1, -1):
+			if offers[i].kind == ShopOffer.Kind.REPAIR:
+				offers.remove_at(i)
+	shop_version += 1
+
+
+## A person opens the shop on their own machine; a bot (server/offline)
+## just buys the priciest thing it can afford (or a repair, see
+## bot_buy_index).
+func _open_shop(player: PlayerClass3D) -> bool:
+	if not can_shop(player) or offers.is_empty():
+		return false
+	if player.slot and player.slot.is_bot:
+		var index: int = bot_buy_index(player)
+		if index >= 0:
+			buy(player, index)
+		return index >= 0
+	var menu: ShopMenu3D = Global.Game3D.shop_menu if Global.Game3D else null
+	if menu:
+		menu.open(player, self)
+	return menu != null
+
+
+## The offer a bot would buy, or -1: a repair if one of its team's towers
+## is down to half, else a kit upgrade, else the dearest weapon it can
+## afford if it's holding nothing it found, else the dearest perk. Bots
+## leave the bombs and flasks alone.
+func bot_buy_index(player: PlayerClass3D) -> int:
+	var best: int = -1
+	var wants_weapon: bool = not player.holds_found_weapon()
+	for i in offers.size():
+		var offer: ShopOffer = offers[i]
+		if price_of(offer, player) > player.coins or not is_useful_to(player, offer):
+			continue
+		match offer.kind:
+			ShopOffer.Kind.REPAIR:
+				# A badly hurt tower comes first
+				if tower_to_repair().damage_share() >= 0.5:
+					return i
+				continue
+			ShopOffer.Kind.KIT:
+				return i
+			ShopOffer.Kind.THROWABLE:
+				continue
+		if (offer.kind == ShopOffer.Kind.WEAPON) != wants_weapon:
+			continue
+		if best < 0 or price_of(offer, player) > price_of(offers[best], player):
+			best = i
+	return best
+
+
+## `player` (on the machine that controls them) buys offers[index]. The
+## server (or the offline game) checks they still can.
+func buy(player: PlayerClass3D, index: int) -> void:
+	if Net.decides():
+		_decide_buy(player, index)
+	else:
+		_request_buy.rpc_id(Net.SERVER_ID, index, shop_version)
+
+
+@rpc("any_peer", "reliable")
+func _request_buy(index: int, version: int) -> void:
+	# A buy meant for stock that's changed since (someone else bought it,
+	# a tier-up) could be something else now
+	if Net.is_server and version == shop_version:
+		_decide_buy(Global.Game3D.rpc_sender(), index)
+
+
+## Server/offline: sell offers[index] to `player` if it's still there,
+## they're still here and they can pay for it. It's replaced by another of
+## its kind.
+func _decide_buy(player: PlayerClass3D, index: int) -> void:
+	if not player or index < 0 or index >= offers.size() or not can_shop(player):
+		return
+	var offer: ShopOffer = offers[index]
+	if player.coins < price_of(offer, player) or not is_useful_to(player, offer):
+		return
+	var is_left: bool = false
+	var replacement := PackedInt32Array()
+	match offer.kind:
+		ShopOffer.Kind.WEAPON:
+			is_left = player.free_hand_for(weapon_info(offer.scene)[1])
+			replacement = _roll_weapon_offer()
+		ShopOffer.Kind.PERK:
+			replacement = _roll_perk_offer(_perks_on_sale())
+		ShopOffer.Kind.KIT:
+			replacement = _roll_kit_offer()
+		ShopOffer.Kind.THROWABLE:
+			replacement = _roll_throwable_offer(_throwables_on_sale())
+		ShopOffer.Kind.REPAIR:
+			var tower: Tower3D = tower_to_repair()
+			tower.repair(tower.max_hp * repair_share)
+			replacement = offer.encode()  # Still on sale
+	Net.everywhere(_sold, String(player.name), index, is_left, _next_weapon_name(), replacement)
+
+
+## Every machine: `player_name` paid for offers[index] and gets it (a weapon
+## in hand, a perk at once; a repair was done by the server), and `replacement` (an encoded ShopOffer, or
+## empty) takes its place.
+@rpc("authority", "call_local", "reliable")
+func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, replacement: PackedInt32Array) -> void:
+	if index < 0 or index >= offers.size():
+		return
+	var offer: ShopOffer = offers[index]
+	var game: Game3D_Class = Global.Game3D
+	var player: PlayerClass3D = game.player_named(player_name) if game else null
+	Sfx.play(&"shop_buy", global_position)
+	if player:
+		player.add_coins(-price_of(offer, player))
+		match offer.kind:
+			ShopOffer.Kind.WEAPON:
+				_hand_weapon(offer.scene, offer.rarity, player, is_left, weapon_name, display_anchor.global_transform)
+			ShopOffer.Kind.PERK:
+				var perk: Perk = perk_of(offer)
+				if perk:
+					player.add_perk(perk)
+					game.perks.perk_taken.emit(player, perk)
+			ShopOffer.Kind.KIT:
+				player.upgrade_kit(offer.steps)
+				Vfx.play(&"shatter", player.global_position + Vector3.UP, Vector3.UP, false, 1.0,
+					WeaponRarity.effect_color(player.kit_rarity))
+			ShopOffer.Kind.THROWABLE:
+				Throwable3D.give(player, offer.throwable_kind as Throwable3D.Kind, offer.variant)
+	var next: ShopOffer = _decode_offer(replacement)
+	if next:
+		offers[index] = next
+	else:
+		offers.remove_at(index)
+	shop_version += 1
+	if player and not _is_ours(player) and owner_team != NEUTRAL and game:
+		game.scoreboard.announce("%s raided %s's shop!" % [player.slot.label() if player.slot else player_name,
+			Players.team_name(owner_team)], player.slot.color if player.slot else Color.WHITE)
+
+
+## Server/offline: a weapon from the current tier, encoded (empty if the
+## tier has none).
+func _roll_weapon_offer() -> PackedInt32Array:
+	var current: AltarTier = _current_tier()
+	if not current or current.weapons.is_empty():
+		return PackedInt32Array()
+	return ShopOffer.weapon(tier, randi() % current.weapons.size(), WeaponRarity.roll(current.rarity_weights)).encode()
+
+
+## Server/offline: a perk card that isn't in `taken`, encoded (empty if
+## none's left). Never a relic.
+func _roll_perk_offer(taken: Array[int]) -> PackedInt32Array:
+	var perks: PerkDirector = Global.Game3D.perks if Global.Game3D else null
+	if not perks:
+		return PackedInt32Array()
+	var choices: Array[int] = []
+	for i in perks.catalog.perks.size():
+		if perks.catalog.perks[i].category != Perk.Category.RELIC and not taken.has(i):
+			choices.append(i)
+	return ShopOffer.perk(choices.pick_random()).encode() if not choices.is_empty() else PackedInt32Array()
+
+
+## Server/offline: a kit upgrade, encoded: one rarity up, sometimes two.
+func _roll_kit_offer() -> PackedInt32Array:
+	return ShopOffer.kit(2 if randf() < kit_jump_chance else 1).encode()
+
+
+## Server/offline: a bomb (at bomb_chance) or a big flask that isn't in
+## `taken` ([kind, variant] pairs, back to back), encoded (empty if none's left).
+func _roll_throwable_offer(taken: PackedInt32Array) -> PackedInt32Array:
+	var bomb: bool = randf() < bomb_chance
+	for attempt in 2:  # The kind rolled, else the other one
+		var of_kind: int = Throwable3D.Kind.BOMB if bomb else Throwable3D.Kind.FLASK
+		var count: int = Bomb3D.Type.size() if bomb else Potion.LARGE.size()
+		var choices: Array[int] = []
+		for which in count:
+			if not _pair_in(taken, of_kind, which):
+				choices.append(which)
+		if not choices.is_empty():
+			return ShopOffer.throwable(of_kind, choices.pick_random()).encode()
+		bomb = not bomb
+	return PackedInt32Array()
+
+
+func _pair_in(pairs: PackedInt32Array, a: int, b: int) -> bool:
+	for i in range(0, pairs.size() - 1, 2):
+		if pairs[i] == a and pairs[i + 1] == b:
+			return true
+	return false
+
+
+func _throwables_on_sale() -> PackedInt32Array:
+	var taken := PackedInt32Array()
+	for offer: ShopOffer in offers:
+		if offer.kind == ShopOffer.Kind.THROWABLE:
+			taken.append_array([offer.throwable_kind, offer.variant])
+	return taken
+
+
+func _perks_on_sale() -> Array[int]:
+	var taken: Array[int] = []
+	for offer: ShopOffer in offers:
+		if offer.kind == ShopOffer.Kind.PERK:
+			taken.append(offer.perk_index)
+	return taken
+
+
+## Server/offline: roll the whole stock afresh, for everyone.
+func _restock_shop() -> void:
+	var rolls := PackedInt32Array()
+	if shop_kit_slot:
+		rolls.append_array(_roll_kit_offer())
+	for i in shop_weapon_slots:
+		rolls.append_array(_roll_weapon_offer())
+	var taken: Array[int] = []
+	for i in shop_perk_slots:
+		var roll: PackedInt32Array = _roll_perk_offer(taken)
+		if not roll.is_empty():
+			taken.append(roll[1])
+			rolls.append_array(roll)
+	var thrown_taken := PackedInt32Array()
+	for i in shop_throwable_slots:
+		var roll: PackedInt32Array = _roll_throwable_offer(thrown_taken)
+		if not roll.is_empty():
+			thrown_taken.append_array([roll[1], roll[2]])
+			rolls.append_array(roll)
+	Net.everywhere(_set_shop, tier, rolls)
+
+
+## Every machine: the shop now sells `rolls` (encoded ShopOffers, back to
+## back), with tiers[tier_index] as its tier.
+@rpc("authority", "call_local", "reliable")
+func _set_shop(tier_index: int, rolls: PackedInt32Array) -> void:
+	tier = tier_index
+	offers.clear()
+	for i in range(0, rolls.size() - ShopOffer.ENCODED_SIZE + 1, ShopOffer.ENCODED_SIZE):
+		var offer: ShopOffer = _decode_offer(rolls.slice(i, i + ShopOffer.ENCODED_SIZE))
+		if offer:
+			offers.append(offer)
+	if _repair_offered:
+		offers.append(ShopOffer.repair())
+	# Grouped by kind in the menu's order (see ShopOffer.ORDER), for its rows
+	offers.sort_custom(func(a: ShopOffer, b: ShopOffer) -> bool:
+		return ShopOffer.order_of(a.kind) < ShopOffer.order_of(b.kind))
+	shop_version += 1
+
+
+## An encoded ShopOffer (see ShopOffer.encode) back as an offer, or null.
+func _decode_offer(code: PackedInt32Array) -> ShopOffer:
+	if code.size() < ShopOffer.ENCODED_SIZE:
+		return null
+	match code[0]:
+		ShopOffer.Kind.WEAPON:
+			if code[1] < 0 or code[1] >= tiers.size() or code[2] < 0 or code[2] >= tiers[code[1]].weapons.size():
+				return null
+			var offer := ShopOffer.weapon(code[1], code[2], code[3])
+			offer.scene = tiers[code[1]].weapons[code[2]]
+			return offer
+		ShopOffer.Kind.PERK:
+			return ShopOffer.perk(code[1])
+		ShopOffer.Kind.REPAIR:
+			return ShopOffer.repair()
+		ShopOffer.Kind.KIT:
+			return ShopOffer.kit(code[1])
+		ShopOffer.Kind.THROWABLE:
+			var max_variant: int = Bomb3D.Type.size() if code[1] == Throwable3D.Kind.BOMB else Potion.LARGE.size()
+			if code[1] < 0 or code[1] >= Throwable3D.Kind.size() or code[2] < 0 or code[2] >= max_variant:
+				return null
+			return ShopOffer.throwable(code[1], code[2])
+	return null
+
+
+func _make_shop_hint() -> void:
+	_shop_ring = (arming_ring.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	arming_ring.material_override = _shop_ring
+	_shop_coin = Sprite3D.new()
+	_shop_coin.texture = ShopMenu3D.COIN_ICON
+	_shop_coin.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_shop_coin.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	_shop_coin.pixel_size = 0.02
+	_shop_coin.no_depth_test = true
+	_shop_coin.position.y = SHOP_COIN_HEIGHT
+	_shop_coin.visible = false
+	add_child(_shop_coin)
+
+
+## Roll the first stock once everyone's in the match, and show the hint
+## for the players on this machine.
+func _update_shop(delta: float) -> void:
+	if not _shop_rolled and Net.decides() and not Net.waiting_for_load():
+		_shop_rolled = true
+		_restock_shop()
+	var game: Game3D_Class = Global.Game3D
+	var affordable: bool = false
+	var in_reach: bool = false
+	var in_reach_affordable: bool = false
+	if game:
+		for player: PlayerClass3D in game.huds:
+			if not is_instance_valid(player) or player.is_dead() or not _may_take(player) \
+					or game.shop_menu.is_shopping(player):
+				continue
+			var rich: bool = can_afford_any(player)
+			affordable = affordable or rich
+			if reach.overlaps_body(player):
+				in_reach = true
+				in_reach_affordable = in_reach_affordable or rich
+	# The ring eases into a slow gold pulse while someone could buy something
+	_shop_glow = move_toward(_shop_glow, 1.0 if affordable else 0.0, delta * 2.0)
+	var t: float = Time.get_ticks_msec() / 1000.0
+	var team_color: Color = (_pip_lit.emission if _pip_lit else NEUTRAL_COLOR)
+	_shop_ring.emission = team_color.lerp(FlyingCoin3D.GOLD, _shop_glow)
+	_shop_ring.albedo_color = _shop_ring.emission
+	_shop_ring.emission_energy_multiplier = 2.0 + _shop_glow * (0.6 + 0.6 * sin(t * SHOP_GLOW_SPEED))
+	# A coin over it while someone's close enough to open it
+	_shop_coin.visible = in_reach
+	if in_reach:
+		_shop_coin.modulate = Color.WHITE if in_reach_affordable else Color(0.6, 0.6, 0.6, 0.6)
+		_shop_coin.position.y = SHOP_COIN_HEIGHT + sin(t * 3.0) * 0.12

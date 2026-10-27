@@ -61,7 +61,7 @@ func _draw_indicators() -> void:
 
 
 func _draw_arrow(at: Vector2, dir: Vector2, ball: Ball3D, pulse: float) -> void:
-	var fill: Color = SKULL_COLOR if ball is Skull3D else BALL_COLOR
+	var fill: Color = SKULL_COLOR if ball is Skull3D else (ball.color() if ball is Bomb3D else BALL_COLOR)
 	var team: int = ball.holder.slot.team if ball.holder and ball.holder.slot else ball.last_team
 	var ring: Color = Players.TEAM_COLORS[team % Players.TEAM_COLORS.size()] if team >= 0 else NO_TEAM_COLOR
 	var r: float = RADIUS * pulse

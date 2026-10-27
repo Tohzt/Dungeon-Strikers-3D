@@ -52,6 +52,10 @@ folder_colors={
 "res://Assets/": "teal"
 }
 
+[filesystem]
+
+import/blender/enabled=false
+
 [global_group]
 
 Entity="Anything that can be interacted with in some way"

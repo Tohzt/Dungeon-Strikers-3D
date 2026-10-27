@@ -26,7 +26,6 @@ func _ready() -> void:
 	# Before Game3D sets up, so it finds the bosses, altars and spawn points
 	level.build(layout, self)
 	super()  # Returns at its first await; the match is set up by then
-	scoreboard.set_caption("Race to the altar!")
 	if not Net.decides():
 		return
 	if Net.in_session() and not Net.match_synced:

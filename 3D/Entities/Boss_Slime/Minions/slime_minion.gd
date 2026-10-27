@@ -3,6 +3,10 @@ class_name SlimeMinion3D extends CharacterBody3D
 ## player. Touching it is safe; up close it lunges at them or swells up in a
 ## quick burst, both telegraphed by a crouch. Fragile and light: a few hits
 ## pop it, and every hit knocks it flying. It pops when its boss is beaten.
+## A boss's minions share its element (SlimeElement): its color, and a
+## milder dose of what its hits do to players.
+## A Slime Tower (Tower3D) spits them out too, for a team: those wear the
+## team's color and only go after the other team's players.
 ## Online the server runs it and streams where it is; everyone else just
 ## plays that back (like the boss).
 
@@ -68,6 +72,13 @@ const SQUASH_DAMPING := 10.0
 @onready var _body_material: StandardMaterial3D = body_mesh.get_surface_override_material(0)
 @onready var _body_color: Color = _body_material.albedo_color if _body_material else Color.WHITE
 
+## The team it fights for (a tower's), or -1 for the boss's. Set before
+## it's added.
+var team: int = -1
+## Its boss's element, if it has one (RANDOM: none). Set before it's added.
+var element: SlimeElement.Kind = SlimeElement.Kind.RANDOM
+## Its hits afflict players this much as hard as its boss's do.
+const STING_STRENGTH := 0.5
 var hp: float = 0.0
 var is_dead: bool = false
 var state: State = State.LAUNCHED
@@ -92,6 +103,10 @@ var _motion := NetMotion.new()
 func _ready() -> void:
 	add_to_group("Minion")
 	hp = max_hp
+	if team >= 0:
+		_body_color = Color(Players.TEAM_COLORS[team % Players.TEAM_COLORS.size()], _body_color.a)
+	elif element != SlimeElement.Kind.RANDOM:
+		_body_color = SlimeElement.BODY_COLORS[element]
 	_wobble_time = randf() * TAU  # So a pair doesn't wobble in sync
 	# Staggered so a fresh pair doesn't attack in sync either
 	_lunge_cooldown = randf_range(0.5, 1.0) * lunge_cooldown
@@ -232,7 +247,7 @@ func _state_lunge_windup() -> void:
 ## Mid-lunge: knock over anyone it runs into (once each).
 func _lunge_strike() -> void:
 	for player: PlayerClass3D in _players():
-		if player.is_dead() or _lunge_hits.has(player):
+		if player.is_dead() or _lunge_hits.has(player) or _is_ally(player):
 			continue
 		var offset: Vector3 = player.global_position - global_position
 		if offset.y < -1.0 or offset.y > HEIGHT + 1.0:
@@ -240,13 +255,14 @@ func _lunge_strike() -> void:
 		if _flat(offset).length() > RADIUS + PLAYER_RADIUS + 0.2:
 			continue
 		_lunge_hits.append(player)
-		Combat.strike(player, _move_dir, lunge_damage, lunge_knockback, lunge_pop)
+		if Combat.strike(player, _move_dir, lunge_damage, lunge_knockback, lunge_pop):
+			_sting(player)
 
 
 ## Burst outward: everyone close enough gets blasted away.
 func _swell_burst() -> void:
 	for player: PlayerClass3D in _players():
-		if player.is_dead():
+		if player.is_dead() or _is_ally(player):
 			continue
 		var offset: Vector3 = player.global_position - global_position
 		if offset.y < -1.0 or offset.y > HEIGHT * SWELL_SCALE + 1.0:
@@ -254,8 +270,15 @@ func _swell_burst() -> void:
 		var flat: Vector3 = _flat(offset)
 		if flat.length() > swell_radius:
 			continue
-		Combat.strike(player, flat if flat.length() > 0.01 else _move_dir,
-				swell_damage, swell_knockback, swell_pop)
+		if Combat.strike(player, flat if flat.length() > 0.01 else _move_dir,
+				swell_damage, swell_knockback, swell_pop):
+			_sting(player)
+
+
+## Its element's touch on a player it hit (if it has one).
+func _sting(player: PlayerClass3D) -> void:
+	if element != SlimeElement.Kind.RANDOM:
+		SlimeElement.afflict(player, element, STING_STRENGTH)
 
 
 # ===== DAMAGE =====
@@ -323,11 +346,16 @@ func _players() -> Array[PlayerClass3D]:
 	return []
 
 
+## `player` is on its team (a tower's slime): it leaves them be.
+func _is_ally(player: PlayerClass3D) -> bool:
+	return team >= 0 and Combat.team_of(player) == team
+
+
 func _nearest_player() -> PlayerClass3D:
 	var best: PlayerClass3D = null
 	var best_dist: float = chase_range
 	for player: PlayerClass3D in _players():
-		if not is_instance_valid(player) or player.is_dead():
+		if not is_instance_valid(player) or player.is_dead() or _is_ally(player):
 			continue
 		var dist: float = _flat(player.global_position - global_position).length()
 		if dist < best_dist:

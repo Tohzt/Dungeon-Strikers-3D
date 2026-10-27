@@ -503,7 +503,7 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			knockback *= FINAL_KNOCKBACK_MULTIPLIER
 		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
-		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D
+		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D or body is Tower3D
 	if contact:
 		_swing_contact(solid)
 	# One use per swing or throw, however many it hits
@@ -842,6 +842,7 @@ func _break() -> void:
 	CameraShake.add(CameraShake.MEDIUM, global_position)
 	WeaponShatter3D.spawn(get_parent(), global_position, shatter_color(), radius)
 	Vfx.play(&"shatter", global_position, Vector3.FORWARD, false, radius, shatter_color())
+	Vfx.play(&"explosion_air", global_position, Vector3.FORWARD, false, radius)
 	if wielder:
 		unequip()
 	swing_time_left = 0.0

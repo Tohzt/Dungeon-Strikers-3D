@@ -17,6 +17,11 @@ const COLORS: Array[Color] = [
 ]
 
 
+## A signature kit never breaks, so its rarity (bought at a shop, see
+## PlayerClass3D.upgrade_kit) makes it hit harder instead: Weapon3D.power.
+const KIT_POWER: Array[float] = [1.0, 1.15, 1.3, 1.5]
+
+
 ## How far a rarer weapon's effects lean toward its tier's color.
 const EFFECT_TINT := 0.65
 

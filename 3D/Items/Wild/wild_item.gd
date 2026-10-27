@@ -1,6 +1,7 @@
 class_name WildItem extends RefCounted
 ## The silly stuff an ItemBox3D hands out, Mario Kart style: short wild
-## buffs, instant effects and giant weapons. Players behind in the race
+## buffs (trails of ice or fire among them), instant effects, giant weapons,
+## and things to hold and throw (big flasks and bombs, see Throwable3D). Players behind in the race
 ## (luck near 1, see Game3D.item_luck) roll the wildest ones more often.
 ##
 ## Items are listed by index, which is what gets sent online, so only ever
@@ -10,8 +11,10 @@ enum Kind {
 	BUFF,     ## A timed perk (see PlayerClass3D.add_timed_perk)
 	INSTANT,  ## Happens on the spot (see ItemBox3D._apply)
 	WEAPON,   ## A giant weapon, straight into a free hand
+	HELD,     ## Something to throw, held up in both hands (see Throwable3D)
 }
 
+## A giant weapon's size and power (an item can say otherwise: "size", "power").
 const GIANT_WEAPON_SIZE := 1.8
 const GIANT_WEAPON_POWER := 1.75
 const GIANT_WEAPONS: Array[PackedScene] = [
@@ -93,11 +96,37 @@ const ITEMS: Array[Dictionary] = [
 	{"title": "Lullaby", "blurb": "Everyone nearby nods off",
 		"kind": Kind.INSTANT, "color": Color(0.8, 0.7, 1.0),
 		"front": 1.0, "back": 3.0},
+	{"title": "Ice Trail", "blurb": "Leave slippery ice behind you",
+		"kind": Kind.BUFF, "color": Color(0.7, 0.92, 1.0), "seconds": 10.0,
+		"mods": {&"ice_trail": 1.0, &"move_speed": 0.15},
+		"front": 2.0, "back": 2.0},
+	{"title": "Hot Foot", "blurb": "Leave a trail of fire behind you",
+		"kind": Kind.BUFF, "color": Color(1.0, 0.45, 0.1), "seconds": 8.0,
+		"mods": {&"fire_trail": 1.0, &"move_speed": 0.15},
+		"front": 2.0, "back": 2.0},
+	{"title": "Bomb", "blurb": "Throw it before it goes off!",
+		"kind": Kind.HELD, "color": Color(1.0, 0.3, 0.2),
+		"front": 2.0, "back": 2.5},
+	{"title": "Big Potion", "blurb": "Throw it and watch it splash",
+		"kind": Kind.HELD, "color": Color(0.6, 0.5, 1.0),
+		"front": 2.5, "back": 2.5},
+	{"title": "Potion Spill", "blurb": "Potions everywhere!",
+		"kind": Kind.INSTANT, "color": Color(1.0, 0.35, 0.55),
+		"front": 2.0, "back": 1.5},
+	{"title": "Colossal Weapon", "blurb": "Absurdly, comically huge",
+		"kind": Kind.WEAPON, "color": Color(1.0, 0.85, 0.2), "size": 2.8, "power": 2.3,
+		"front": 0.5, "back": 2.0},
 ]
 const SNACK := 6
 const THUNDERCLAP := 7
 const WARP := 12
 const LULLABY := 13
+const BOMB := 16
+const BIG_POTION := 17
+const POTION_SPILL := 18
+
+## Potion Spill: this many small potions pop out of the box.
+const SPILL_COUNT := 3
 
 ## Each buff's Perk, made once (the same object every time, so getting a
 ## buff again restarts it instead of stacking a copy).

@@ -7,7 +7,7 @@
 content_margin_left = 36.0
 content_margin_top = 2.0
 content_margin_right = 36.0
-content_margin_bottom = 20.0
+content_margin_bottom = 12.0
 texture = ExtResource("2_panel")
 texture_margin_left = 24.0
 texture_margin_right = 24.0
@@ -29,21 +29,11 @@ grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("Banner")
 
-[node name="Column" type="VBoxContainer" parent="Banner"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = -6
-
-[node name="Row" type="HBoxContainer" parent="Banner/Column"]
+[node name="Row" type="HBoxContainer" parent="Banner"]
 layout_mode = 2
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 20
-
-[node name="Caption" type="Label" parent="Banner/Column"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-horizontal_alignment = 1
 
 [node name="Log" type="VBoxContainer" parent="."]
 anchors_preset = 3

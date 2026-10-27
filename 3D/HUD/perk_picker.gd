@@ -60,7 +60,7 @@ class Hand:
 var _hands: Array[Hand] = []
 ## Intermission: hands fill the dimmed screen. Otherwise they're compact.
 var _full_screen: bool = false
-var _center: CenterContainer
+var _center: FitCenterContainer
 var _grid: GridContainer
 var _bottom: HBoxContainer
 ## The waiting line's place at the top of the screen, as laid out in the scene.
@@ -69,7 +69,7 @@ var _waiting_offsets: Vector2
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_center = CenterContainer.new()
+	_center = FitCenterContainer.new()
 	_center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_center)

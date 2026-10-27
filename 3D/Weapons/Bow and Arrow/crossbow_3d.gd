@@ -102,6 +102,9 @@ func _fire_arrow(muzzle: Vector3, aim_direction: Vector3, real: bool, heavy: Wea
 		arrow.pierce = heavy.shot_pierce
 		arrow.enlarge(heavy.shot_scale)
 		speed *= heavy.shot_speed_scale
+	# An upgraded kit (or a giant one) shoots harder too
+	arrow.damage *= power
+	arrow.knockback *= power
 	# The shot that breaks it is the big one (see Weapon3D.is_last_use)
 	if _echoing:
 		arrow.damage *= PlayerClass3D.ECHO_POWER

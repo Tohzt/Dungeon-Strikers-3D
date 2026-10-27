@@ -41,6 +41,11 @@ func _give(_player: PlayerClass3D) -> void:
 	pass
 
 
+## `player` (null if they've gone) took it. Called on every machine.
+func _on_taken(_player: PlayerClass3D) -> void:
+	pass
+
+
 func _physics_process(delta: float) -> void:
 	var model: Node3D = _model()
 	_bob_time += delta
@@ -96,6 +101,7 @@ func _taken(player_name: String) -> void:
 	var player: PlayerClass3D = Global.Game3D.player_named(player_name)
 	if player and not player.is_remote:
 		_give(player)
+	_on_taken(player)
 
 
 ## Server -> asker: someone beat you to it.

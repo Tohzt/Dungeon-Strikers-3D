@@ -59,6 +59,8 @@ func _build_display() -> void:
 func _make_display_copy(scene: PackedScene, tier: int) -> Node3D:
 	var copy: Node3D = scene.instantiate()
 	copy.process_mode = Node.PROCESS_MODE_DISABLED
+	if copy is Weapon3D:
+		(copy as Weapon3D).rarity = tier  # Its _ready glows it by this
 	if copy is RigidBody3D:
 		copy.freeze = true
 	if not Engine.is_editor_hint():

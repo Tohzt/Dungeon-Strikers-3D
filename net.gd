@@ -44,7 +44,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 19
+const PROTOCOL_VERSION := 24
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -629,7 +629,7 @@ func _request_start() -> void:
 		print("Session %s started a match with %d players and %d bots in %d teams on %s (%s, first to %d)." % [access_code,
 			peers.size(), bots.size(), Players.team_count, MatchMap.name_of(Players.map), MatchMap.drop_name(Players.boss_drop),
 			Players.score_to_win])
-		_to_session(_start_match, _format())
+		_to_session(_start_match, _format(), randi())
 
 
 @rpc("any_peer", "reliable")
@@ -662,9 +662,10 @@ func _sync_peers(ids: Array, new_loadouts: Dictionary, new_bots: Array, format: 
 
 
 @rpc("authority", "call_local", "reliable")
-func _start_match(format: Array) -> void:
+func _start_match(format: Array, match_seed: int) -> void:
 	in_match = true
 	_apply_format(format)
+	Players.match_seed = match_seed
 	if is_server:
 		get_tree().change_scene_to_packed(_map_scenes[Players.map])
 	match_started.emit()

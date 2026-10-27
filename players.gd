@@ -59,6 +59,10 @@ var boss_drop: BossDrop.Kind = MatchMap.DROPS[0] as BossDrop.Kind
 ## Points to win the next match: goals where the level is won by goals,
 ## kills otherwise (see Game3D). Online, sent with the match start too.
 var score_to_win: int = 5
+## Rolls this match's chance the same way on every machine (which element
+## each boss is, see SlimeElement.pick). Online the server picks it and
+## sends it with the match start; offline each match rolls its own.
+var match_seed: int = 0
 ## Offline: seat bots until the match has this many players (0 = no bots).
 ## Always a whole number of players per team; see bot_fill_options().
 ## Starts at a full 4v4.

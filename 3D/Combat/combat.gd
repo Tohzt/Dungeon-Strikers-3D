@@ -74,8 +74,9 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 ## Online, a hit on someone else's player is sent to its owner, who decides
 ## whether it was blocked, so remote hits always report true.
 ## Teammates pass through each other's attacks untouched.
-## `knock_down` (a slide tackle) knocks a player down if it gets through.
-static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null, knock_down: bool = false) -> bool:
+## Above 0, `knock_down` knocks a player down if it gets through, for that
+## many times as long as a slide tackle (1).
+static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null, knock_down: float = 0.0) -> bool:
 	if are_teammates(body, attacker):
 		return false
 	dir.y = 0
@@ -94,7 +95,7 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 				damage *= attacker.perk_stat(&"damage_vs_wounded")
 	if body is PlayerClass3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker, knock_down)
-	if body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D:
+	if body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D or body is Tower3D:
 		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
 	if body is Ball3D:
 		body.touched_by(attacker)
@@ -145,17 +146,32 @@ static func _homing_target(world: World3D, from: Vector3, dir: Vector3, attacker
 	return best
 
 
-## Whether `a` and `b` are different players on the same team, or both
-## monsters (they don't fight each other).
+## Whether `a` and `b` are two different things on the same team (players,
+## towers and towers' slimes), or both monsters (they don't fight each other).
 static func are_teammates(a: Node3D, b: Node3D) -> bool:
 	if is_monster(a) and is_monster(b):
 		return true
-	return a is PlayerClass3D and b is PlayerClass3D and a != b \
-		and a.slot and b.slot and a.slot.team == b.slot.team
+	if not a or not b or a == b:
+		return false
+	var team: int = team_of(a)
+	return team >= 0 and team == team_of(b)
 
 
+## The team `node` fights for: a player's, a tower's (Tower3D) or one of its
+## slimes'. -1 for monsters and everything else.
+static func team_of(node: Node3D) -> int:
+	if node is PlayerClass3D:
+		return node.slot.team if node.slot else -1
+	if node is Tower3D:
+		return node.owner_team
+	if node is SlimeMinion3D:
+		return node.team
+	return -1
+
+
+## Bosses, skeletons and the boss's slimes (not a tower's).
 static func is_monster(node: Node3D) -> bool:
-	return node is Boss3D or node is SlimeMinion3D or node is SkeletonEnemy3D
+	return node is Boss3D or (node is SlimeMinion3D and node.team < 0) or node is SkeletonEnemy3D
 
 
 ## Whether `player`'s team has more kills than `other`'s.

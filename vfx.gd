@@ -1,7 +1,7 @@
 extends Node
 ## Visual effects (Binbun's packs, see Assets/VFX): flashes for heavy
 ## swings, hits and blocks, the swirl of a heavy charging up, spells (orbs,
-## bolts, fireballs and where they land) and weapons shattering.
+## bolts, fireballs and where they land), weapons shattering and explosions.
 ##
 ## Like Sfx: play() is just this machine, for things every machine already
 ## does (a heavy's strike); play_everywhere() is for the ones only one
@@ -35,6 +35,14 @@ const EFFECTS: Dictionary[StringName, Array] = {
 	&"block": ["BattleFX/effects/shield/vfx_blank_shield_01.tscn", Kind.FLASH, 0.28, 0.0, Color(0.8, 0.92, 1.0), Color(0.3, 0.55, 1.0)],
 	# A big blast on the ground (Thunderclap, a legendary heavy)
 	&"impact": ["HitFX/effects/big_impact/vfx_big_impact_01.tscn", Kind.ONE_SHOT, 1.0, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	# Explosions, fire and smoke (sizes make them about 1m across, sparks and
+	# shockwave aside): one on the ground (a goal, a legendary heavy), one in
+	# the air (a weapon breaking) and a mushroom cloud (the boss going down)
+	&"explosion": ["ExplosionFX/effects/ground/vfx_ground_explosion_01.tscn", Kind.ONE_SHOT, 0.5, 0.0, Color(1.0, 0.37, 0.11), Color(0.98, 0.12, 0.0)],
+	&"explosion_air": ["ExplosionFX/effects/air/vfx_air_explosion_01.tscn", Kind.ONE_SHOT, 0.5, 0.0, Color(1.0, 0.37, 0.11), Color(0.98, 0.12, 0.0)],
+	# Smoke only, billowing out of a goal a bomb went off in
+	&"smoke": ["ExplosionFX/effects/smoke/vfx_smoke_puff_01.tscn", Kind.ONE_SHOT, 0.5, 0.0, Color(0.6, 0.6, 0.6), Color(0.35, 0.35, 0.35)],
+	&"nuke": ["ExplosionFX/effects/nuke/vfx_nuke_explosion_01.tscn", Kind.ONE_SHOT, 0.17, 0.0, Color(1.0, 0.37, 0.11), Color(0.98, 0.12, 0.0)],
 	# Sparks gathering on a heavy's weapon as it charges (see PlayerClass3D._show_charging)
 	&"charging": ["StatusFX/effects/status/vfx_status_shatter.tscn", Kind.HELD, 1.0, 0.0, Color(1.0, 0.95, 0.8), Color(1.0, 0.7, 0.3)],
 	# Spells in flight (see AttackWaveSpec3D.look, Arrow3D.look)
@@ -50,7 +58,14 @@ const EFFECTS: Dictionary[StringName, Array] = {
 	&"frozen": ["StatusFX/effects/status/vfx_status_frozen.tscn", Kind.HELD, 1.0, 0.0, Color(0.85, 0.97, 1.0), Color(0.45, 0.8, 1.0)],
 	&"healing": ["StatusFX/effects/status/vfx_status_heal.tscn", Kind.HELD, 1.0, 0.0, Color(0.75, 1.0, 0.6), Color(0.3, 0.9, 0.35)],
 	&"asleep": ["StatusFX/effects/status/vfx_status_sleep.tscn", Kind.HELD, 1.0, 0.0, Color(0.9, 0.85, 1.0), Color(0.6, 0.5, 1.0)],
+	&"poisoned": ["StatusFX/effects/status/vfx_status_heal.tscn", Kind.HELD, 1.0, 0.0, Color(0.7, 1.0, 0.3), Color(0.45, 0.15, 0.6)],
 	&"burning": ["FlameFX/effects/fire/vfx_basic_fire_01.tscn", Kind.HELD, 0.8, 0.0, Color(1.0, 0.72, 0.29), Color(0.69, 0.0, 0.18)],
+	# A bolt of lightning straight down, crackling where it lands (stands
+	# upright; its size is the landing's width): a Storm Tower's strike, a
+	# Striker Tower's zap (see LightningStrike3D)
+	&"lightning": ["ElectricFX/effects/zap/vfx_zap_lightning_01.tscn", Kind.ONE_SHOT, 0.25, 0.0, Color(1.0, 1.0, 1.0), Color(0.0, 0.84, 1.0)],
+	# A crackling ball of it, held: on a Storm Tower's orb (see Tower3D)
+	&"lightning_ball": ["ElectricFX/effects/ball/vfx_ball_lightning_01.tscn", Kind.HELD, 0.7, 0.0, Color(1.0, 1.0, 1.0), Color(0.0, 0.84, 1.0)],
 	# A warp's way in and out (stands upright)
 	&"portal": ["PortalVFX/effects/simple/simple_portal_vfx.tscn", Kind.HELD, 1.0, 0.0, Color(0.8, 0.8, 0.8), Color(0.2, 0.2, 0.2), false],
 }

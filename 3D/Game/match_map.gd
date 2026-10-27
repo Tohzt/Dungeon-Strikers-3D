@@ -1,7 +1,8 @@
 class_name MatchMap extends RefCounted
 ## The levels a match can be played on, and what each one supports. The
 ## host picks one in the lobby (Players.map), along with the boss drop
-## (Players.boss_drop), which some levels can't host: a ball needs goals.
+## (Players.boss_drop), which some levels can't host: a bomb needs goals.
+## On the pitch it's what kicks off instead (a ball, or a bomb).
 
 enum Map {
 	ARENA,    ## The open soccer field: goals and altars for up to 4 teams
@@ -37,17 +38,18 @@ const HAS_GOALS: Array[Map] = [Map.ARENA, Map.PITCH]
 ## ball), so any drop setting fits.
 const NO_DROPS: Array[Map] = [Map.RACE, Map.PITCH]
 
-## Drops the host can pick, in the order the lobby's Boss button cycles
-## (that button is hidden for now: every map plays with the ball).
+## Drops the host can pick, in the order the lobby's Ball button cycles.
 ## Each will get its own boss later; for now the one boss drops any of them.
-const DROPS: Array[BossDrop.Kind] = [BossDrop.Kind.BALL, BossDrop.Kind.SKULL]
-## Whether a ball needs a map with goals (see fits). Off while every map
-## plays with the ball; turn back on with the Boss Drop button.
+## The first is the default.
+const DROPS: Array[BossDrop.Kind] = [BossDrop.Kind.BOMB, BossDrop.Kind.BALL, BossDrop.Kind.SKULL]
+## Whether a ball needs a map with goals (see fits). Off: every map plays
+## with the ball.
 const BALL_NEEDS_GOALS := false
 const DROP_NAMES: Dictionary[BossDrop.Kind, String] = {
 	BossDrop.Kind.NONE: "None",
 	BossDrop.Kind.SKULL: "Skull",
 	BossDrop.Kind.BALL: "Soccer Ball",
+	BossDrop.Kind.BOMB: "Bomb",
 }
 
 static func scene_of(map: Map) -> String:
@@ -69,7 +71,8 @@ static func max_teams(map: Map) -> int:
 ## Whether `map` can host a match of `team_count` teams where bosses drop `drop`.
 static func fits(map: Map, team_count: int, drop: BossDrop.Kind) -> bool:
 	return team_count <= MAX_TEAMS[map] \
-		and (not BALL_NEEDS_GOALS or drop != BossDrop.Kind.BALL or HAS_GOALS.has(map) or NO_DROPS.has(map))
+		and (not BALL_NEEDS_GOALS or drop != BossDrop.Kind.BALL or HAS_GOALS.has(map) or NO_DROPS.has(map)) \
+		and (drop != BossDrop.Kind.BOMB or HAS_GOALS.has(map))
 
 
 ## The first map (in MAPS order) that fits, or ARENA if none does.

@@ -116,8 +116,6 @@ func _ready() -> void:
 		button.pressed.connect(_cycle_map)
 	for button: Button in [solo_drop, lobby_drop, online_drop]:
 		button.pressed.connect(_cycle_boss_drop)
-		# Every map plays with the ball for now; see MatchMap.BALL_NEEDS_GOALS
-		button.visible = false
 	for button: Button in [solo_score, lobby_score, online_score]:
 		_setup_cycler(button, _step_score_to_win)
 	lobby_bots.pressed.connect(_toggle_bots)
@@ -511,8 +509,9 @@ func _cycle_map() -> void:
 	_refresh_lobby()
 
 
-## Boss Drop button: what every boss drops. A ball needs goals, so picking
-## it moves the match to a map that has them.
+## Ball button: what every boss drops, and on the pitch what kicks off (a
+## ball or a bomb). A bomb needs goals, so picking it moves the match to a
+## map that has them.
 func _cycle_boss_drop() -> void:
 	if online_lobby.visible:
 		Net.set_boss_drop(Players.next_boss_drop())
@@ -539,7 +538,7 @@ func _map_text() -> String:
 
 
 func _drop_text() -> String:
-	return "Boss Drop: " + MatchMap.drop_name(Players.boss_drop)
+	return "Ball: " + MatchMap.drop_name(Players.boss_drop)
 
 
 func _score_text() -> String:

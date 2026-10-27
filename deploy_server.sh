@@ -58,7 +58,7 @@ fi
 # folders aren't needed by the headless server.
 rsync -az --delete --info=stats1 \
 	--exclude /.git/ --exclude /.godot/ --exclude /Exports/ --exclude /_Exports/ \
-	--exclude /.cursor/ --exclude /.vscode/ --exclude /.claude/ \
+	--exclude /.cursor/ --exclude /.vscode/ --exclude /.claude/ --exclude /Steam/ \
 	--exclude /deploy_server.sh --exclude /.deployed_commit --exclude '*.tmp' \
 	./ "droplet:$REMOTE/"
 
@@ -69,7 +69,7 @@ git diff --quiet HEAD && git diff --quiet --cached HEAD || echo "  (working tree
 ssh droplet "
 	set -e
 	# Builds uploaded by older versions of this script before Exports/ was excluded.
-	rm -rf $REMOTE/Exports $REMOTE/_Exports
+	rm -rf $REMOTE/Exports $REMOTE/_Exports $REMOTE/Steam
 	chown -R dungeon:dungeon $REMOTE
 	# runuser keeps root's cwd (/root), which godot can't chdir back into.
 	cd $REMOTE

@@ -1,6 +1,8 @@
 @tool
 class_name Goal3D extends StaticBody3D
-## A goal mouth. When the ball goes into its net, `scoring_team` gets a point.
+## A goal mouth. When the ball goes into its net, `scoring_team` gets a point;
+## a bomb goes off in there instead, damaging `owner_team`'s base (whoever
+## knocked it in, see Game3D.bomb_in_goal).
 ## Online only the server (which simulates the ball) counts goals.
 
 const PLAYERS_SCRIPT := preload("res://players.gd")
@@ -33,6 +35,9 @@ func _ready() -> void:
 
 func _on_net_body_entered(body: Node3D) -> void:
 	if not body is Ball3D or not Net.decides():
+		return
+	if body is Bomb3D:
+		Global.Game3D.bomb_in_goal(self, body)
 		return
 	var team: int = scoring_team
 	if team == LAST_TOUCH:

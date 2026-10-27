@@ -1,17 +1,17 @@
 class_name HUD3D extends CanvasLayer
 @export var player: PlayerClass3D
 
+## Coins on the left (on levels with a shop), then the bars: red for
+## health, blue for the carry meter. The player's name is only over their
+## head (Nameplates3D).
 @onready var panel:       PanelContainer = $Panel
-## The player's name, filled in their team color as far as their health
-## goes (see NameTag).
-@onready var name_tag:    NameTag        = $Panel/Row/Bars/NameTag
+## The red bar: the player's health.
+@onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
 ## The blue bar: the player's carry meter (see PlayerClass3D.carry).
 @onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
 
 ## Gap between the HUD panel and the screen edges.
 const MARGIN := 16
-const NAME_FONT_SIZE := 30
-const NAME_BORDER := 9
 
 var signals_connected: bool = false
 ## "PERK READY (R)" under the bars while the player has a hand waiting
@@ -27,22 +27,23 @@ var _down_label: Label
 var _picker: CharacterSelectPanel
 const PICKER_STAGE_SIZE := Vector2(240, 190)
 var _corner: Control.LayoutPreset = Control.PRESET_TOP_LEFT
+## The player's coins (see PlayerClass3D.coins), on levels with a shop.
+var _coin_row: HBoxContainer
+var _coin_label: Label
+var _coins_drawn: int = -1
+const COIN_POP_SCALE := 1.35
 
 
 ## Binds this HUD to a player and moves it to `corner` (the player's place
 ## among this machine's humans): top-left, top-right, bottom-left,
 ## bottom-right. Anchored, so it stays in the corner whatever shape the
 ## window is.
-func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
+func setup(p: PlayerClass3D, _slot: PlayerSlot, corner: int) -> void:
 	player = p
 	var corners: Array[Control.LayoutPreset] = [Control.PRESET_TOP_LEFT, Control.PRESET_TOP_RIGHT,
 		Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]
 	_corner = corners[corner % corners.size()]
 	panel.set_anchors_and_offsets_preset(_corner, Control.PRESET_MODE_MINSIZE, MARGIN)
-	name_tag.font_size = NAME_FONT_SIZE
-	name_tag.border = NAME_BORDER
-	name_tag.color = slot.color
-	name_tag.text = slot.label()
 	if not _down_label:
 		_down_label = Label.new()
 		_down_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
@@ -56,6 +57,26 @@ func setup(p: PlayerClass3D, slot: PlayerSlot, corner: int) -> void:
 		_perk_label.add_theme_font_size_override("font_size", 20)
 		_perk_label.hide()
 		$Panel/Row/Bars.add_child(_perk_label)
+	if not _coin_row:
+		_coin_row = HBoxContainer.new()
+		_coin_row.add_theme_constant_override("separation", 6)
+		_coin_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var icon := TextureRect.new()
+		icon.texture = ShopMenu3D.COIN_ICON
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_coin_row.add_child(icon)
+		_coin_label = Label.new()
+		_coin_label.add_theme_color_override("font_color", FlyingCoin3D.GOLD)
+		_coin_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		_coin_label.add_theme_constant_override("outline_size", 6)
+		_coin_label.add_theme_font_size_override("font_size", 30)
+		_coin_label.custom_minimum_size.x = 44  # Room for 3 digits, so the bars don't shift
+		_coin_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_coin_row.add_child(_coin_label)
+		_coin_row.visible = Global.Game3D != null and Global.Game3D.has_shops()
+		$Panel/Row.add_child(_coin_row)
+		$Panel/Row.move_child(_coin_row, 0)
 
 func _process(_delta: float) -> void:
 	if _down_label and player:
@@ -66,6 +87,7 @@ func _process(_delta: float) -> void:
 	if player:
 		_update_picker()
 		_update_perk_button()
+		_update_coins()
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)
@@ -82,7 +104,8 @@ func _connect_signals(eb: Node) -> void:
 	_on_hp_changed(eb.hp, eb.hp_max)
 
 func _on_hp_changed(new_hp: float, max_hp: float) -> void:
-	name_tag.fraction = new_hp / max_hp if max_hp > 0.0 else 0.0
+	health_bar.max_value = max_hp
+	health_bar.value = new_hp
 
 func _on_carry_changed(new_carry: float, max_carry: float) -> void:
 	carry_bar.max_value = max_carry
@@ -110,6 +133,25 @@ func _update_perk_button() -> void:
 		perks.close_for(player)
 	elif perks.can_open(player):
 		perks.open_for(player)
+
+
+# ===== COINS =====
+
+## The count, with a pop each time a coin lands.
+func _update_coins() -> void:
+	if not _coin_row:
+		return
+	var shown: int = player.coins_shown()
+	if shown == _coins_drawn:
+		return
+	var gained: bool = shown > _coins_drawn and _coins_drawn >= 0
+	_coins_drawn = shown
+	_coin_label.text = "%d" % shown
+	_coin_row.visible = _coin_row.visible or shown > 0
+	if gained:
+		_coin_label.pivot_offset = _coin_label.size / 2.0
+		_coin_label.scale = Vector2.ONE * COIN_POP_SCALE
+		create_tween().tween_property(_coin_label, "scale", Vector2.ONE, 0.15)
 
 
 # ===== CHARACTER PICK WHILE DOWN =====

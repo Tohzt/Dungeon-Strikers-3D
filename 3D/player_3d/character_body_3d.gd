@@ -59,6 +59,9 @@ var arms: Array[PlayerArm3D] = [left_arm, right_arm]
 ## This character's signature kit (see Roster and the KIT section below),
 ## main hand first. Made by make_kit().
 var kit: Array[Weapon3D] = []
+## How rare our kit is (a WeaponRarity.Tier), bought up at shops (see
+## upgrade_kit). Kept when we change character.
+var kit_rarity: int = WeaponRarity.Tier.COMMON
 ## Kit weapons made so far, so a new character's kit doesn't take the old
 ## one's names (the same on every machine).
 var _kits_made: int = 0
@@ -134,6 +137,67 @@ var held_ball: Ball3D = null
 var _ball_thrown: bool = false
 ## Hit while carrying: the ball pops loose along the hit this fast.
 const BALL_FUMBLE_SPEED := 5.0
+
+# ===== THROWABLES =====
+# A big flask or a bomb from an item box (see Throwable3D), held up in both
+# hands until Throw, Light or Shoot lets it go: at what we're locked on to,
+# or along our aim, further the longer it was held. Like the ball, it keeps
+# our hands full; being knocked about drops it.
+
+## What we're holding (every machine), if anything.
+var held_throwable: Throwable3D = null
+## Names the throwables we're handed, the same on every machine.
+var throwables_made: int = 0
+
+# ===== TRAILS & ICE =====
+# The ice_trail and fire_trail perk stats (wild items) leave patches behind
+# us (see GroundPatch3D); every machine lays its own. An enemy's ice is
+# slippery: walking only slowly changes how we're sliding.
+
+## How fast we get a grip on ice (higher = less slippery).
+const ICE_TRACTION := 1.6
+## Standing on an enemy's ice (owner, see GroundPatch3D.effects_on).
+var on_ice: bool = false
+## Our walking velocity as it slides about on ice.
+var _ice_walk: Vector3 = Vector3.ZERO
+## Where we last laid a trail patch (every machine).
+var _last_trail_at: Vector3 = Vector3.INF
+
+# ===== COINS =====
+# Picked up from coin piles (a chest's, or half of what a dead player held)
+# and boss kills, and spent at shop altars (see Altar3D.shop). Every change
+# comes from the server (or the offline game) through an RPC that runs on
+# every machine, so the count is the same everywhere.
+signal coins_changed(new_coins: int)
+var coins: int = 0
+## Coins counted already but still flying in (see FlyingCoin3D). The HUD
+## leaves them out until they land.
+var coins_in_flight: int = 0
+## Coins landing one after another chime higher and higher.
+var coin_streak: int = 0
+var _last_coin_msec: int = -1
+const COIN_STREAK_GAP_MSEC := 600
+
+
+## Every machine (inside an RPC from the deciding machine): `amount` more
+## coins (fewer, if negative).
+func add_coins(amount: int) -> void:
+	coins = maxi(coins + amount, 0)
+	coins_changed.emit(coins)
+
+
+## The coins the HUD shows: what's landed.
+func coins_shown() -> int:
+	return maxi(coins - coins_in_flight, 0)
+
+
+## A flying coin landed: how high its chime is (see coin_streak).
+func coin_landed() -> float:
+	coins_in_flight = maxi(coins_in_flight - 1, 0)
+	var now: int = Time.get_ticks_msec()
+	coin_streak = coin_streak + 1 if now - _last_coin_msec < COIN_STREAK_GAP_MSEC else 0
+	_last_coin_msec = now
+	return 1.0 + minf(coin_streak, 24) * 0.035
 
 ## Walking speed while charging a heavy (see WeaponMove3D), times normal.
 const CHARGE_MOVE_SPEED := 0.6
@@ -399,12 +463,14 @@ func _physics_process(delta: float) -> void:
 	if Input_Handler.interact:
 		Input_Handler.interact = false
 		# Carrying, our hands are full: no taking weapons
-		if not carries_ball() and not _grab_nearest_ball() and not _pick_up_nearest_weapon():
+		if not hands_full() and not _grab_nearest_ball() and not _pick_up_nearest_weapon():
 			_take_from_nearest_stand()
 	_update_carry(delta)
+	_update_throwable()
+	on_ice = GroundPatch3D.effects_on(self)
 
 	# Walking velocity (sprinting speeds up only the horizontal part)
-	var speed: float = Entity.SPEED * perk_stat(&"move_speed")
+	var speed: float = Entity.SPEED * perk_stat(&"move_speed") * status.speed_multiplier()
 	var walk: Vector3 = direction * speed
 	if is_sprinting:
 		walk.x *= SPRINT_SPEED_MULTIPLIER
@@ -418,6 +484,10 @@ func _physics_process(delta: float) -> void:
 	if left_arm.charging or right_arm.charging:
 		walk *= CHARGE_MOVE_SPEED
 	var move: Vector3 = _roll_velocity() if roll_time > 0.0 else walk * control
+	# On ice, walking only slowly turns how we're sliding
+	if on_ice and roll_time <= 0.0:
+		move = _ice_walk.lerp(move, 1.0 - exp(-ICE_TRACTION * delta))
+	_ice_walk = move
 	if _dash_time > 0.0:
 		_dash_time -= delta
 		move = _dash_velocity
@@ -464,6 +534,7 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_timed_perks(delta)  # Every machine, alive or not, so they all agree
+	_lay_trail()
 	_show_weapons_in_hand()
 	_update_cursor()
 	if is_dead():
@@ -647,6 +718,7 @@ func make_kit() -> void:
 		Global.Game3D.add_weapon(weapon)
 		weapon.name = weapon_name  # Its _ready renames it after its Properties
 		weapon.global_position = global_position + Vector3.UP
+		_apply_kit_rarity(weapon)
 		if Net.in_session():
 			weapon.setup_network()
 		kit.append(weapon)
@@ -654,6 +726,25 @@ func make_kit() -> void:
 			weapon.holster()  # Out once what we found is gone (see draw_kit)
 		else:
 			equip_weapon(weapon, _kit_hand_is_left(weapon, i))
+
+
+## Every machine: our kit goes `steps` rarities up (a shop's kit offer),
+## glowing and hitting harder (WeaponRarity.KIT_POWER).
+func upgrade_kit(steps: int) -> void:
+	kit_rarity = clampi(kit_rarity + steps, 0, WeaponRarity.Tier.LEGENDARY)
+	for weapon: Weapon3D in kit:
+		if is_instance_valid(weapon):
+			_apply_kit_rarity(weapon)
+
+
+## Whether a kit upgrade would do us any good.
+func can_upgrade_kit() -> bool:
+	return not kit.is_empty() and kit_rarity < WeaponRarity.Tier.LEGENDARY
+
+
+func _apply_kit_rarity(weapon: Weapon3D) -> void:
+	weapon.set_rarity(kit_rarity)
+	weapon.power = WeaponRarity.KIT_POWER[kit_rarity]
 
 
 ## Every machine: become `character` (if our team can play it), with its
@@ -848,7 +939,7 @@ func _handle_buttons(busy: bool) -> void:
 		elif button.just_pressed():
 			button.armed = true
 			button.press_time = PlayerArm3D.now()
-			button.for_ball = carries_ball()
+			button.for_ball = hands_full()
 	if busy:
 		for arm: PlayerArm3D in arms:
 			_end_charge(arm)
@@ -949,7 +1040,7 @@ func _charging_arm() -> PlayerArm3D:
 
 
 func _handle_heavy_button() -> void:
-	if carries_ball():
+	if hands_full():
 		var charging: PlayerArm3D = _charging_arm()
 		if charging:
 			_end_charge(charging)  # Picked the ball up mid-charge
@@ -1081,6 +1172,9 @@ func _net_charging(on: bool, is_left: bool, cut: bool = true) -> void:
 func _handle_throw_button() -> void:
 	if not _throw.just_released() or not _throw.armed:
 		return
+	if holds_throwable():
+		throw_held_item(_pay_throw_charge(_throw.held_for()))
+		return
 	if carries_ball():
 		throw_ball(_pay_throw_charge(_throw.held_for()))
 		return
@@ -1094,7 +1188,9 @@ func _handle_throw_button() -> void:
 ## Let go of Shoot while carrying: shoot the ball at the goal, further the
 ## longer it was held. Pressed without the ball it does nothing.
 func _handle_shoot_button() -> void:
-	if _shoot.just_released() and _shoot.armed and carries_ball():
+	if _shoot.just_released() and _shoot.armed and holds_throwable():
+		throw_held_item(_pay_throw_charge(_shoot.held_for()))
+	elif _shoot.just_released() and _shoot.armed and carries_ball():
 		shoot_ball(_pay_throw_charge(_shoot.held_for()))
 
 
@@ -1102,6 +1198,10 @@ func _handle_shoot_button() -> void:
 ## (harder the longer it was held), press Heavy to pass to the nearest
 ## teammate.
 func _handle_ball_buttons() -> void:
+	if holds_throwable():
+		if _light.just_released() and _light.armed and _light.for_ball:
+			throw_held_item(_pay_throw_charge(_light.held_for()))
+		return
 	if not carries_ball():
 		return
 	if _light.just_released() and _light.armed and _light.for_ball:
@@ -1135,7 +1235,7 @@ func carry_point() -> Vector3:
 ## _roll_into_ball); knocked about isn't.
 func can_grab_ball(ball: Ball3D, reach: float = BALL_REACH) -> bool:
 	return not ball.holder and not is_dead() and not _knocked_about() and not is_instance_valid(held_ball) \
-		and carry >= CARRY_MIN_TO_GRAB and global_position.distance_to(ball.global_position) <= reach
+		and not holds_throwable() and carry >= CARRY_MIN_TO_GRAB and global_position.distance_to(ball.global_position) <= reach
 
 
 ## Interact: pick up the nearest ball within `reach`. Returns whether we are
@@ -1284,7 +1384,7 @@ func _fumble_ball(dir: Vector3) -> void:
 ## Every machine: what's in our hands is out of sight while we carry a ball
 ## (a weapon off flying or holstered stays hidden either way).
 func _show_weapons_in_hand() -> void:
-	var carrying: bool = is_instance_valid(held_ball)
+	var carrying: bool = is_instance_valid(held_ball) or is_instance_valid(held_throwable)
 	for weapon: Weapon3D in [held_weapon_left, held_weapon_right]:
 		if is_instance_valid(weapon) and weapon.wielder == self:
 			weapon.visible = not carrying and not weapon.away and not weapon.holstered
@@ -1307,6 +1407,58 @@ func _update_carry(delta: float) -> void:
 			_launch_ball(global_basis.z * BALL_TOSS_SPEED + Vector3.UP * 2.0)
 	elif not held_ball:
 		carry += CARRY_REGEN_PER_SEC * delta
+
+
+# ===== THROWABLES =====
+
+## Whether we hold a throwable (see Throwable3D).
+func holds_throwable() -> bool:
+	return is_instance_valid(held_throwable) and held_throwable.holder == self
+
+
+## Carrying the ball or holding a throwable: no attacking or picking up.
+func hands_full() -> bool:
+	return carries_ball() or holds_throwable()
+
+
+## Owner: throw what we hold, at what we're locked on to (just far enough
+## to land on them), or else along our aim, further with more `charge` (0-1).
+func throw_held_item(charge: float) -> void:
+	if not holds_throwable():
+		return
+	var from: Vector3 = held_throwable.global_position
+	var lock: Node3D = Input_Handler.lock_target
+	var launch: Vector3
+	if is_instance_valid(lock):
+		var at: Vector3 = lock.global_position
+		if lock is CharacterBody3D and lock != self:
+			at += (lock as CharacterBody3D).velocity * 0.4  # Lead them a little
+		launch = Throwable3D.launch_onto(from, at)
+	else:
+		launch = Throwable3D.launch_along(_get_aim_direction(), charge, perk_stat(&"throw_power"))
+	held_throwable.throw(launch)
+
+
+## Owner: knocked about, we drop what we hold.
+func _update_throwable() -> void:
+	if holds_throwable() and _knocked_about():
+		held_throwable.drop(global_basis.z)
+
+
+## Every machine: with a trail buff, lay a patch every so often as we go.
+func _lay_trail() -> void:
+	var kind: int = -1
+	if perk_stat(&"ice_trail") > 1.0:
+		kind = GroundPatch3D.Kind.ICE
+	elif perk_stat(&"fire_trail") > 1.0:
+		kind = GroundPatch3D.Kind.FIRE
+	if kind < 0 or is_dead() or not Global.Game3D:
+		_last_trail_at = Vector3.INF
+		return
+	if _last_trail_at != Vector3.INF and global_position.distance_to(_last_trail_at) < GroundPatch3D.TRAIL_SPACING:
+		return
+	_last_trail_at = global_position
+	GroundPatch3D.lay(Global.Game3D, kind as GroundPatch3D.Kind, global_position, self)
 
 
 # ===== SWINGS =====
@@ -1511,7 +1663,7 @@ func _emit_move(weapon: Weapon3D, move: WeaponMove3D, dir: Vector3, real: bool, 
 		Vfx.play(move.vfx, global_position, dir, weapon == held_weapon_left, 1.0, tint)
 	if heavy and weapon.rarity >= WeaponRarity.Tier.LEGENDARY:
 		var ahead: Vector3 = global_position + dir * LEGENDARY_BLAST_AHEAD
-		Vfx.play(&"impact", ahead + Vector3.DOWN * 0.9, dir, false, 1.2, tint)
+		Vfx.play(&"explosion", ahead + Vector3.DOWN * 0.9, dir, false, 2.4, tint)
 		Vfx.play(&"fire_cast", global_position, dir, false, 1.0, tint)
 	match move.action:
 		WeaponMove3D.Action.BOOMERANG:
@@ -1690,10 +1842,11 @@ func _check_fist_hits(arm: PlayerArm3D) -> void:
 ## Called by Combat.strike for every attack that lands on this player.
 ## `dir` is the direction the attack travels. Returns false if blocked.
 ## `attacker` is the player behind it, if any (they may get the kill).
-## `knock_down` (a slide tackle) also knocks us down if it gets through.
+## Above 0, `knock_down` also knocks us down if it gets through, for that
+## many times as long as a slide tackle does (a bomb blast: longer up close).
 ## Online the hit is decided on this player's owner, so a remote copy just
 ## passes it on (and can't know yet whether it was blocked).
-func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null, knock_down: bool = false) -> bool:
+func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null, knock_down: float = 0.0) -> bool:
 	if is_dead():
 		return false
 	if not _is_local():
@@ -1745,8 +1898,8 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		_wear_poise(damage)
 	if Entity.hp <= 0:
 		_on_lethal_hit()
-	elif knock_down:
-		_knock_down(attacker)
+	elif knock_down > 0.0:
+		_knock_down(attacker, knock_down)
 	return true
 
 
@@ -1998,15 +2151,16 @@ func is_busy() -> bool:
 
 
 ## The intermission (walking back to our altar and picking there), a
-## draft, or choosing a perk mid-round: movement and hands are out of our
-## control. Online, also until everyone has loaded the match.
+## draft, choosing a perk mid-round, or browsing a shop: movement and hands
+## are out of our control. Online, also until everyone has loaded the match.
 func is_perk_locked() -> bool:
 	var game: Game3D_Class = Global.Game3D
 	if not game:
 		return false
 	if Net.waiting_for_load():
 		return true
-	return game.phase == Game3D_Class.Phase.INTERMISSION or game.perks.in_draft or game.perks.is_picking(self)
+	return game.phase == Game3D_Class.Phase.INTERMISSION or game.perks.in_draft or game.perks.is_picking(self) \
+		or (game.shop_menu != null and game.shop_menu.is_shopping(self))
 
 
 ## Where to walk while perk-locked: in the intermission, straight to our
@@ -2101,18 +2255,18 @@ func _check_slide_hits() -> void:
 			continue
 		_slide_hits.append(body)
 		var damage: float = SLIDE_DAMAGE * perk_stat(&"slide_damage")
-		if Combat.strike(body, roll_dir, damage, SLIDE_KNOCKBACK, SLIDE_POP, SLIDE_OBJECT_IMPULSE, self, true):
+		if Combat.strike(body, roll_dir, damage, SLIDE_KNOCKBACK, SLIDE_POP, SLIDE_OBJECT_IMPULSE, self, 1.0):
 			_shake_view(CameraShake.LIGHT)
 
 
-## Slide-tackled (owner only, see receive_hit): down we go, unless we're
-## already down or only just got back up. The tackler's knockdown_time perk
-## stat keeps us down longer.
-func _knock_down(attacker: Node3D = null) -> void:
+## Slide-tackled or blasted (owner only, see receive_hit): down we go for
+## `length` times KNOCKDOWN_DURATION, unless we're already down or only just
+## got back up. The tackler's knockdown_time perk stat keeps us down longer.
+func _knock_down(attacker: Node3D = null, length: float = 1.0) -> void:
 	if knockdown_time > 0.0 or _knockdown_immunity > 0.0 or is_dead():
 		return
 	var down: float = attacker.perk_stat(&"knockdown_time") if attacker is PlayerClass3D else 1.0
-	knockdown_time = KNOCKDOWN_DURATION * down + GETUP_DURATION
+	knockdown_time = KNOCKDOWN_DURATION * down * length + GETUP_DURATION
 	roll_time = 0.0
 	roll_iframes = 0.0
 	stagger_time = 0.0
@@ -2290,7 +2444,7 @@ func _share_iframes(was_in_iframes: bool) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _net_receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker_name: String, knock_down: bool) -> void:
+func _net_receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker_name: String, knock_down: float) -> void:
 	if is_multiplayer_authority():
 		var attacker: PlayerClass3D = Global.Game3D.player_named(attacker_name) if Global.Game3D else null
 		receive_hit(dir, damage, knockback_velocity, attacker, knock_down)

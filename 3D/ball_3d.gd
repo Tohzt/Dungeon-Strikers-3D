@@ -68,6 +68,17 @@ const CATCH_POP := 1.0
 const WALL_BOUNCE := 0.85
 ## Its velocity the step before, to see how hard it hit a wall.
 var _last_velocity: Vector3 = Vector3.ZERO
+## Fast enough, it can cross a thin floor, wall or roof between two physics
+## steps (continuous collision misses it), e.g. a high shot coming back down
+## off the roof. Each step it checks the line it just travelled against
+## these layers (World, Roof) and is put back on the near side, bounced.
+const TUNNEL_MASK := 1 | 64
+## Moving further than its speed allows in a step means it was put
+## somewhere (reset, released from hands), not that it tunnelled.
+const TELEPORT_SLACK := 1.0
+## Bounce kept coming back off a surface it would have tunnelled through.
+const TUNNEL_BOUNCE := 0.6
+var _last_position: Vector3 = Vector3.INF  # None yet: the first step is skipped
 
 func _ready() -> void:
 	# Update collision mask to detect weapons and entities
@@ -94,6 +105,7 @@ func _process(delta: float) -> void:
 	_update_burn_light()
 	burn_left = max(burn_left - delta, 0.0)
 	_update_burn_sound()
+	ElementReactions.ball_at(self)
 
 
 func _physics_process(delta: float) -> void:
@@ -103,10 +115,12 @@ func _physics_process(delta: float) -> void:
 	if holder:
 		if not is_instance_valid(holder) or holder.is_dead():
 			_released_everywhere(Vector3.ZERO)
+		_last_position = global_position
 		return
 	_shot_left = max(_shot_left - delta, 0.0)
 	if _shot_left <= 0.0:
 		_shot = Shot.NONE
+	_stop_tunnelling(delta)
 	if global_position.y < OUT_OF_BOUNDS_Y and Global.Game3D:
 		Global.Game3D.ball_fell(self)
 	_update_curve(delta)
@@ -117,6 +131,37 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if Net.decides() and not holder:
 		_bounce_off_walls(state)
 	_last_velocity = state.linear_velocity
+
+
+## Server/offline: if the last physics step carried it through a floor,
+## wall or roof, put it back in front of that surface and bounce it off.
+func _stop_tunnelling(delta: float) -> void:
+	var from: Vector3 = _last_position
+	_last_position = global_position
+	var travelled: float = from.distance_to(global_position)
+	if travelled < 0.01 or travelled > linear_velocity.length() * delta * 2.0 + TELEPORT_SLACK:
+		return
+	var query := PhysicsRayQueryParameters3D.create(from, global_position, TUNNEL_MASK, [get_rid()])
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return
+	var normal: Vector3 = hit.normal
+	# Should be rare: say what sent it through, to find and fix the cause
+	push_warning("%s crossed %s at %.0f m/s (from %s to %s), touching %s; put back" % [name, hit.collider.name,
+		linear_velocity.length(), from.snapped(Vector3.ONE * 0.01), global_position.snapped(Vector3.ONE * 0.01),
+		get_colliding_bodies().map(func(body: Node) -> String: return String(body.name))])
+	global_position = hit.position + normal * (_radius() + 0.01)
+	_last_position = global_position
+	var into: float = linear_velocity.dot(normal)
+	if into < 0.0:
+		linear_velocity -= normal * into * (1.0 + TUNNEL_BOUNCE)
+
+
+func _radius() -> float:
+	for child: Node in get_children():
+		if child is CollisionShape3D and child.shape is SphereShape3D:
+			return child.shape.radius
+	return 0.5
 
 
 ## A wall it just ran into sends it back out at WALL_BOUNCE of the speed it
@@ -381,7 +426,7 @@ func _shot_reached(body: Node) -> bool:
 			_shot = Shot.NONE
 			_caught_by.call_deferred(body)  # Not mid-collision: grabbing freezes the body
 			return true
-	elif (body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D) \
+	elif (body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D or body is Tower3D) \
 			and not Combat.are_teammates(body, by):
 		_shot = Shot.NONE
 		Combat.strike(body, linear_velocity, _shot_damage, ATTACK_KNOCKBACK, ATTACK_POP, -1.0, by)

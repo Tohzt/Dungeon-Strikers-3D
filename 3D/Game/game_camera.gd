@@ -118,8 +118,9 @@ func _set_camera_active(TorF: bool) -> void: is_active = TorF
 
 ## Scrolling sets the base zoom the automatic camera works from, rather than
 ## the FOV itself (which the camera eases every frame). Wheel up zooms in.
+## Not during the opening move (until is_active), which would snap at the end.
 func _input(event: InputEvent) -> void:
-	if not can_zoom or not event is InputEventMouseButton or not event.pressed:
+	if not is_active or not can_zoom or not event is InputEventMouseButton or not event.pressed:
 		return
 	var zoom_dir: int = 0
 	match event.button_index:

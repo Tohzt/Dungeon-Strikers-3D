@@ -1,14 +1,17 @@
 class_name PlayerStatus3D extends Node
 ## What's happening to a player for a while beyond their perks: frozen
-## solid, burning or asleep (see Kind). Also shows the wild items' status
+## solid, burning, asleep, poisoned or chilled (see Kind). Also shows the wild items' status
 ## buffs on whoever has them (Frost Touch, Ablaze, Regen, see WildItem).
 ##
 ## The player's owner decides: apply() passes anyone else's request on to
 ## it, and it tells every machine, which each run the clock and show it.
-## While frozen or asleep the player can't act (see held()); burning hurts,
-## and regen heals, on the owner only (HP is synced from there).
+## While frozen or asleep the player can't act (see held()); burning and
+## poison hurt, and regen heals, on the owner only (HP is synced from there).
+## Chilled players walk slower (see speed_multiplier).
 
-enum Kind { FROZEN, BURNING, ASLEEP }
+enum Kind { FROZEN, BURNING, ASLEEP, POISONED, CHILLED }
+## These stop the player where they stand.
+const HOLDING: Array[Kind] = [Kind.FROZEN, Kind.ASLEEP]
 
 const FREEZE_TIME := 1.5
 ## Can't be frozen again this soon after thawing, so nobody's locked for good.
@@ -18,6 +21,9 @@ const BURN_DPS := 6.0
 const SLEEP_TIME := 4.0
 ## Can't be put back to sleep this soon after waking.
 const SLEEP_IMMUNITY := 3.0
+const POISON_DPS := 4.0
+## A chilled player walks at this share of their speed.
+const CHILL_SPEED := 0.55
 ## Regen heals this share of max HP a second.
 const REGEN_RATE := 0.06
 ## How long an Ablaze player's touch sets the ball burning (see Ball3D).
@@ -29,6 +35,8 @@ const LOOKS: Dictionary[Kind, Array] = {
 	Kind.FROZEN: [&"frozen", 1.0, Vector3.ZERO, &"frozen"],
 	Kind.BURNING: [&"burning", 0.7, Vector3(0.0, -0.9, 0.0), &"burning"],
 	Kind.ASLEEP: [&"asleep", 1.8, Vector3(0.0, 1.0, 0.0), &""],
+	Kind.POISONED: [&"poisoned", 1.5, Vector3.ZERO, &""],
+	Kind.CHILLED: [&"frozen", 0.7, Vector3.ZERO, &""],
 }
 ## The same for the wild items' buffs, by the perk stat they set.
 const BUFF_LOOKS: Dictionary[StringName, Array] = {
@@ -65,6 +73,16 @@ func is_asleep() -> bool:
 ## Frozen or asleep: no moving, turning or attacking.
 func held() -> bool:
 	return is_frozen() or is_asleep()
+
+
+## Seconds left of `kind` (0 = not running).
+func time_left(kind: Kind) -> float:
+	return _left.get(kind, 0.0)
+
+
+## What their walking speed is multiplied by (chilled: slower).
+func speed_multiplier() -> float:
+	return CHILL_SPEED if _left.has(Kind.CHILLED) else 1.0
 
 
 ## Whether the player has a wild item's status buff (its perk stat).
@@ -129,7 +147,11 @@ func _start(kind: Kind, seconds: float) -> void:
 			Sfx.play(&"ice_bolt", player.global_position)
 		Kind.BURNING:
 			Sfx.play(&"ignite", player.global_position)
-	if kind != Kind.BURNING and player._is_local():
+		Kind.POISONED:
+			Sfx.play(&"spell_impact", player.global_position, 0.7)
+		Kind.CHILLED:
+			Sfx.play(&"ice_bolt", player.global_position, 1.3)
+	if kind in HOLDING and player._is_local():
 		player.stop_in_place()
 
 
@@ -166,6 +188,8 @@ func _process(delta: float) -> void:
 	if player._is_local() and not player.is_dead():
 		if _left.has(Kind.BURNING):
 			player.hurt(BURN_DPS * delta)
+		if _left.has(Kind.POISONED):
+			player.hurt(POISON_DPS * delta)
 		if has_buff(&"regen"):
 			player.heal(player.Entity.hp_max * REGEN_RATE * delta)
 	for stat: StringName in BUFF_LOOKS:

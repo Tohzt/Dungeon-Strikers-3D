@@ -6,6 +6,7 @@ enum Kind {
 	NONE,   ## Drops nothing
 	BALL,   ## The soccer ball: score it in a goal (see Goal3D)
 	SKULL,  ## Knock it home to your altar for a reward (see Skull3D)
+	BOMB,   ## Knock it into the enemy goal before it goes off (see Bomb3D)
 }
 
 ## The scene each kind spawns. BALL uses Game3D.ball_scene instead, so a
@@ -13,10 +14,12 @@ enum Kind {
 const SCENES: Dictionary[Kind, String] = {
 	Kind.BALL: "res://3D/ball_3d.tscn",
 	Kind.SKULL: "res://3D/Items/BossDrops/skull_3d.tscn",
+	Kind.BOMB: "res://3D/Items/BossDrops/bomb_3d.tscn",
 }
 ## Just the looks of each kind, shown floating inside the boss until it drops.
 const MODELS: Dictionary[Kind, String] = {
 	Kind.SKULL: "res://3D/Items/BossDrops/skull_model.tscn",
+	Kind.BOMB: "res://3D/Items/BossDrops/bomb_model.tscn",
 }
 
 

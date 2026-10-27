@@ -15,12 +15,19 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(viewport)
 	resized.connect(_fit)
+	# Also refit when a parent's scale changes (e.g. FitCenterContainer)
+	set_notify_transform(true)
 
 
 func _ready() -> void:
 	texture = viewport.get_texture()
 	get_viewport().size_changed.connect(_fit)
 	_fit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED:
+		_fit()
 
 
 func _fit() -> void:

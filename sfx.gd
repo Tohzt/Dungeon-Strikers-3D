@@ -55,6 +55,10 @@ const SOUNDS: Dictionary[StringName, Array] = {
 	# The altar
 	&"altar_tier": ["Anvil/Anvil_Strike_Light_", 5, -4.0, 1.0],
 	&"altar_reward": ["Anvil/Anvil_Strike_Heavy_", 5, -2.0, 1.0],
+	# Coins (see CoinPile3D, FlyingCoin3D): a light anvil tap, pitched way up
+	&"coin": ["Anvil/Anvil_Strike_Light_", 5, -16.0, 2.6],
+	&"coin_spill": ["Anvil/Anvil_Strike_Light_", 5, -8.0, 1.8],
+	&"shop_buy": ["Anvil/Anvil_Strike_Heavy_", 5, -6.0, 1.4],
 }
 
 ## Background loops, one per level (see Game3D_Class.ambience), not placed
@@ -151,8 +155,8 @@ func _route_to_effects(node: Node) -> void:
 		(node as AudioStreamPlayer).bus = EFFECTS_BUS
 
 
-## Play `id` at `at` on this machine only.
-func play(id: StringName, at: Vector3) -> void:
+## Play `id` at `at` on this machine only, `pitch` times its usual pitch.
+func play(id: StringName, at: Vector3, pitch: float = 1.0) -> void:
 	if _silent:
 		return
 	var stream: AudioStreamRandomizer = _stream(id)
@@ -161,7 +165,7 @@ func play(id: StringName, at: Vector3) -> void:
 	var player := AudioStreamPlayer3D.new()
 	player.stream = stream
 	player.volume_db = SOUNDS[id][2]
-	player.pitch_scale = SOUNDS[id][3]
+	player.pitch_scale = SOUNDS[id][3] * pitch
 	player.unit_size = UNIT_SIZE
 	player.max_distance = MAX_DISTANCE
 	player.bus = EFFECTS_BUS

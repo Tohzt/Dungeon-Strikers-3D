@@ -8,10 +8,16 @@ class_name Game3D_Class extends Node3D
 ## altar, then the next, tougher boss.
 ## A goal is a comeback tool: a team behind on kills takes one back from
 ## the leader.
+## With bombs (Players.boss_drop) goals don't score: each team has a base
+## (behind its goal) with base_hp, and a bomb going off in its goal damages
+## it (see bomb_in_goal). Blowing up the enemy base wins.
 
 signal set_camera_active(TorF: bool)
 ## A point was just awarded to `team`. On every machine.
 signal goal_scored(team: int)
+## A bomb went off: in `defender`'s goal, or on the field (-1). On every
+## machine, after any goal_scored it brings.
+signal bomb_detonated(defender: int)
 ## The round moved on (see Phase). On every machine.
 signal phase_changed(phase: Phase)
 ## `victim` died; `killer` gets the kill (null = nobody). On every machine.
@@ -22,6 +28,21 @@ signal match_won(team: int)
 const BOT_INPUT := preload("res://3D/Entities/Handlers/bot_input_handler_3d.gd")
 ## Seconds the winner's banner shows before the stats screen (MatchStatsScreen).
 const STATS_DELAY := 3.0
+## A kill within this many seconds of the killer's last one chains into a
+## multi-kill (double kill, triple kill...), called out big in the middle.
+const MULTI_KILL_WINDOW := 4.0
+## Call-outs for a chain of 2, 3, 4... kills; longer chains keep the last.
+const MULTI_KILL_NAMES: Array[String] = ["DOUBLE KILL", "TRIPLE KILL", "QUAD KILL", "RAMPAGE", "UNSTOPPABLE"]
+## How wide the explosion a goal sets off in the net is (m, see Vfx "explosion").
+const GOAL_BLAST_SIZE := 4.0
+## A bomb going off in a goal: a muffled blast in the net, then smoke
+## billowing out of it towards the field, this many puffs this far apart (m)
+## and this long apart (s), each this big (m).
+const GOAL_BOMB_BLAST_SIZE := 2.5
+const GOAL_SMOKE_PUFFS := 5
+const GOAL_SMOKE_STEP := 1.1
+const GOAL_SMOKE_DELAY := 0.12
+const GOAL_SMOKE_SIZE := 3.0
 ## Which side of the arena each team starts on and defends (its goal and
 ## altar): Blue left, Red right, Green nearest the camera, Yellow far.
 const TEAM_SIDES: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.BACK, Vector3.FORWARD]
@@ -90,6 +111,13 @@ enum Phase {
 @export_range(0, 20) var goals_to_win: int = 0
 ## A goal by a team behind on kills takes one back from the leader.
 @export var goals_take_kills: bool = true
+@export_group("Coins")
+## Coins every player starts the match with.
+@export var starting_coins: int = 0
+## Coins each player on a team gets when one of them slays a boss.
+@export var boss_coins: int = 0
+## Share of a player's coins spilled where they die, for anyone to take.
+@export_range(0.0, 1.0) var death_coin_share: float = 0.5
 @export_group("")
 
 @onready var HUD: HUD3D = $HUD
@@ -99,6 +127,11 @@ enum Phase {
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var game_camera: Camera3D = $Camera3D
 ## The painted soccer field, in levels that have one.
+## Browsing a shop altar (see Altar3D.shop), for players on this machine.
+var shop_menu: ShopMenu3D = null
+## Server/offline: names coin piles, the same on every machine.
+var _coin_piles_made: int = 0
+
 @onready var floor_mesh: MeshInstance3D = get_node_or_null("Walls/Floor/CollisionShape3D/MeshInstance3D")
 
 var phase: Phase = Phase.BOSS
@@ -121,9 +154,22 @@ var huds: Dictionary[PlayerClass3D, HUD3D] = {}
 var scores: Dictionary[int, int] = {}
 ## Player kills per team, for every team in the match. Decides the winner.
 var kills: Dictionary[int, int] = {}
+## Bombs are in play (the lobby's pick, on a level with goals): bases
+## instead of goals decide the match.
+var bombs: bool = false
+## With bombs: each base's HP (by the team whose goal it's behind), and
+## what they start with.
+var base_hp: Dictionary[int, int] = {}
+var base_max_hp: int = 0
 var match_over: bool = false
+## The opening camera move is done: until then nobody moves or acts (see
+## PlayerInputHandler3D), so the camera isn't left chasing anyone.
+var camera_active: bool = false
 ## Server/offline: everyone's kills, goals, damage... for the stats screen.
 var stats := MatchStats.new()
+## Server/offline: each killer's current chain, by name: [kills, time of the
+## last one (s)]. See MULTI_KILL_WINDOW.
+var _kill_chains: Dictionary[String, Array] = {}
 ## First player, kept for code that only knows about one.
 var Player: PlayerClass3D:
 	get: return players[0] if not players.is_empty() else null
@@ -135,6 +181,9 @@ func _enter_tree() -> void:
 		goals_to_win = Players.score_to_win
 	else:
 		kills_to_win = Players.score_to_win
+	# Online the match's seed came with its start (see Net._start_match)
+	if not Net.in_session():
+		Players.match_seed = randi()
 	# Before the level's bosses are ready, so they show the right drop
 	_set_boss_drops(self)
 
@@ -166,11 +215,14 @@ func _ready() -> void:
 	for child: Node in get_children():
 		if child is Boss3D:
 			_track_boss(child)
+	shop_menu = ShopMenu3D.new()
+	add_child(shop_menu)
 	perks.intermission_started.connect(_on_intermission_started)
 	perks.intermission_finished.connect(_on_intermission_finished)
 	_update_phase()
 
 	await get_tree().create_timer(3.0).timeout
+	camera_active = true
 	set_camera_active.emit(true)
 
 
@@ -226,6 +278,8 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 		player.set_remote()
 	players.append(player)
 	player.make_kit()
+	if starting_coins > 0:
+		player.add_coins(starting_coins)  # The same on every machine, so no RPC
 
 	# Only humans on this machine get a HUD: the first takes the scene's
 	# (top-left), local co-op players get copies in the other corners.
@@ -378,7 +432,8 @@ func _forfeit_win(team: int) -> void:
 		_win(team, "Everyone else left")
 
 
-## Every team with a goal to attack or a player in the match.
+## Every team with a goal to attack or a player in the match. With bombs,
+## the scoreboard shows each base's HP instead.
 func _setup_scores() -> void:
 	var teams: Array[int] = []
 	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
@@ -393,10 +448,11 @@ func _setup_scores() -> void:
 	teams.sort()
 	for team: int in teams:
 		kills[team] = 0
-	if goals_to_win > 0:
-		scoreboard.setup(teams, "First to %d goals" % goals_to_win)
+	bombs = Players.boss_drop == BossDrop.Kind.BOMB and not get_tree().get_nodes_in_group("Goal").is_empty()
+	if bombs:
+		_setup_bases()
 	else:
-		scoreboard.setup(teams, "First to %d kills" % kills_to_win)
+		scoreboard.setup(teams)
 
 
 ## Server/offline: `scored_ball` went into a goal attacked by `team`. Award
@@ -407,9 +463,7 @@ func score_goal(team: int, scored_ball: Ball3D) -> void:
 	if not balls.has(scored_ball):
 		return  # Already counted
 	var new_score: int = scores.get(team, 0) + 1
-	var scorer: PlayerClass3D = player_named(scored_ball.last_player)
-	if scorer and _team_of(scorer) == team and not match_over:
-		stats.add(scorer, &"goals")
+	_credit_goal(team, scored_ball)
 	# Behind on kills: take one back from the leader
 	var erased_team: int = _top_team_ahead_of(team) if goals_take_kills else -1
 	Net.everywhere(_goal_scored, team, new_score, scored_ball.name, erased_team)
@@ -420,6 +474,8 @@ func _goal_scored(team: int, new_score: int, ball_name: String, erased_team: int
 	scores[team] = new_score
 	var scored_ball: Ball3D = get_node_or_null(ball_name) as Ball3D
 	if scored_ball:
+		Vfx.play(&"explosion", scored_ball.global_position, Vector3.FORWARD, false, GOAL_BLAST_SIZE)
+		CameraShake.add(CameraShake.HEAVY, scored_ball.global_position)
 		_remove_ball(scored_ball)
 	var color: Color = _team_color(team)
 	if erased_team >= 0 and not match_over:
@@ -433,6 +489,122 @@ func _goal_scored(team: int, new_score: int, ball_name: String, erased_team: int
 	goal_scored.emit(team)
 	if goals_to_win > 0 and new_score >= goals_to_win and not match_over:
 		_win(team)
+	_update_phase()
+	check_round_over()
+
+
+## Server/offline: the goal `team` just got goes in the stats of whoever
+## put `ball` in, if they're on that team.
+func _credit_goal(team: int, ball: Ball3D) -> void:
+	var scorer: PlayerClass3D = player_named(ball.last_player)
+	if scorer and _team_of(scorer) == team and not match_over:
+		stats.add(scorer, &"goals")
+
+
+# ===== BOMBS =====
+
+## A base for every team with a goal, Bomb3D.BASE_HP_PER_POINT for each
+## point of the lobby's Score to Win.
+func _setup_bases() -> void:
+	base_max_hp = Bomb3D.BASE_HP_PER_POINT * Players.score_to_win
+	var teams: Array[int] = []
+	for goal: Goal3D in get_tree().get_nodes_in_group("Goal"):
+		if not teams.has(goal.owner_team):
+			teams.append(goal.owner_team)
+		base_hp[goal.owner_team] = base_max_hp
+	teams.sort()
+	scoreboard.setup_health(teams, base_max_hp)
+
+
+## Server/offline: `bomb` went into `goal`'s net and goes off in there. Its
+## owner's base takes the bomb's damage and their whole team its type's
+## effect; whoever knocked it in gets the goal (not for an own goal).
+func bomb_in_goal(goal: Goal3D, bomb: Bomb3D) -> void:
+	if Net.in_session() and not (Net.is_server and Net.match_synced):
+		return
+	if not balls.has(bomb):
+		return
+	var defender: int = goal.owner_team
+	var scorer: int = goal.scoring_team if goal.scoring_team != Goal3D.LAST_TOUCH else bomb.last_team
+	if scorer == defender:
+		scorer = -1
+	var new_hp: int = maxi(base_hp.get(defender, 0) - Bomb3D.BASE_DAMAGE[bomb.type], 0)
+	var new_score: int = scores.get(scorer, 0) + 1
+	if scorer >= 0:
+		_credit_goal(scorer, bomb)
+	for player: PlayerClass3D in players:
+		if _team_of(player) == defender and not player.is_dead():
+			Bomb3D.afflict(player, bomb.type, Bomb3D.GOAL_EFFECT_TIME)
+	Net.everywhere(_bomb_goal, defender, scorer, new_hp, new_score, bomb.name, bomb.type)
+
+
+@rpc("authority", "call_local", "reliable")
+func _bomb_goal(defender: int, scorer: int, new_hp: int, new_score: int, bomb_name: String, type: int) -> void:
+	var bomb: Ball3D = get_node_or_null(bomb_name) as Ball3D
+	if bomb:
+		_remove_ball(bomb)
+	base_hp[defender] = new_hp
+	scoreboard.set_score(defender, new_hp)
+	_smoke_out_of(_goal_of_team(defender), type as Bomb3D.Type)
+	var effect: String = {Bomb3D.Type.FIRE: "", Bomb3D.Type.POISON: " They're poisoned!",
+		Bomb3D.Type.ICE: " They're chilled!"}[type]
+	scoreboard.announce("BOOM! %s bomb in the %s goal!%s" % [Bomb3D.NAMES[type], _team_name(defender), effect],
+		_team_color(scorer) if scorer >= 0 else Bomb3D.COLORS[type])
+	if scorer >= 0:
+		scores[scorer] = new_score
+		perks.record_goal(scorer)
+		goal_scored.emit(scorer)
+	bomb_detonated.emit(defender)
+	if new_hp <= 0 and not match_over:
+		_win(_base_winner(defender, scorer), "The %s base is destroyed!" % _team_name(defender))
+	_update_phase()
+	check_round_over()
+
+
+## Who wins when `defender`'s base goes down: whoever blew it up, or else
+## (an own goal) the team with the most base left.
+func _base_winner(defender: int, scorer: int) -> int:
+	if scorer >= 0:
+		return scorer
+	var best: int = -1
+	for team: int in base_hp:
+		if team != defender and (best < 0 or base_hp[team] > base_hp[best]):
+			best = team
+	return best
+
+
+## Every machine: a muffled blast in `goal`'s net, and smoke (in the bomb's
+## colors) billowing out of it towards the field.
+func _smoke_out_of(goal: Goal3D, type: Bomb3D.Type) -> void:
+	if not goal:
+		return
+	var at: Vector3 = goal.net.global_position
+	var out: Vector3 = Vector3(-at.x, 0.0, -at.z).normalized()
+	var tint: Color = Bomb3D.COLORS[type].lerp(Color(0.5, 0.5, 0.5), 0.55)
+	Bomb3D.show_blast(at, type, GOAL_BOMB_BLAST_SIZE)
+	for i in GOAL_SMOKE_PUFFS:
+		get_tree().create_timer(i * GOAL_SMOKE_DELAY).timeout.connect(func() -> void:
+			Vfx.play(&"smoke", at + out * i * GOAL_SMOKE_STEP, out, false, GOAL_SMOKE_SIZE, tint))
+
+
+## Server/offline: `bomb` ran out of fuse out on the field: it goes off
+## there, everywhere.
+func bomb_fuse_out(bomb: Bomb3D) -> void:
+	if not balls.has(bomb):
+		return
+	var at: Vector3 = bomb.global_position
+	Bomb3D.blast(get_world_3d(), at, bomb.type, [bomb.get_rid()])
+	Net.everywhere(_bomb_went_off, bomb.name, bomb.type, at)
+
+
+@rpc("authority", "call_local", "reliable")
+func _bomb_went_off(bomb_name: String, type: int, at: Vector3) -> void:
+	var bomb: Ball3D = get_node_or_null(bomb_name) as Ball3D
+	if bomb:
+		_remove_ball(bomb)
+	Bomb3D.show_blast(at, type as Bomb3D.Type)
+	scoreboard.announce("The %s bomb went off on the field!" % Bomb3D.NAMES[type], Bomb3D.COLORS[type])
+	bomb_detonated.emit(-1)
 	_update_phase()
 	check_round_over()
 
@@ -507,11 +679,24 @@ func _resolve_death(victim_name: String, killer_name: String) -> void:
 		stats.add(killer, &"kills")
 	var new_kills: int = kills.get(_team_of(killer), 0) + 1 if killer else -1
 	var sent_killer: String = String(killer.name) if killer else ""
-	Net.everywhere(_player_died, victim_name, sent_killer, new_kills)
+	Net.everywhere(_player_died, victim_name, sent_killer, new_kills, _chain_kill(sent_killer))
+	_spill_coins_of(victim)
+
+
+## Server/offline: count a kill by `killer_name` towards their chain and
+## return its length (1 = a lone kill, 0 = nobody got the kill).
+func _chain_kill(killer_name: String) -> int:
+	if killer_name == "":
+		return 0
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var chain: Array = _kill_chains.get(killer_name, [0, -INF])
+	var count: int = chain[0] + 1 if now - chain[1] <= MULTI_KILL_WINDOW else 1
+	_kill_chains[killer_name] = [count, now]
+	return count
 
 
 @rpc("authority", "call_local", "reliable")
-func _player_died(victim_name: String, killer_name: String, new_kills: int) -> void:
+func _player_died(victim_name: String, killer_name: String, new_kills: int, chain: int) -> void:
 	var victim: PlayerClass3D = player_named(victim_name)
 	var killer: PlayerClass3D = player_named(killer_name)
 	if not victim:
@@ -526,6 +711,9 @@ func _player_died(victim_name: String, killer_name: String, new_kills: int) -> v
 	killer.on_kill()
 	perks.record_kill(killer)
 	scoreboard.announce("%s killed %s" % [_player_label(killer), _player_label(victim)], _team_color(team))
+	if chain >= 2:
+		var streak: String = MULTI_KILL_NAMES[mini(chain - 2, MULTI_KILL_NAMES.size() - 1)]
+		scoreboard.call_out("%s!\n%s" % [streak, _player_label(killer)], _team_color(team).lerp(Color.WHITE, 0.3))
 	player_killed.emit(victim, killer)
 	if kills_win and new_kills >= kills_to_win and not match_over:
 		_win(team)
@@ -559,7 +747,10 @@ func _show_stats(team: int, title: String, rows: Array) -> void:
 		local_names.append(String(player.name))
 	var screen := MatchStatsScreen.new()
 	add_child(screen)
-	screen.setup(rows, team, title, scores if goals_to_win > 0 else kills, "goals" if goals_to_win > 0 else "kills", local_names)
+	if bombs:
+		screen.setup(rows, team, title, base_hp, "base HP", local_names)
+	else:
+		screen.setup(rows, team, title, scores if goals_to_win > 0 else kills, "goals" if goals_to_win > 0 else "kills", local_names)
 	if not Net.in_session():
 		get_tree().paused = true
 
@@ -613,7 +804,7 @@ func revive_delay(player: PlayerClass3D, deaths: int) -> float:
 
 func _set_kills(team: int, value: int) -> void:
 	kills[team] = max(value, 0)
-	if goals_to_win <= 0:
+	if goals_to_win <= 0 and not bombs:
 		scoreboard.set_score(team, kills[team])
 	_refresh_leader()
 
@@ -732,6 +923,7 @@ func _add_ball(new_ball: Ball3D, impulse: Vector3) -> void:
 
 func _remove_ball(old_ball: Ball3D) -> void:
 	balls.erase(old_ball)
+	old_ball.release(Vector3.ZERO)  # Out of whoever's hands
 	old_ball.queue_free()
 
 
@@ -808,10 +1000,78 @@ func _on_boss_defeated(killer: PlayerClass3D, boss: Boss3D) -> void:
 	bosses.erase(boss)
 	if Net.decides() and not match_over:
 		stats.add(killer, &"boss_kills")
+		if killer and boss_coins > 0:
+			Net.everywhere(_award_team_coins, _team_of(killer), boss_coins, boss.global_position + Vector3.UP * 2.0)
 	_update_music()
 	_reward_boss_kill(killer)
 	_update_phase()
 	check_round_over()
+
+
+# ===== COINS =====
+
+## Server/offline: spill death_coin_share of `victim`'s coins (rounded up)
+## where they fell.
+func _spill_coins_of(victim: PlayerClass3D) -> void:
+	var amount: int = mini(ceili(victim.coins * death_coin_share), victim.coins)
+	if amount <= 0:
+		return
+	var at: Vector3 = victim.global_position
+	_coin_piles_made += 1
+	Net.everywhere(_coins_spilled, String(victim.name), amount, "CoinPile%d" % _coin_piles_made, at)
+
+
+@rpc("authority", "call_local", "reliable")
+func _coins_spilled(victim_name: String, amount: int, pile_name: String, at: Vector3) -> void:
+	var victim: PlayerClass3D = player_named(victim_name)
+	if victim:
+		victim.add_coins(-amount)
+	_add_coin_pile(pile_name, at, amount, at + Vector3.UP * FlyingCoin3D.CHEST_HEIGHT)
+
+
+## Server/offline: a pile of `amount` coins at `at`, spilling out of
+## `from` (e.g. an opened chest), for anyone to take.
+func drop_coins(at: Vector3, amount: int, from: Vector3) -> void:
+	if not Net.decides() or amount <= 0:
+		return
+	_coin_piles_made += 1
+	Net.everywhere(_coins_dropped, "CoinPile%d" % _coin_piles_made, at, amount, from)
+
+
+@rpc("authority", "call_local", "reliable")
+func _coins_dropped(pile_name: String, at: Vector3, amount: int, from: Vector3) -> void:
+	_add_coin_pile(pile_name, at, amount, from)
+
+
+func _add_coin_pile(pile_name: String, at: Vector3, amount: int, from: Vector3) -> void:
+	var pile := CoinPile3D.new()
+	pile.name = pile_name
+	pile.count = amount
+	pile.spill_from = from
+	pile.position = at  # The game sits at the origin
+	add_child(pile)
+
+
+## Every machine: everyone on `team` gets `amount` coins, a few of them
+## seen flying in from `from` (the boss that went down).
+@rpc("authority", "call_local", "reliable")
+func _award_team_coins(team: int, amount: int, from: Vector3) -> void:
+	for player: PlayerClass3D in players:
+		if _team_of(player) != team:
+			continue
+		player.add_coins(amount)
+		# The rest are counted at once, so the HUD only waits on these
+		for i in mini(amount, 12):
+			FlyingCoin3D.launch(self, from, player, i * 0.06)
+	scoreboard.announce("+%d coins each for the %s!" % [amount, _team_name(team)], FlyingCoin3D.GOLD)
+
+
+## Whether this level has a shop altar (the HUD shows coins only then).
+func has_shops() -> bool:
+	for node: Node in get_tree().get_nodes_in_group("WeaponStand"):
+		if node is Altar3D and node.shop:
+			return true
+	return false
 
 
 ## On every machine: what slaying a boss earns. By default the killer's

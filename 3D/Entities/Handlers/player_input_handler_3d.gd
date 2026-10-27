@@ -110,6 +110,8 @@ func release_all() -> void:
 
 
 func _process(delta: float) -> void:
+	if _held_for_intro():
+		return
 	# Get 2D input and convert to 3D (X/Z plane)
 	var input_2d: Vector2 = Input.get_vector(action("move_left"), action("move_right"), action("move_up"), action("move_down"))
 	move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
@@ -124,6 +126,16 @@ func _process(delta: float) -> void:
 	_handle_input_dodge(delta)
 	_handle_lock_on()
 	_handle_input_look(delta)
+
+
+## The match's opening camera move isn't done: stand still and let go of
+## everything until it is.
+func _held_for_intro() -> bool:
+	if not Global.Game3D or Global.Game3D.camera_active:
+		return false
+	release_all()
+	move_dir = Vector3.ZERO
+	return true
 
 
 ## Space / A rolls on press, Shift sprints while held. Controller: B tap =

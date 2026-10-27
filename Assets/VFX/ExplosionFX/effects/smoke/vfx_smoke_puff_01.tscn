@@ -1,0 +1,34 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://chqijevfxuhpd" path="res://Assets/VFX/ExplosionFX/effects/ground/vfx_ground_explosion_01.tscn" id="1_ground"]
+
+[node name="VFXSmokePuff_01" instance=ExtResource("1_ground")]
+smoke_amount = 24
+light_energy = 0.0
+
+[node name="Core" parent="."]
+visible = false
+
+[node name="Rings" parent="."]
+visible = false
+
+[node name="Impact1" parent="."]
+visible = false
+
+[node name="Impact2" parent="."]
+visible = false
+
+[node name="Shrapnel" parent="."]
+visible = false
+
+[node name="Bits" parent="."]
+visible = false
+
+[node name="BitsTrail" parent="."]
+visible = false
+
+[node name="VFXOmniLightBB" parent="."]
+visible = false
+
+[node name="Smoke" parent="."]
+lifetime = 2.6

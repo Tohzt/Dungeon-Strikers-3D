@@ -15,12 +15,16 @@ const THINK_TIME := 0.15
 const MELEE_RANGE := 2.2
 ## Bosses are big: swing from a bit further out.
 const BOSS_RANGE := 3.5
+## Towers (Tower3D) are bigger still: swing from this far from the middle.
+const TOWER_RANGE := 3.5
 ## Ranged weapons (that don't swing) hang back this far.
 const RANGED_RANGE := 10.0
 ## An enemy this close gets fought even mid-objective.
 const THREAT_RANGE := 4.0
 ## How far the bot will go for a loose weapon or a stand.
 const WEAPON_SEARCH_RANGE := 30.0
+## How far the bot will go for a pile of coins (see CoinPile3D).
+const COIN_SEARCH_RANGE := 18.0
 ## With only its signature kit in hand, a bot still grabs a weapon this close.
 const KIT_UPGRADE_RANGE := 8.0
 ## Pause between swings: [min, max] seconds.
@@ -53,6 +57,12 @@ const SHOT_ANGLE := deg_to_rad(40.0)
 const FRONT_DISTANCE := 9.0
 ## A teammate carrying: go after enemies this close to them.
 const ESCORT_RANGE := 7.0
+# Holding a throwable (see Throwable3D): throw it at an enemy within
+# THROWABLE_RANGE (a healing flask: at ourselves if hurt, else a teammate).
+# A bomb with under BOMB_PANIC_FUSE left goes anywhere.
+const THROWABLE_RANGE := 14.0
+const BOMB_PANIC_FUSE := 2.0
+const HEAL_BELOW := 0.75
 
 ## Seconds a bot waits before taking its perk, so it doesn't feel instant.
 const PERK_DELAY := 1.0
@@ -100,6 +110,8 @@ func _process(delta: float) -> void:
 	if not player or not game or player.is_dead():
 		release_all()
 		return
+	if _held_for_intro():
+		return
 	_think_left -= delta
 	if _think_left <= 0.0:
 		_think_left = THINK_TIME * randf_range(0.8, 1.2)
@@ -128,6 +140,11 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if player.carries_ball():
 		_carry_ball(player)
 		return
+	# Only ever aimed (locked on) for a throw, below
+	if not player.holds_throwable():
+		lock_target = null
+	elif _throw_held_item(player, game):
+		return
 
 	var enemy: PlayerClass3D = _nearest_enemy(player, game)
 	var enemy_dist: float = _flat_dist(player, enemy) if enemy else INF
@@ -146,8 +163,12 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 
 	if _go_get_reward(player):
 		return
+	if _go_get_coins(player):
+		return
 
 	if not found_weapon and _go_get_weapon(player, game, WEAPON_SEARCH_RANGE if not armed else KIT_UPGRADE_RANGE):
+		return
+	if _tower_job(player):
 		return
 	var ball: Ball3D = _nearest_ball(game)
 	if ball:
@@ -193,6 +214,8 @@ func _take_perk_soon(player: PlayerClass3D, game: Game3D_Class) -> void:
 func _fight(player: PlayerClass3D, target: Node3D) -> void:
 	_attack_target = target
 	var reach: float = BOSS_RANGE if target is Boss3D else MELEE_RANGE
+	if target is Tower3D:
+		reach = TOWER_RANGE
 	if _has_ranged_weapon(player):
 		reach = RANGED_RANGE
 	var dist: float = _flat_dist(player, target)
@@ -324,6 +347,38 @@ func _start_throw(player: PlayerClass3D, target: Vector3, dir: Vector3, shot: bo
 	_throw_press_left = maxf(hold, 0.05)
 
 
+## Throw what we hold, if there's anyone to throw it at (see
+## THROWABLE_RANGE). Returns whether we did.
+func _throw_held_item(player: PlayerClass3D, game: Game3D_Class) -> bool:
+	var item: Throwable3D = player.held_throwable
+	var target: Node3D = null
+	if item.kind == Throwable3D.Kind.FLASK and Potion.large(item.variant).get("allies", false):
+		if player.Entity.hp < player.Entity.hp_max * HEAL_BELOW:
+			target = player
+		else:
+			var mate: PlayerClass3D = player._nearest_teammate()
+			if mate and _flat_dist(player, mate) <= THROWABLE_RANGE and mate.Entity.hp < mate.Entity.hp_max * HEAL_BELOW:
+				target = mate
+			else:
+				# Nobody needs it, but our hands are wanted: drink up anyway
+				var enemy: PlayerClass3D = _nearest_enemy(player, game)
+				if enemy and _flat_dist(player, enemy) < THREAT_RANGE:
+					target = player
+	else:
+		var enemy: PlayerClass3D = _nearest_enemy(player, game)
+		if enemy and _flat_dist(player, enemy) <= THROWABLE_RANGE:
+			target = enemy
+	var panic: bool = item.kind == Throwable3D.Kind.BOMB and item.fuse_left < BOMB_PANIC_FUSE
+	if not target and not panic:
+		return false
+	lock_target = target
+	_shot_dir = player.global_basis.z if not target or target == player else target.global_position - player.global_position
+	_shot_dir.y = 0.0
+	_shooting = false
+	_throw_press_left = 0.05
+	return true
+
+
 ## Nothing solid between us and `point` (walls; players and the ball don't
 ## count).
 func _clear_line(player: PlayerClass3D, point: Vector3) -> bool:
@@ -374,6 +429,22 @@ func _go_get_reward(player: PlayerClass3D) -> bool:
 	return false
 
 
+## Head for the nearest coin pile, if there's one close. Standing on it is
+## enough: the coins come to us.
+func _go_get_coins(player: PlayerClass3D) -> bool:
+	var best: Node3D = null
+	var best_dist: float = COIN_SEARCH_RANGE
+	for pile: Node3D in get_tree().get_nodes_in_group("CoinPile"):
+		var dist: float = _flat_dist(player, pile)
+		if dist < best_dist:
+			best = pile
+			best_dist = dist
+	if not best:
+		return false
+	_move_target = best.global_position
+	return true
+
+
 ## Head for the nearest loose weapon or stocked stand. Returns false if
 ## there's none in range.
 func _go_get_weapon(player: PlayerClass3D, game: Game3D_Class, search_range: float = WEAPON_SEARCH_RANGE) -> bool:
@@ -419,8 +490,8 @@ func _steer(player: PlayerClass3D, _delta: float) -> void:
 	move_dir = dir.normalized() if dir.length() > 0.1 else Vector3.ZERO
 	move_dodge = dist > SPRINT_DISTANCE
 
-	if _throw_press_left > 0.0 and player.carries_ball():
-		look_dir = _shot_dir
+	if _throw_press_left > 0.0 and player.hands_full():
+		look_dir = _shot_dir.normalized() if _shot_dir.length() > 0.01 else Vector3.ZERO
 	elif _attack_target and is_instance_valid(_attack_target):
 		var look: Vector3 = _attack_target.global_position - player.global_position
 		look.y = 0.0
@@ -443,15 +514,15 @@ func _press_buttons(player: PlayerClass3D, delta: float) -> void:
 			_attack_heavy = true
 		_attack_gap_left = _attack_press_left + randf_range(ATTACK_GAP.x, ATTACK_GAP.y)
 	# Carrying, Light and Heavy throw and pass the ball: leave them be
-	var pressing: bool = _attack_press_left > 0.0 and not player.carries_ball()
+	var pressing: bool = _attack_press_left > 0.0 and not player.hands_full()
 	light_held = pressing and not _attack_heavy
 	heavy_held = pressing and _attack_heavy
 	# A shot: Throw held while it charges, let go once it's long enough
 	_throw_press_left -= delta
-	var charging: bool = _throw_press_left > 0.0 and player.carries_ball()
+	var charging: bool = _throw_press_left > 0.0 and player.hands_full()
 	throw_held = charging and not _shooting
 	shoot_held = charging and _shooting
-	if not player.carries_ball():
+	if not player.hands_full():
 		_throw_press_left = 0.0
 
 	_interact_gap_left -= delta
@@ -475,6 +546,36 @@ func _separation(player: PlayerClass3D) -> Vector3:
 
 
 # ===== LOOKING AROUND =====
+
+## A tower to claim or knock down, if we're the one on our team nearest it
+## (so one teammate peels off for it and the rest keep playing): stand in
+## reach of one that's up for grabs, or go hit an enemy one.
+func _tower_job(player: PlayerClass3D) -> bool:
+	var team: int = Combat.team_of(player)
+	for tower: Tower3D in Tower3D.standing(get_tree()):
+		var claim: bool = tower.is_capturable() and not (tower.capture_team == team and tower.capture >= 1.0)
+		var attack: bool = tower.state == Tower3D.State.ACTIVE and tower.owner_team != team
+		if not (claim or attack) or not _nearest_teammate_to(player, tower):
+			continue
+		if attack:
+			_fight(player, tower)
+		elif _flat_dist(player, tower) > tower.capture_radius * 0.8:
+			var out: Vector3 = player.global_position - tower.global_position
+			out.y = 0.0
+			_move_target = tower.global_position + out.normalized() * tower.capture_radius * 0.6
+		return true
+	return false
+
+
+## Whether no living teammate is closer to `target` than `player`.
+func _nearest_teammate_to(player: PlayerClass3D, target: Node3D) -> bool:
+	var dist: float = _flat_dist(player, target)
+	for other: PlayerClass3D in Global.Game3D.players:
+		if other != player and is_instance_valid(other) and not other.is_dead() \
+				and Combat.are_teammates(player, other) and _flat_dist(other, target) < dist:
+			return false
+	return true
+
 
 func _nearest_enemy(player: PlayerClass3D, game: Game3D_Class) -> PlayerClass3D:
 	var best: PlayerClass3D = null
