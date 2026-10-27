@@ -40,6 +40,9 @@ var steps: int = 1
 ## Bomb3D.Type).
 var throwable_kind: int = 0
 var variant: int = 0
+## Bought: it stays in the menu, sold out, until the next restock. Set
+## on every machine (see Altar3D._sold), never sent.
+var sold: bool = false
 
 
 static func weapon(tier_index: int, weapon_pick: int, weapon_rarity: int) -> ShopOffer:

@@ -21,7 +21,8 @@ class_name Altar3D extends WeaponStand3D
 ## A shop altar (see `shop`) shows nothing on top: interact opens its shop
 ## (ShopMenu3D), where coins buy an upgrade for the buyer's own kit, a
 ## breakable weapon (rolled from the current tier, so the stock gets better
-## as the tier goes up), perk cards, and bombs and flasks. All it shows
+## as the tier goes up), perk cards, and bombs and flasks. Every player has
+## their own stock, rolled afresh every shop_restock_time. All it shows
 ## is a quiet hint: its ring glows gold while someone here can afford
 ## something, and a coin floats over it while they're in reach.
 
@@ -80,16 +81,18 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 @export_group("Shop")
 ## Sells its stock for coins instead of handing it out (see ShopMenu3D).
 @export var shop: bool = false
+## Seconds between restocks: every player's stock is rolled afresh. A
+## tier-up restocks at once too.
+@export var shop_restock_time: float = 45.0
 ## Sells an upgrade for each buyer's own signature kit (see
 ## PlayerClass3D.upgrade_kit), first in the weapons row: one rarity up, or
-## with kit_jump_chance two.
+## with kit_jump_chance two. There's always another once one's bought.
 @export var shop_kit_slot: bool = true
 @export_range(0.0, 1.0) var kit_jump_chance: float = 0.2
-## Breakable weapons on sale at once (any kind). Each sold one is replaced
-## by another from the current tier; a tier-up restocks the whole shop.
+## Breakable weapons (any kind) in each stock, from the current tier.
+## Everything but the kit upgrade sells out until the next restock.
 @export_range(0, 4) var shop_weapon_slots: int = 1
-## Perk cards on sale at once (never relics), each taken on the spot.
-## Each sold one is replaced by another.
+## Perk cards in each stock (never relics), each taken on the spot.
 @export_range(0, 4) var shop_perk_slots: int = 2
 ## Bombs and big flasks on sale at once (see Throwable3D), handed over
 ## straight into the buyer's hands. Each is a bomb at bomb_chance, else a
@@ -177,11 +180,15 @@ const REWARD_SIGN_HEIGHT := 4.9
 const RELIC_COLOR := Color(1.0, 0.8, 0.3)
 const UNGUARDED_COLOR := Color(1.0, 0.25, 0.2)
 
-## Shop: what's on sale, grouped by kind in ShopOffer.Kind order (the
-## menu's rows). The same on every machine.
-var offers: Array[ShopOffer] = []
-## Shop: goes up whenever the stock changes (the menu redraws).
-var shop_version: int = 0
+## Shop: each player's own stock (Array[ShopOffer]), by player name,
+## grouped in ShopOffer.ORDER (the menu's rows). The same on every machine.
+var _stocks: Dictionary[String, Array] = {}
+## Shop: goes up whenever a player's stock changes (their menu redraws, and
+## a buy meant for older stock is turned down), by player name.
+var _stock_versions: Dictionary[String, int] = {}
+## Shop: seconds until the next restock, counted on every machine (for the
+## menu); the server's (or the offline game's) count is the one that acts.
+var restock_left: float = 0.0
 ## Server/offline: the first stock has been rolled.
 var _shop_rolled: bool = false
 ## Shop: a repair is on sale (our team has a tower up), after the stock.
@@ -248,7 +255,7 @@ func _process(delta: float) -> void:
 func can_give_to(player: PlayerClass3D) -> bool:
 	if _has_perks_for(player):
 		return true
-	if shop and can_shop(player) and not offers.is_empty():
+	if shop and can_shop(player) and not offers_for(player).is_empty():
 		return not player.slot or not player.slot.is_bot or bot_buy_index(player) >= 0 \
 			or (has_reward_for(player))
 	return super(player)
@@ -920,18 +927,38 @@ func can_shop(player: PlayerClass3D) -> bool:
 	return shop and not player.is_dead() and _may_take(player) and reach.overlaps_body(player)
 
 
+## `player`'s own stock here (empty until the server rolls it).
+func offers_for(player: PlayerClass3D) -> Array[ShopOffer]:
+	var stock: Array[ShopOffer] = []
+	if player:
+		stock.assign(_stocks.get(String(player.name), []))
+	return stock
+
+
+## Goes up whenever `player`'s stock changes.
+func stock_version(player: PlayerClass3D) -> int:
+	return _stock_versions.get(String(player.name), 0) if player else 0
+
+
+func _stock_changed(player_name: String) -> void:
+	_stock_versions[player_name] = _stock_versions.get(player_name, 0) + 1
+
+
 ## Whether `player` has the coins for anything on sale.
 func can_afford_any(player: PlayerClass3D) -> bool:
-	for offer: ShopOffer in offers:
+	for offer: ShopOffer in offers_for(player):
 		if price_of(offer, player) <= player.coins and is_useful_to(player, offer):
 			return true
 	return false
 
 
-## Whether `offer` would do `player` any good: a repair only when it's our
-## team's altar and one of our towers is hurt, a kit upgrade until their
-## kit's Legendary, a bomb or flask while their hands are free for it.
+## Whether `offer` would do `player` any good: not once it's sold, a repair
+## only when it's our team's altar and one of our towers is hurt, a kit
+## upgrade until their kit's Legendary, a bomb or flask while their hands
+## are free for it.
 func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
+	if offer.sold:
+		return false
 	match offer.kind:
 		ShopOffer.Kind.REPAIR:
 			return _is_ours(player) and tower_to_repair() != null
@@ -953,20 +980,22 @@ func set_repair_offer(on: bool) -> void:
 	if not shop or on == _repair_offered:
 		return
 	_repair_offered = on
-	if on:
-		offers.append(ShopOffer.repair())
-	else:
-		for i in range(offers.size() - 1, -1, -1):
-			if offers[i].kind == ShopOffer.Kind.REPAIR:
-				offers.remove_at(i)
-	shop_version += 1
+	for player_name: String in _stocks:
+		var stock: Array = _stocks[player_name]
+		if on:
+			stock.append(ShopOffer.repair())
+		else:
+			for i in range(stock.size() - 1, -1, -1):
+				if stock[i].kind == ShopOffer.Kind.REPAIR:
+					stock.remove_at(i)
+		_stock_changed(player_name)
 
 
 ## A person opens the shop on their own machine; a bot (server/offline)
 ## just buys the priciest thing it can afford (or a repair, see
 ## bot_buy_index).
 func _open_shop(player: PlayerClass3D) -> bool:
-	if not can_shop(player) or offers.is_empty():
+	if not can_shop(player) or offers_for(player).is_empty():
 		return false
 	if player.slot and player.slot.is_bot:
 		var index: int = bot_buy_index(player)
@@ -986,6 +1015,7 @@ func _open_shop(player: PlayerClass3D) -> bool:
 func bot_buy_index(player: PlayerClass3D) -> int:
 	var best: int = -1
 	var wants_weapon: bool = not player.holds_found_weapon()
+	var offers: Array[ShopOffer] = offers_for(player)
 	for i in offers.size():
 		var offer: ShopOffer = offers[i]
 		if price_of(offer, player) > player.coins or not is_useful_to(player, offer):
@@ -1007,27 +1037,31 @@ func bot_buy_index(player: PlayerClass3D) -> int:
 	return best
 
 
-## `player` (on the machine that controls them) buys offers[index]. The
-## server (or the offline game) checks they still can.
+## `player` (on the machine that controls them) buys their offers[index].
+## The server (or the offline game) checks they still can.
 func buy(player: PlayerClass3D, index: int) -> void:
 	if Net.decides():
 		_decide_buy(player, index)
 	else:
-		_request_buy.rpc_id(Net.SERVER_ID, index, shop_version)
+		_request_buy.rpc_id(Net.SERVER_ID, index, stock_version(player))
 
 
 @rpc("any_peer", "reliable")
 func _request_buy(index: int, version: int) -> void:
-	# A buy meant for stock that's changed since (someone else bought it,
-	# a tier-up) could be something else now
-	if Net.is_server and version == shop_version:
-		_decide_buy(Global.Game3D.rpc_sender(), index)
+	if not Net.is_server:
+		return
+	# A buy meant for stock that's changed since (a restock, a tier-up)
+	# could be something else now
+	var player: PlayerClass3D = Global.Game3D.rpc_sender()
+	if player and version == stock_version(player):
+		_decide_buy(player, index)
 
 
-## Server/offline: sell offers[index] to `player` if it's still there,
-## they're still here and they can pay for it. It's replaced by another of
-## its kind.
+## Server/offline: sell `player` their offers[index] if it's still there,
+## they're still here and they can pay for it. It sells out until the next
+## restock, but a kit upgrade is followed by the next one.
 func _decide_buy(player: PlayerClass3D, index: int) -> void:
+	var offers: Array[ShopOffer] = offers_for(player)
 	if not player or index < 0 or index >= offers.size() or not can_shop(player):
 		return
 	var offer: ShopOffer = offers[index]
@@ -1038,13 +1072,8 @@ func _decide_buy(player: PlayerClass3D, index: int) -> void:
 	match offer.kind:
 		ShopOffer.Kind.WEAPON:
 			is_left = player.free_hand_for(weapon_info(offer.scene)[1])
-			replacement = _roll_weapon_offer()
-		ShopOffer.Kind.PERK:
-			replacement = _roll_perk_offer(_perks_on_sale())
 		ShopOffer.Kind.KIT:
 			replacement = _roll_kit_offer()
-		ShopOffer.Kind.THROWABLE:
-			replacement = _roll_throwable_offer(_throwables_on_sale())
 		ShopOffer.Kind.REPAIR:
 			var tower: Tower3D = tower_to_repair()
 			tower.repair(tower.max_hp * repair_share)
@@ -1052,11 +1081,12 @@ func _decide_buy(player: PlayerClass3D, index: int) -> void:
 	Net.everywhere(_sold, String(player.name), index, is_left, _next_weapon_name(), replacement)
 
 
-## Every machine: `player_name` paid for offers[index] and gets it (a weapon
-## in hand, a perk at once; a repair was done by the server), and `replacement` (an encoded ShopOffer, or
-## empty) takes its place.
+## Every machine: `player_name` paid for their offers[index] and gets it (a
+## weapon in hand, a perk at once; a repair was done by the server). It's
+## sold out, unless `replacement` (an encoded ShopOffer) takes its place.
 @rpc("authority", "call_local", "reliable")
 func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, replacement: PackedInt32Array) -> void:
+	var offers: Array = _stocks.get(player_name, [])
 	if index < 0 or index >= offers.size():
 		return
 	var offer: ShopOffer = offers[index]
@@ -1065,6 +1095,9 @@ func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, 
 	Sfx.play(&"shop_buy", global_position)
 	if player:
 		player.add_coins(-price_of(offer, player))
+		# Out of the shop, so they see what they got (open it again for more)
+		if game.shop_menu:
+			game.shop_menu.close(player)
 		match offer.kind:
 			ShopOffer.Kind.WEAPON:
 				_hand_weapon(offer.scene, offer.rarity, player, is_left, weapon_name, display_anchor.global_transform)
@@ -1083,8 +1116,8 @@ func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, 
 	if next:
 		offers[index] = next
 	else:
-		offers.remove_at(index)
-	shop_version += 1
+		offer.sold = true
+	_stock_changed(player_name)
 	if player and not _is_ours(player) and owner_team != NEUTRAL and game:
 		game.scoreboard.announce("%s raided %s's shop!" % [player.slot.label() if player.slot else player_name,
 			Players.team_name(owner_team)], player.slot.color if player.slot else Color.WHITE)
@@ -1141,24 +1174,25 @@ func _pair_in(pairs: PackedInt32Array, a: int, b: int) -> bool:
 	return false
 
 
-func _throwables_on_sale() -> PackedInt32Array:
-	var taken := PackedInt32Array()
-	for offer: ShopOffer in offers:
-		if offer.kind == ShopOffer.Kind.THROWABLE:
-			taken.append_array([offer.throwable_kind, offer.variant])
-	return taken
-
-
-func _perks_on_sale() -> Array[int]:
-	var taken: Array[int] = []
-	for offer: ShopOffer in offers:
-		if offer.kind == ShopOffer.Kind.PERK:
-			taken.append(offer.perk_index)
-	return taken
-
-
-## Server/offline: roll the whole stock afresh, for everyone.
+## Server/offline: roll every player's stock afresh, and start the wait for
+## the next restock.
 func _restock_shop() -> void:
+	var game: Game3D_Class = Global.Game3D
+	if not game:
+		return
+	for player: PlayerClass3D in game.players:
+		if is_instance_valid(player):
+			_restock_for(player)
+	Net.everywhere(_set_restock_left, shop_restock_time)
+
+
+@rpc("authority", "call_local", "reliable")
+func _set_restock_left(seconds: float) -> void:
+	restock_left = seconds
+
+
+## Server/offline: roll `player` a fresh stock, for everyone.
+func _restock_for(player: PlayerClass3D) -> void:
 	var rolls := PackedInt32Array()
 	if shop_kit_slot:
 		rolls.append_array(_roll_kit_offer())
@@ -1176,15 +1210,15 @@ func _restock_shop() -> void:
 		if not roll.is_empty():
 			thrown_taken.append_array([roll[1], roll[2]])
 			rolls.append_array(roll)
-	Net.everywhere(_set_shop, tier, rolls)
+	Net.everywhere(_set_stock, String(player.name), tier, rolls)
 
 
-## Every machine: the shop now sells `rolls` (encoded ShopOffers, back to
-## back), with tiers[tier_index] as its tier.
+## Every machine: `player_name` can now buy `rolls` here (encoded
+## ShopOffers, back to back), with tiers[tier_index] as the shop's tier.
 @rpc("authority", "call_local", "reliable")
-func _set_shop(tier_index: int, rolls: PackedInt32Array) -> void:
+func _set_stock(player_name: String, tier_index: int, rolls: PackedInt32Array) -> void:
 	tier = tier_index
-	offers.clear()
+	var offers: Array[ShopOffer] = []
 	for i in range(0, rolls.size() - ShopOffer.ENCODED_SIZE + 1, ShopOffer.ENCODED_SIZE):
 		var offer: ShopOffer = _decode_offer(rolls.slice(i, i + ShopOffer.ENCODED_SIZE))
 		if offer:
@@ -1194,7 +1228,8 @@ func _set_shop(tier_index: int, rolls: PackedInt32Array) -> void:
 	# Grouped by kind in the menu's order (see ShopOffer.ORDER), for its rows
 	offers.sort_custom(func(a: ShopOffer, b: ShopOffer) -> bool:
 		return ShopOffer.order_of(a.kind) < ShopOffer.order_of(b.kind))
-	shop_version += 1
+	_stocks[player_name] = offers
+	_stock_changed(player_name)
 
 
 ## An encoded ShopOffer (see ShopOffer.encode) back as an offer, or null.
@@ -1236,12 +1271,19 @@ func _make_shop_hint() -> void:
 	add_child(_shop_coin)
 
 
-## Roll the first stock once everyone's in the match, and show the hint
-## for the players on this machine.
+## Roll the first stock once everyone's in the match (and anyone who turns
+## up later), restock on time, and show the hint for the players on this
+## machine.
 func _update_shop(delta: float) -> void:
-	if not _shop_rolled and Net.decides() and not Net.waiting_for_load():
-		_shop_rolled = true
-		_restock_shop()
+	restock_left = maxf(restock_left - delta, 0.0)
+	if Net.decides() and not Net.waiting_for_load():
+		if not _shop_rolled or (shop_restock_time > 0.0 and restock_left <= 0.0):
+			_shop_rolled = true
+			_restock_shop()
+		elif Global.Game3D:
+			for player: PlayerClass3D in Global.Game3D.players:
+				if is_instance_valid(player) and not _stocks.has(String(player.name)):
+					_restock_for(player)
 	var game: Game3D_Class = Global.Game3D
 	var affordable: bool = false
 	var in_reach: bool = false

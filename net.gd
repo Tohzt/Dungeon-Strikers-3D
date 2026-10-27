@@ -44,7 +44,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 24
+const PROTOCOL_VERSION := 25
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.

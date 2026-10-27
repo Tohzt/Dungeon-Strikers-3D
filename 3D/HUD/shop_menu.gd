@@ -1,5 +1,6 @@
 class_name ShopMenu3D extends CanvasLayer
-## A shop altar's wares (see Altar3D.shop), as a popup in the middle of the
+## A shop altar's wares for one player (each has their own stock, see
+## Altar3D.offers_for), as a popup in the middle of the
 ## screen for every player on this machine who's browsing one (side by
 ## side when several are; FitCenterContainer shrinks them to fit). Each is
 ## browsed with its owner's own device while everyone else keeps playing.
@@ -8,7 +9,8 @@ class_name ShopMenu3D extends CanvasLayer
 ## repair. Weapons, kits, bombs and flasks show a spinning preview, perks
 ## their card, a repair the tower's health. Browsing holds the player still
 ## (PlayerClass3D.is_perk_locked), so only this machine needs to know who's
-## shopping; a buy goes to the server (Altar3D.buy). Game3D makes one.
+## shopping; a buy goes to the server (Altar3D.buy), and once it's sold
+## (Altar3D._sold) the shop closes. Game3D makes one.
 
 ## Ignore input this long after opening, so the interact press that opened
 ## it doesn't also close it.
@@ -53,12 +55,15 @@ class Card:
 class Stall:
 	var player: PlayerClass3D
 	var altar: Altar3D
-	## Index into altar.offers.
+	## The player's own stock at the altar, as last drawn.
+	var offers: Array[ShopOffer] = []
+	## Index into offers.
 	var selected: int = 0
 	var input_delay: float = INPUT_DELAY
 	var root: PanelContainer
 	var coin_label: Label
-	## altar.offers indices, one array per row (a kind of offer).
+	var restock_label: Label
+	## offers indices, one array per row (a section).
 	var rows: Array[PackedInt32Array] = []
 	## By offer index.
 	var cards: Array[Card] = []
@@ -149,15 +154,16 @@ func _process(delta: float) -> void:
 	for stall: Stall in _stalls.duplicate():
 		var player: PlayerClass3D = stall.player
 		if not is_instance_valid(player) or not is_instance_valid(stall.altar) \
-				or not stall.altar.can_shop(player) or stall.altar.offers.is_empty() \
+				or not stall.altar.can_shop(player) or stall.altar.offers_for(player).is_empty() \
 				or player.holds_throwable() \
 				or (Global.Game3D and Global.Game3D.perks.is_picking(player)):
 			close(player)
 			continue
-		if stall.drawn_version != stall.altar.shop_version:
+		if stall.drawn_version != stall.altar.stock_version(player):
 			_redraw(stall)
 		elif stall.drawn_coins != player.coins_shown():
 			_update_prices(stall)
+		stall.restock_label.text = _restock_text(stall.altar)
 		for card: Card in stall.cards:
 			if card.spinner:
 				card.spinner.rotate_y(PREVIEW_SPIN * delta)
@@ -224,8 +230,8 @@ func _place_of(stall: Stall, index: int) -> Vector2i:
 
 
 func _first_affordable(stall: Stall) -> int:
-	for i in stall.altar.offers.size():
-		if _can_buy(stall, stall.altar.offers[i]):
+	for i in stall.offers.size():
+		if _can_buy(stall, stall.offers[i]):
 			return i
 	return 0
 
@@ -242,7 +248,7 @@ func _select(stall: Stall, index: int) -> void:
 
 
 func _buy(stall: Stall) -> void:
-	var offers: Array[ShopOffer] = stall.altar.offers
+	var offers: Array[ShopOffer] = stall.offers
 	if stall.selected >= offers.size():
 		return
 	if not _can_buy(stall, offers[stall.selected]):
@@ -256,7 +262,8 @@ func _buy(stall: Stall) -> void:
 func _redraw(stall: Stall) -> void:
 	if stall.root:
 		stall.root.queue_free()
-	stall.drawn_version = stall.altar.shop_version
+	stall.drawn_version = stall.altar.stock_version(stall.player)
+	stall.offers = stall.altar.offers_for(stall.player)
 	stall.drawn_coins = stall.player.coins_shown()
 	stall.cards.clear()
 	stall.rows.clear()
@@ -282,12 +289,14 @@ func _redraw(stall: Stall) -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
+	stall.restock_label = _label(_restock_text(stall.altar), 18, _muted_color)
+	header.add_child(stall.restock_label)
 	header.add_child(_coin_icon())
 	stall.coin_label = _label("%d" % stall.drawn_coins, 30, FlyingCoin3D.GOLD)
 	header.add_child(stall.coin_label)
 
 	# A row per section, in ShopOffer.ORDER (offers come grouped that way)
-	var offers: Array[ShopOffer] = stall.altar.offers
+	var offers: Array[ShopOffer] = stall.offers
 	stall.cards.resize(offers.size())
 	var i: int = 0
 	while i < offers.size():
@@ -319,6 +328,11 @@ func _redraw(stall: Stall) -> void:
 	_update_prices(stall)
 
 
+## When the altar restocks next (every player's stock at once).
+func _restock_text(altar: Altar3D) -> String:
+	return "New stock in %ds" % ceili(altar.restock_left) if altar.shop_restock_time > 0.0 else ""
+
+
 ## The coins went up or down: recolor what's (un)affordable.
 func _update_prices(stall: Stall) -> void:
 	stall.drawn_coins = stall.player.coins_shown()
@@ -327,7 +341,7 @@ func _update_prices(stall: Stall) -> void:
 		var card: Card = stall.cards[i]
 		if card:
 			card.price_label.add_theme_color_override("font_color",
-				FlyingCoin3D.GOLD if _can_buy(stall, stall.altar.offers[i]) else UNAFFORDABLE)
+				FlyingCoin3D.GOLD if _can_buy(stall, stall.offers[i]) else UNAFFORDABLE)
 	_highlight(stall)
 
 
@@ -339,7 +353,7 @@ func _highlight(stall: Stall) -> void:
 			continue
 		card.selected = i == stall.selected
 		var dim: float = 1.0 if card.selected else UNSELECTED_DIM
-		if i >= stall.altar.offers.size() or not _can_buy(stall, stall.altar.offers[i]):
+		if i >= stall.offers.size() or not _can_buy(stall, stall.offers[i]):
 			dim *= UNAFFORDABLE_DIM
 		card.panel.modulate = Color(dim, dim, dim)
 		card.panel.queue_redraw()
@@ -392,8 +406,11 @@ func _make_card(stall: Stall, offer: ShopOffer) -> Card:
 	price_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	price_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	price_row.add_theme_constant_override("separation", 6)
-	price_row.add_child(_coin_icon())
-	card.price_label = _label("%d" % card.price, 26, FlyingCoin3D.GOLD)
+	if offer.sold:
+		card.price_label = _label("SOLD", 26, UNAFFORDABLE)
+	else:
+		price_row.add_child(_coin_icon())
+		card.price_label = _label("%d" % card.price, 26, FlyingCoin3D.GOLD)
 	price_row.add_child(card.price_label)
 	column.add_child(price_row)
 	return card
