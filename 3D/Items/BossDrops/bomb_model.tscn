@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://3D/Items/BossDrops/bomb_model.gd" id="1_model"]
-
-[node name="BombModel" type="Node3D"]
-script = ExtResource("1_model")

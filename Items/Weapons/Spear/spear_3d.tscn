@@ -1,0 +1,49 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bun8vhbdpgja8" path="res://Items/Weapons/Sword/sword_3d.gd" id="script"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://Items/Weapons/weapon_behavior.tscn" id="behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://Items/Weapons/weapon_properties.tscn" id="properties"]
+[ext_resource type="PackedScene" uid="uid://di6gs2vcgx8h5" path="res://Assets/Weapons/spear_A.glb" id="model"]
+[ext_resource type="Resource" path="res://Items/Weapons/Moves/light_lance.tres" id="mv_light"]
+[ext_resource type="Resource" path="res://Items/Weapons/Moves/heavy_lance.tres" id="mv_heavy"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.28, 2.11, 0.25)
+
+[node name="Spear_3D" type="RigidBody3D" node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 1.8
+script = ExtResource("script")
+swing_sound = &"swing_spear"
+grip = 3
+swing_clip = &"CombatMelee/Melee_2H_Attack_Stab"
+throw_point_first = true
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+light_move = ExtResource("mv_light")
+heavy_move = ExtResource("mv_heavy")
+
+[node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
+weapon_name = "Spear"
+base_damage = 45.0
+knockback_force = 12.0
+ball_power = 2.0
+ball_lift = 0.1
+ball_exact = true
+
+[node name="WeaponProperties" parent="." instance=ExtResource("properties")]
+weapon_name = "Spear"
+throw_force = 20.0
+throw_spin_speed = 4.0
+swing_duration = 0.28
+swing_windup = 0.12
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.055, 0.005)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]

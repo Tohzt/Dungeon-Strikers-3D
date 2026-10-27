@@ -1,0 +1,49 @@
+[gd_scene format=3 uid="uid://q6gtgqc5r26i"]
+
+[ext_resource type="Script" uid="uid://c1ybujcli5ex2" path="res://UI/HUD/hud_3d.gd" id="1_hbyoa"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_nobox"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hbyoa")
+
+[node name="Panel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 280.0
+offset_bottom = 104.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_nobox")
+
+[node name="Row" type="HBoxContainer" parent="Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="Bars" type="VBoxContainer" parent="Panel/Row"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="HealthBar" type="ProgressBar" parent="Panel/Row/Bars"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+mouse_filter = 2
+step = 0.01
+value = 100.0
+show_percentage = false
+
+[node name="CarryBar" type="ProgressBar" parent="Panel/Row/Bars"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BoostBar"
+step = 0.01
+value = 100.0
+show_percentage = false

@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="WeaponMove3D" format=3 uid="uid://cltgn87egbxqe"]
+
+[ext_resource type="Script" uid="uid://dy2wxxyaigmo2" path="res://Items/Weapons/weapon_move.gd" id="1_move"]
+[ext_resource type="Script" uid="uid://bq7wksvk2nxc7" path="res://Combat/attack_wave_spec.gd" id="2_wave"]
+[ext_resource type="Script" uid="uid://m3xltna86b7j" path="res://Items/Weapons/weapon_combo.gd" id="3_combo"]
+[ext_resource type="Script" uid="uid://dqt2l4uq7314e" path="res://Items/Weapons/weapon_combo_step.gd" id="4_step"]
+
+[sub_resource type="Resource" id="step_0"]
+script = ExtResource("4_step")
+hand = 1
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.6
+lunge_scale = 0.4
+
+[sub_resource type="Resource" id="step_1"]
+script = ExtResource("4_step")
+hand = 1
+delay = 0.1
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.6
+lunge_scale = 0.4
+
+[sub_resource type="Resource" id="step_2"]
+script = ExtResource("4_step")
+hand = 1
+delay = 0.1
+main_clip = &"CombatMelee/Melee_1H_Attack_Stab"
+duration_scale = 0.7
+damage_scale = 0.6
+lunge_scale = 0.4
+
+[sub_resource type="Resource" id="combo"]
+script = ExtResource("3_combo")
+steps = Array[ExtResource("4_step")]([SubResource("step_0"), SubResource("step_1"), SubResource("step_2")])
+
+[sub_resource type="Resource" id="wave_0"]
+script = ExtResource("2_wave")
+shape = 1
+width = 0.5
+length = 1.5
+speed = 20.0
+reach = 2.6
+delay = 0.02
+damage_scale = 0.45
+knockback_scale = 0.6
+color = Color(0.8, 0.92, 1, 0.85)
+
+[resource]
+script = ExtResource("1_move")
+combo = SubResource("combo")
+waves = Array[ExtResource("2_wave")]([SubResource("wave_0")])

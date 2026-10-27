@@ -1,0 +1,757 @@
+[gd_scene format=3 uid="uid://dr1034qb7ohyb"]
+
+[ext_resource type="Script" uid="uid://k0v0dh0jjmjr" path="res://Game/game_3d.gd" id="1_ddysq"]
+[ext_resource type="PackedScene" uid="uid://c6pn0hh7losfc" path="res://Entities/Player/player_3d.tscn" id="2_0jqmx"]
+[ext_resource type="Script" uid="uid://cgp742w6j8vmw" path="res://Game/tools.gd" id="3_ae7db"]
+[ext_resource type="PackedScene" uid="uid://q6gtgqc5r26i" path="res://UI/HUD/hud.tscn" id="4_fy3xe"]
+[ext_resource type="PackedScene" path="res://UI/HUD/scoreboard.tscn" id="5_3fmcl"]
+[ext_resource type="PackedScene" path="res://UI/Menus/PauseMenu/pause_menu.tscn" id="6_jyk8j"]
+[ext_resource type="PackedScene" uid="uid://q1rbuk5ltxad" path="res://Game/Camera/game_camera.tscn" id="7_qcvor"]
+[ext_resource type="Script" uid="uid://dr0gxbbiuc5r4" path="res://Game/Level/auto_bake_navigation.gd" id="8_5xjtm"]
+[ext_resource type="MeshLibrary" uid="uid://c52v7rtxfudh3" path="res://Game/Maps/GridMaps/dungeon_mesh_library.res" id="9_djtk1"]
+[ext_resource type="MeshLibrary" uid="uid://btvcev40f4tk7" path="res://Game/Maps/GridMaps/dungeon_floor_library.res" id="10_uvecd"]
+[ext_resource type="MeshLibrary" uid="uid://du3ec8aekym6j" path="res://Game/Maps/GridMaps/dungeon_props_library.res" id="11_mohbt"]
+[ext_resource type="PackedScene" path="res://Game/Level/wall_torch.tscn" id="12_8av44"]
+[ext_resource type="PackedScene" uid="uid://c2unbwt1hsje5" path="res://Assets/BetterDungeon/glb/shield_rare.glb" id="13_xlmdv"]
+[ext_resource type="Script" uid="uid://ckfkkyu27xi51" path="res://Game/Level/boss_trigger.gd" id="15_ne6ha"]
+[ext_resource type="Script" uid="uid://b0d37x1lanq1f" path="res://Game/Level/spawn_point.gd" id="16_xn8s7"]
+[ext_resource type="PackedScene" uid="uid://cdei2r6df0bov" path="res://Items/Weapons/Sword/sword_3d.tscn" id="18_gr3ut"]
+[ext_resource type="PackedScene" uid="uid://bfxkjqagjl318" path="res://Items/Chest/chest.tscn" id="25_cgqqt"]
+[ext_resource type="PackedScene" uid="uid://de71j64imtbg0" path="res://Items/Altar/Altar.tscn" id="26_k31i0"]
+[ext_resource type="PackedScene" uid="uid://dq1toy2g128vu" path="res://Entities/SlimeBoss/boss.tscn" id="27_le4n0"]
+[ext_resource type="PackedScene" path="res://UI/HUD/boss_health_bar.tscn" id="28_pivql"]
+[ext_resource type="PackedScene" path="res://UI/HUD/perk_picker.tscn" id="29_8kjxy"]
+[ext_resource type="Script" uid="uid://cth2f48l2dsh5" path="res://Perks/perk_director.gd" id="30_us62g"]
+[ext_resource type="PackedScene" path="res://Items/Armor/armor_pickup.tscn" id="40_armor"]
+[ext_resource type="PackedScene" uid="uid://dkjpdg82rwe33" path="res://Assets/BetterDungeon/glb/banner.glb" id="41_banner"]
+[ext_resource type="PackedScene" uid="uid://cl15jho5rjmye" path="res://Game/Level/banner_red.tscn" id="42_banner_red"]
+[ext_resource type="PackedScene" uid="uid://dr5vljw58paov" path="res://Assets/BetterDungeon/glb/plateFull.glb" id="43_plateFull"]
+[ext_resource type="PackedScene" uid="uid://c1e0q1upciqaw" path="res://Assets/BetterDungeon/glb/mug.glb" id="44_mug"]
+[ext_resource type="PackedScene" uid="uid://b360r06iwvp64" path="res://Assets/BetterDungeon/glb/plateHalf.glb" id="45_plateHalf"]
+[ext_resource type="PackedScene" uid="uid://ubl7wl4dkcng" path="res://Assets/BetterDungeon/glb/bookOpenA.glb" id="46_bookOpenA"]
+[ext_resource type="PackedScene" uid="uid://b5m3qumk0472m" path="res://Assets/BetterDungeon/glb/crate.glb" id="47_crate"]
+[ext_resource type="PackedScene" uid="uid://ddsrhkac74ytw" path="res://Assets/BetterDungeon/glb/quiver_full.glb" id="48_quiver_full"]
+[ext_resource type="PackedScene" uid="uid://dfs3xwan2b2xk" path="res://Assets/BetterDungeon/glb/spellBook.glb" id="49_spellBook"]
+[ext_resource type="PackedScene" uid="uid://27vcmgxdvhbx" path="res://Assets/BetterDungeon/glb/potionSmall_blue.glb" id="50_potionSmall_"]
+[ext_resource type="PackedScene" uid="uid://bfo1vu8vyfns6" path="res://Assets/BetterDungeon/glb/bookA.glb" id="51_bookA"]
+[ext_resource type="PackedScene" uid="uid://bj2wbud06s4fo" path="res://Assets/BetterDungeon/glb/plate.glb" id="52_plate"]
+[ext_resource type="PackedScene" uid="uid://kxvn76yii355" path="res://Assets/BetterDungeon/glb/floorDecoration_shatteredBricks.glb" id="53_floorDecorat"]
+
+[sub_resource type="Environment" id="Environment_8qp10"]
+background_mode = 1
+background_color = Color(0.015, 0.015, 0.025, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.42, 0.45, 0.6, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+ssao_enabled = true
+glow_enabled = true
+glow_bloom = 0.05
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_p4rfi"]
+geometry_parsed_geometry_type = 1
+geometry_source_geometry_mode = 1
+geometry_source_group_name = &"dungeon_nav"
+agent_height = 2.0
+agent_radius = 0.75
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_b34hq"]
+size = Vector3(176, 4, 72)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l61jq"]
+albedo_color = Color(0.06, 0.055, 0.06, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_1vw8f"]
+material = SubResource("StandardMaterial3D_l61jq")
+size = Vector2(240, 130)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ep5sb"]
+size = Vector3(1.5, 40, 33.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8dk4v"]
+size = Vector3(1.5, 40, 33.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gj0q8"]
+size = Vector3(41.5, 40, 1.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_6w0jg"]
+size = Vector3(41.5, 40, 1.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_upnhw"]
+size = Vector3(2.2, 40, 2.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_nvilm"]
+size = Vector3(2.2, 40, 2.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_npimv"]
+size = Vector3(2.2, 40, 2.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_mp4y4"]
+size = Vector3(2.2, 40, 2.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_p77v1"]
+size = Vector3(2, 40, 72)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_7v6q7"]
+size = Vector3(2, 40, 72)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_36odt"]
+size = Vector3(174, 40, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_q5mkp"]
+size = Vector3(174, 40, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wmi0t"]
+size = Vector3(38, 6, 30)
+
+[node name="DungeonArena" type="Node3D" unique_id=2039293745]
+script = ExtResource("1_ddysq")
+player_scene = ExtResource("2_0jqmx")
+spawn_distance = 30.0
+ambience = &"cave"
+max_team_count = 2
+
+[node name="Tools" type="Node" parent="." unique_id=7709918]
+script = ExtResource("3_ae7db")
+testing_mode = true
+
+[node name="HUD" parent="." unique_id=1338016074 instance=ExtResource("4_fy3xe")]
+
+[node name="Scoreboard" parent="." unique_id=1951278162 instance=ExtResource("5_3fmcl")]
+
+[node name="PauseMenu" parent="." unique_id=282757706 instance=ExtResource("6_jyk8j")]
+
+[node name="Camera3D" parent="." unique_id=1583300921 instance=ExtResource("7_qcvor")]
+transform = Transform3D(1, 0, 0, 0, 0.4067366, 0.9135455, 0, -0.9135455, 0.4067366, 0, 30, 13.35686)
+group_max_fov = 82.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1051834958]
+environment = SubResource("Environment_8qp10")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=28761109]
+transform = Transform3D(0.81915206, -0.50643796, 0.26927787, 0, 0.4694716, 0.88294756, -0.57357645, -0.72326833, 0.38456863, 0, 0, 0)
+light_color = Color(0.75, 0.8, 1, 1)
+light_energy = 0.55
+shadow_enabled = true
+
+[node name="Walls" type="Node3D" parent="." unique_id=1018633583]
+
+[node name="Navigation" type="NavigationRegion3D" parent="Walls" unique_id=1862909681]
+navigation_mesh = SubResource("NavigationMesh_p4rfi")
+script = ExtResource("8_5xjtm")
+
+[node name="Floor" type="StaticBody3D" parent="Walls" unique_id=2121507181 groups=["dungeon_nav"]]
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/Floor" unique_id=314486130]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+shape = SubResource("BoxShape3D_b34hq")
+
+[node name="Bedrock" type="MeshInstance3D" parent="Walls" unique_id=2105797790]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.03, 0)
+mesh = SubResource("PlaneMesh_1vw8f")
+
+[node name="WallGrid" type="GridMap" parent="Walls" unique_id=1011738542 groups=["dungeon_nav"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -2)
+mesh_library = ExtResource("9_djtk1")
+cell_size = Vector3(4, 4, 4)
+cell_center_y = false
+collision_mask = 0
+data = {
+"cells": PackedInt32Array(65515, 65528, 1048579, 21, 65528, 3, 65516, 65528, 2, 20, 65528, 2, 65517, 65528, 17, 19, 65528, 17, 65518, 65528, 4, 18, 65528, 4, 65519, 65528, 16, 17, 65528, 16, 65520, 65528, 2, 16, 65528, 2, 65521, 65528, 2, 15, 65528, 2, 65522, 65528, 4, 14, 65528, 4, 65523, 65528, 2, 13, 65528, 2, 65524, 65528, 2, 12, 65528, 2, 65525, 65528, 2, 11, 65528, 2, 65526, 65528, 4, 10, 65528, 4, 65527, 65528, 3, 9, 65528, 1048579, 65515, 8, 655363, 21, 8, 1441795, 65516, 8, 2, 20, 8, 2, 65517, 8, 2, 19, 8, 2, 65518, 8, 4, 18, 8, 4, 65519, 8, 655376, 17, 8, 655376, 65520, 8, 2, 16, 8, 2, 65521, 8, 2, 15, 8, 2, 65522, 8, 4, 14, 8, 4, 65523, 8, 2, 13, 8, 2, 65524, 8, 5, 12, 8, 5, 65525, 8, 2, 11, 8, 2, 65526, 8, 5, 10, 8, 5, 65527, 8, 1441795, 9, 8, 655363, 65527, 65530, 655363, 9, 65530, 1441795, 65528, 65530, 2, 8, 65530, 2, 65529, 65530, 2, 7, 65530, 2, 65530, 65530, 2, 6, 65530, 2, 65531, 65530, 5, 5, 65530, 5, 65532, 65530, 4, 4, 65530, 4, 65533, 65530, 2, 3, 65530, 2, 65534, 65530, 3, 2, 65530, 1048579, 65527, 6, 1048579, 9, 6, 3, 65528, 6, 2, 8, 6, 2, 65529, 6, 2, 7, 6, 2, 65530, 6, 2, 6, 6, 2, 65531, 6, 5, 5, 6, 5, 65532, 6, 4, 4, 6, 4, 65533, 6, 2, 3, 6, 2, 65534, 6, 1441795, 2, 6, 655363, 65515, 65532, 1048592, 21, 65532, 1441808, 65516, 65532, 655379, 20, 65532, 19, 65518, 65532, 19, 18, 65532, 655379, 65519, 65532, 6, 17, 65532, 6, 65520, 65532, 5, 16, 65532, 5, 65521, 65532, 2, 15, 65532, 2, 65522, 65532, 655379, 14, 65532, 19, 65524, 65532, 19, 12, 65532, 655379, 65525, 65532, 4, 11, 65532, 4, 65526, 65532, 2, 10, 65532, 2, 65527, 65532, 2, 9, 65532, 2, 65528, 65532, 2, 8, 65532, 2, 65529, 65532, 4, 7, 65532, 4, 65530, 65532, 2, 6, 65532, 2, 65531, 65532, 17, 5, 65532, 17, 65532, 65532, 655379, 4, 65532, 19, 65534, 65532, 655363, 2, 65532, 1441795, 65535, 65532, 4, 1, 65532, 4, 0, 65532, 2, 65515, 4, 1048592, 21, 4, 1441808, 65516, 4, 655379, 20, 4, 19, 65518, 4, 19, 18, 4, 655379, 65519, 4, 6, 17, 4, 6, 65520, 4, 4, 16, 4, 4, 65521, 4, 2, 15, 4, 2, 65522, 4, 655379, 14, 4, 19, 65524, 4, 19, 12, 4, 655379, 65525, 4, 4, 11, 4, 4, 65526, 4, 2, 10, 4, 2, 65527, 4, 2, 9, 4, 2, 65528, 4, 2, 8, 4, 2, 65529, 4, 2, 7, 4, 2, 65530, 4, 2, 6, 4, 2, 65531, 4, 5, 5, 4, 5, 65532, 4, 655379, 4, 4, 19, 65534, 4, 1048579, 2, 4, 3, 65535, 4, 4, 1, 4, 4, 0, 4, 2, 65527, 65534, 1048579, 9, 65534, 3, 65528, 65534, 2, 8, 65534, 2, 65529, 65534, 5, 7, 65534, 5, 65530, 65534, 5, 6, 65534, 5, 65531, 65534, 3, 5, 65534, 1048579, 65527, 2, 655363, 9, 2, 1441795, 65528, 2, 2, 8, 2, 2, 65529, 2, 4, 7, 2, 4, 65530, 2, 5, 6, 2, 5, 65531, 2, 1441795, 5, 2, 655363, 65515, 65529, 1048578, 21, 65529, 1048578, 65515, 65530, 1048578, 21, 65530, 1048578, 65515, 65531, 1048578, 21, 65531, 1048578, 65515, 65533, 1048578, 21, 65533, 1048578, 65515, 65534, 1048578, 21, 65534, 1048578, 65515, 65535, 1048581, 21, 65535, 1048581, 65515, 0, 1048578, 21, 0, 1048578, 65515, 1, 1048581, 21, 1, 1048581, 65515, 2, 1048578, 21, 2, 1048578, 65515, 3, 1048578, 21, 3, 1048578, 65515, 5, 1048578, 21, 5, 1048578, 65515, 6, 1048578, 21, 6, 1048578, 65515, 7, 1048578, 21, 7, 1048578, 65519, 65529, 1048595, 17, 65529, 1048595, 65519, 65531, 1441811, 17, 65531, 1441811, 65519, 65533, 1048581, 17, 65533, 1048581, 65519, 65534, 1048578, 17, 65534, 1048578, 65519, 65535, 1048595, 17, 65535, 1048595, 65519, 1, 1441811, 17, 1, 1441811, 65519, 2, 1048578, 17, 2, 1048578, 65519, 3, 1048581, 17, 3, 1048581, 65519, 5, 1048595, 17, 5, 1048595, 65519, 7, 1441811, 17, 7, 1441811, 65527, 65529, 1048578, 9, 65529, 1048578, 65527, 65535, 1048578, 9, 65535, 1048578, 65527, 0, 1048597, 9, 0, 1048597, 65527, 1, 1048578, 9, 1, 1048578, 65527, 7, 1048578, 9, 7, 1048578, 65531, 65535, 1048578, 5, 65535, 1048578, 65531, 0, 1048578, 5, 0, 1048578, 65531, 1, 1048578, 5, 1, 1048578, 65534, 65531, 1048578, 2, 65531, 1048578, 65534, 5, 1048578, 2, 5, 1048578, 65521, 65534, 0, 15, 65534, 0, 65525, 65534, 0, 11, 65534, 0, 65521, 2, 0, 15, 2, 0, 65525, 2, 0, 11, 2, 0, 65521, 6, 1, 15, 6, 1, 65525, 6, 1, 11, 6, 1, 65534, 65534, 1, 2, 65534, 1, 65534, 2, 1, 2, 2, 1)
+}
+
+[node name="FloorGrid" type="GridMap" parent="Walls" unique_id=1994493081]
+mesh_library = ExtResource("10_uvecd")
+cell_size = Vector3(4, 4, 4)
+cell_center_y = false
+collision_layer = 0
+collision_mask = 0
+data = {
+"cells": PackedInt32Array(65531, 65532, 1048577, 65531, 65533, 655360, 65531, 65534, 1441793, 65531, 65535, 655360, 65531, 0, 1, 65531, 1, 0, 65531, 2, 1048577, 65531, 3, 0, 65532, 65532, 1048576, 65532, 65533, 655361, 65532, 65534, 0, 65532, 65535, 1, 65532, 0, 0, 65532, 1, 1, 65532, 2, 0, 65532, 3, 655361, 65533, 65532, 1048577, 65533, 65533, 655360, 65533, 65534, 655361, 65533, 65535, 1048576, 65533, 0, 655361, 65533, 1, 1441792, 65533, 2, 1, 65533, 3, 0, 65534, 65532, 655360, 65534, 65533, 1441793, 65534, 65534, 1441792, 65534, 65535, 1441793, 65534, 0, 1048576, 65534, 1, 1441793, 65534, 2, 1441792, 65534, 3, 1441793, 65535, 65532, 1441793, 65535, 65533, 1048576, 65535, 65534, 1, 65535, 65535, 0, 65535, 0, 1048577, 65535, 1, 655360, 65535, 2, 655361, 65535, 3, 1441792, 0, 65532, 1441792, 0, 65533, 1048577, 0, 65534, 0, 0, 65535, 1, 0, 0, 1048576, 0, 1, 655361, 0, 2, 655360, 0, 3, 1441793, 1, 65532, 655361, 1, 65533, 1441792, 1, 65534, 1441793, 1, 65535, 1441792, 1, 0, 1048577, 1, 1, 1441792, 1, 2, 1441793, 1, 3, 1441792, 2, 65532, 1048576, 2, 65533, 655361, 2, 65534, 655360, 2, 65535, 1048577, 2, 0, 655360, 2, 1, 1441793, 2, 2, 0, 2, 3, 1, 3, 65532, 1048577, 3, 65533, 655360, 3, 65534, 1, 3, 65535, 0, 3, 0, 1, 3, 1, 0, 3, 2, 1, 3, 3, 655360, 4, 65532, 1048576, 4, 65533, 655361, 4, 65534, 1441792, 4, 65535, 655361, 4, 0, 0, 4, 1, 1, 4, 2, 1048576, 4, 3, 1, 65515, 65532, 0, 65515, 65533, 0, 65515, 65534, 655361, 65515, 65535, 1048577, 65515, 0, 1441793, 65515, 1, 1441793, 65515, 2, 0, 65515, 3, 655361, 65516, 65532, 1441793, 65516, 65533, 0, 65516, 65534, 0, 65516, 65535, 1048577, 65516, 0, 1048577, 65516, 1, 1048577, 65516, 2, 0, 65516, 3, 0, 65517, 65532, 1441793, 65517, 65533, 655361, 65517, 65534, 0, 65517, 65535, 655361, 65517, 0, 1048577, 65517, 1, 0, 65517, 2, 655361, 65517, 3, 0, 65518, 65532, 0, 65518, 65533, 1441793, 65518, 65534, 1048577, 65518, 65535, 0, 65518, 0, 1048577, 65518, 1, 0, 65518, 2, 1048577, 65518, 3, 1441793, 20, 65532, 0, 20, 65533, 0, 20, 65534, 655361, 20, 65535, 1048577, 20, 0, 1441793, 20, 1, 1441793, 20, 2, 0, 20, 3, 655361, 19, 65532, 1441793, 19, 65533, 0, 19, 65534, 0, 19, 65535, 1048577, 19, 0, 1048577, 19, 1, 1048577, 19, 2, 0, 19, 3, 0, 18, 65532, 1441793, 18, 65533, 655361, 18, 65534, 0, 18, 65535, 655361, 18, 0, 1048577, 18, 1, 0, 18, 2, 655361, 18, 3, 0, 17, 65532, 0, 17, 65533, 1441793, 17, 65534, 1048577, 17, 65535, 0, 17, 0, 1048577, 17, 1, 0, 17, 2, 1048577, 17, 3, 1441793, 65515, 65528, 1, 65515, 65529, 655361, 65515, 65530, 0, 65515, 65531, 655361, 65516, 65528, 655361, 65516, 65529, 655360, 65516, 65530, 1, 65516, 65531, 655361, 65517, 65528, 655360, 65517, 65529, 1441793, 65517, 65530, 1441792, 65517, 65531, 0, 65518, 65528, 655360, 65518, 65529, 1048576, 65518, 65530, 1441793, 65518, 65531, 655361, 20, 65528, 1, 20, 65529, 655361, 20, 65530, 0, 20, 65531, 655361, 19, 65528, 655361, 19, 65529, 655360, 19, 65530, 1, 19, 65531, 655361, 18, 65528, 655360, 18, 65529, 1441793, 18, 65530, 1441792, 18, 65531, 0, 17, 65528, 655360, 17, 65529, 1048576, 17, 65530, 1441793, 17, 65531, 655361, 65515, 4, 655360, 65515, 5, 0, 65515, 6, 655361, 65515, 7, 0, 65516, 4, 1441792, 65516, 5, 655361, 65516, 6, 0, 65516, 7, 655360, 65517, 4, 1048576, 65517, 5, 655361, 65517, 6, 1048577, 65517, 7, 1048576, 65518, 4, 0, 65518, 5, 655361, 65518, 6, 1441793, 65518, 7, 1048576, 20, 4, 655360, 20, 5, 0, 20, 6, 655361, 20, 7, 0, 19, 4, 1441792, 19, 5, 655361, 19, 6, 0, 19, 7, 655360, 18, 4, 1048576, 18, 5, 655361, 18, 6, 1048577, 18, 7, 1048576, 17, 4, 0, 17, 5, 655361, 17, 6, 1441793, 17, 7, 1048576, 65519, 65532, 0, 65519, 65533, 0, 65519, 65534, 1441793, 65519, 65535, 655361, 65519, 0, 1441793, 65519, 1, 0, 65519, 2, 1048577, 65519, 3, 655361, 65520, 65532, 0, 65520, 65533, 1048577, 65520, 65534, 0, 65520, 65535, 655361, 65520, 0, 655361, 65520, 1, 655361, 65520, 2, 0, 65520, 3, 1048577, 65521, 65532, 1048577, 65521, 65533, 0, 65521, 65534, 0, 65521, 65535, 1441793, 65521, 0, 1048577, 65521, 1, 1048577, 65521, 2, 655361, 65521, 3, 655361, 65522, 65532, 1048577, 65522, 65533, 655361, 65522, 65534, 1441793, 65522, 65535, 655361, 65522, 0, 1441793, 65522, 1, 655361, 65522, 2, 1441793, 65522, 3, 655361, 65523, 65532, 655361, 65523, 65533, 1441793, 65523, 65534, 1048577, 65523, 65535, 0, 65523, 0, 0, 65523, 1, 1048577, 65523, 2, 1441793, 65523, 3, 1048577, 65524, 65532, 1048577, 65524, 65533, 655361, 65524, 65534, 655361, 65524, 65535, 1048577, 65524, 0, 1048577, 65524, 1, 1048577, 65524, 2, 655361, 65524, 3, 655361, 65525, 65532, 655361, 65525, 65533, 655361, 65525, 65534, 1048577, 65525, 65535, 1048577, 65525, 0, 655361, 65525, 1, 1441793, 65525, 2, 1441793, 65525, 3, 0, 65526, 65532, 1048577, 65526, 65533, 1048577, 65526, 65534, 1048577, 65526, 65535, 655361, 65526, 0, 1441793, 65526, 1, 655361, 65526, 2, 1048577, 65526, 3, 1048577, 16, 65532, 0, 16, 65533, 0, 16, 65534, 1441793, 16, 65535, 655361, 16, 0, 1441793, 16, 1, 0, 16, 2, 1048577, 16, 3, 655361, 15, 65532, 0, 15, 65533, 1048577, 15, 65534, 0, 15, 65535, 655361, 15, 0, 655361, 15, 1, 655361, 15, 2, 0, 15, 3, 1048577, 14, 65532, 1048577, 14, 65533, 0, 14, 65534, 0, 14, 65535, 1441793, 14, 0, 1048577, 14, 1, 1048577, 14, 2, 655361, 14, 3, 655361, 13, 65532, 1048577, 13, 65533, 655361, 13, 65534, 1441793, 13, 65535, 655361, 13, 0, 1441793, 13, 1, 655361, 13, 2, 1441793, 13, 3, 655361, 12, 65532, 655361, 12, 65533, 1441793, 12, 65534, 1048577, 12, 65535, 0, 12, 0, 0, 12, 1, 1048577, 12, 2, 1441793, 12, 3, 1048577, 11, 65532, 1048577, 11, 65533, 655361, 11, 65534, 655361, 11, 65535, 1048577, 11, 0, 1048577, 11, 1, 1048577, 11, 2, 655361, 11, 3, 655361, 10, 65532, 655361, 10, 65533, 655361, 10, 65534, 1048577, 10, 65535, 1048577, 10, 0, 655361, 10, 1, 1441793, 10, 2, 1441793, 10, 3, 0, 9, 65532, 1048577, 9, 65533, 1048577, 9, 65534, 1048577, 9, 65535, 655361, 9, 0, 1441793, 9, 1, 655361, 9, 2, 1048577, 9, 3, 1048577, 65519, 65528, 1048577, 65519, 65529, 655361, 65519, 65530, 655361, 65519, 65531, 655360, 65520, 65528, 1441792, 65520, 65529, 0, 65520, 65530, 1048576, 65520, 65531, 655360, 65521, 65528, 0, 65521, 65529, 655360, 65521, 65530, 655360, 65521, 65531, 1048577, 65522, 65528, 0, 65522, 65529, 1441792, 65522, 65530, 655361, 65522, 65531, 655360, 65523, 65528, 0, 65523, 65529, 0, 65523, 65530, 1048576, 65523, 65531, 1048577, 65524, 65528, 1, 65524, 65529, 655360, 65524, 65530, 1441792, 65524, 65531, 1441792, 65525, 65528, 1441792, 65525, 65529, 0, 65525, 65530, 655360, 65525, 65531, 655361, 65526, 65528, 1048576, 65526, 65529, 1441793, 65526, 65530, 1048576, 65526, 65531, 655360, 16, 65528, 1048577, 16, 65529, 655361, 16, 65530, 655361, 16, 65531, 655360, 15, 65528, 1441792, 15, 65529, 0, 15, 65530, 1048576, 15, 65531, 655360, 14, 65528, 0, 14, 65529, 655360, 14, 65530, 655360, 14, 65531, 1048577, 13, 65528, 0, 13, 65529, 1441792, 13, 65530, 655361, 13, 65531, 655360, 12, 65528, 0, 12, 65529, 0, 12, 65530, 1048576, 12, 65531, 1048577, 11, 65528, 1, 11, 65529, 655360, 11, 65530, 1441792, 11, 65531, 1441792, 10, 65528, 1441792, 10, 65529, 0, 10, 65530, 655360, 10, 65531, 655361, 9, 65528, 1048576, 9, 65529, 1441793, 9, 65530, 1048576, 9, 65531, 655360, 65519, 4, 655361, 65519, 5, 1, 65519, 6, 1, 65519, 7, 1, 65520, 4, 1, 65520, 5, 655361, 65520, 6, 1048577, 65520, 7, 1, 65521, 4, 1441793, 65521, 5, 1441793, 65521, 6, 1, 65521, 7, 1, 65522, 4, 1048577, 65522, 5, 655361, 65522, 6, 655361, 65522, 7, 1441793, 65523, 4, 1, 65523, 5, 1441793, 65523, 6, 1441793, 65523, 7, 655361, 65524, 4, 1048577, 65524, 5, 1441793, 65524, 6, 1441793, 65524, 7, 655361, 65525, 4, 1, 65525, 5, 1, 65525, 6, 1, 65525, 7, 655361, 65526, 4, 1048577, 65526, 5, 655361, 65526, 6, 1048577, 65526, 7, 1441793, 16, 4, 655361, 16, 5, 1, 16, 6, 1, 16, 7, 1, 15, 4, 1, 15, 5, 655361, 15, 6, 1048577, 15, 7, 1, 14, 4, 1441793, 14, 5, 1441793, 14, 6, 1, 14, 7, 1, 13, 4, 1048577, 13, 5, 655361, 13, 6, 655361, 13, 7, 1441793, 12, 4, 1, 12, 5, 1441793, 12, 6, 1441793, 12, 7, 655361, 11, 4, 1048577, 11, 5, 1441793, 11, 6, 1441793, 11, 7, 655361, 10, 4, 1, 10, 5, 1, 10, 6, 1, 10, 7, 655361, 9, 4, 1048577, 9, 5, 655361, 9, 6, 1048577, 9, 7, 1441793, 65527, 65532, 655361, 65527, 65533, 655360, 65528, 65532, 1048576, 65528, 65533, 1441792, 65529, 65532, 1048577, 65529, 65533, 1441793, 65530, 65532, 655360, 65530, 65533, 1, 8, 65532, 655361, 8, 65533, 655360, 7, 65532, 1048576, 7, 65533, 1441792, 6, 65532, 1048577, 6, 65533, 1441793, 5, 65532, 655360, 5, 65533, 1, 65527, 2, 1048577, 65527, 3, 0, 65528, 2, 1441793, 65528, 3, 1441792, 65529, 2, 1441793, 65529, 3, 1048576, 65530, 2, 655361, 65530, 3, 1, 8, 2, 1048577, 8, 3, 0, 7, 2, 1441793, 7, 3, 1441792, 6, 2, 1441793, 6, 3, 1048576, 5, 2, 655361, 5, 3, 1, 65527, 65530, 0, 65527, 65531, 1048576, 65528, 65530, 655360, 65528, 65531, 1441793, 65529, 65530, 1048577, 65529, 65531, 1441792, 65530, 65530, 1048576, 65530, 65531, 1048577, 65531, 65530, 1048576, 65531, 65531, 655361, 65532, 65530, 1441792, 65532, 65531, 1441792, 65533, 65530, 1048577, 65533, 65531, 1441792, 8, 65530, 0, 8, 65531, 1048576, 7, 65530, 655360, 7, 65531, 1441793, 6, 65530, 1048577, 6, 65531, 1441792, 5, 65530, 1048576, 5, 65531, 1048577, 4, 65530, 1048576, 4, 65531, 655361, 3, 65530, 1441792, 3, 65531, 1441792, 2, 65530, 1048577, 2, 65531, 1441792, 65527, 4, 1, 65527, 5, 1441793, 65528, 4, 1048576, 65528, 5, 1441793, 65529, 4, 1441793, 65529, 5, 1048577, 65530, 4, 655361, 65530, 5, 1048577, 65531, 4, 1441792, 65531, 5, 0, 65532, 4, 1048576, 65532, 5, 1441792, 65533, 4, 1441792, 65533, 5, 1048576, 8, 4, 1, 8, 5, 1441793, 7, 4, 1048576, 7, 5, 1441793, 6, 4, 1441793, 6, 5, 1048577, 5, 4, 655361, 5, 5, 1048577, 4, 4, 1441792, 4, 5, 0, 3, 4, 1048576, 3, 5, 1441792, 2, 4, 1441792, 2, 5, 1048576, 65527, 65534, 1441793, 65527, 65535, 655361, 65527, 0, 1441793, 65527, 1, 0, 65528, 65534, 1441793, 65528, 65535, 655361, 65528, 0, 655361, 65528, 1, 655361, 65529, 65534, 1048577, 65529, 65535, 1441793, 65529, 0, 0, 65529, 1, 1048577, 65530, 65534, 655361, 65530, 65535, 1048577, 65530, 0, 0, 65530, 1, 1048577, 8, 65534, 1441793, 8, 65535, 655361, 8, 0, 1441793, 8, 1, 0, 7, 65534, 1441793, 7, 65535, 655361, 7, 0, 655361, 7, 1, 655361, 6, 65534, 1048577, 6, 65535, 1441793, 6, 0, 0, 6, 1, 1048577, 5, 65534, 655361, 5, 65535, 1048577, 5, 0, 0, 5, 1, 1048577)
+}
+
+[node name="PropGrid" type="GridMap" parent="Walls" unique_id=47629130 groups=["dungeon_nav"]]
+mesh_library = ExtResource("11_mohbt")
+cell_size = Vector3(0.5, 0.5, 0.5)
+cell_center_y = false
+collision_mask = 0
+data = {
+"cells": PackedInt32Array(65373, 65525, 1048585, 162, 65525, 1441801, 65376, 65523, 1048586, 159, 65523, 1441802, 65373, 10, 1048585, 162, 10, 1441801, 65376, 8, 1048586, 159, 8, 1441802, 65371, 65507, 0, 164, 65507, 0, 65373, 65507, 1, 162, 65507, 1, 65371, 65509, 1048576, 164, 65509, 1441792, 65375, 65507, 42, 160, 65507, 42, 65371, 28, 2, 164, 28, 2, 65373, 28, 1048579, 162, 28, 1441795, 65375, 28, 33, 160, 28, 33, 65374, 65474, 655398, 162, 65474, 655398, 65384, 65474, 655398, 152, 65474, 655398, 65394, 65474, 655398, 142, 65474, 655398, 65371, 65499, 5, 164, 65499, 5, 65396, 65475, 0, 139, 65475, 0, 65396, 65477, 1048576, 139, 65477, 1441792, 65373, 61, 655376, 162, 61, 655376, 65381, 61, 655378, 154, 61, 655378, 65389, 61, 655376, 146, 61, 655376, 65370, 50, 1048588, 165, 50, 1441804, 65370, 45, 1048587, 165, 45, 1441803, 65383, 48, 8, 152, 48, 8, 65383, 51, 655400, 152, 51, 655400, 65387, 48, 41, 148, 48, 41, 65376, 55, 51, 159, 55, 51, 65377, 56, 1048622, 158, 56, 1441838, 65396, 61, 35, 139, 61, 35, 65394, 61, 59, 141, 61, 59, 65396, 35, 25, 139, 35, 25, 65439, 65531, 64, 96, 65531, 64, 65432, 5, 63, 103, 5, 63, 65441, 4, 1048641, 94, 4, 1441857, 65429, 65530, 32, 106, 65530, 32, 65403, 65507, 29, 132, 65507, 29, 65405, 65506, 26, 130, 65506, 26, 65460, 65506, 3, 75, 65506, 3, 65458, 65506, 0, 77, 65506, 0, 65403, 28, 29, 132, 28, 29, 65405, 29, 26, 130, 29, 26, 65460, 29, 3, 75, 29, 3, 65458, 29, 0, 77, 29, 0, 65415, 65480, 8, 120, 65480, 8, 65415, 65483, 41, 120, 65483, 41, 65419, 65480, 41, 116, 65480, 41, 65425, 65476, 7, 110, 65476, 7, 65425, 65479, 655400, 110, 65479, 655400, 65440, 65474, 655398, 96, 65474, 655398, 65448, 65474, 655398, 88, 65474, 655398, 65404, 65476, 6, 131, 65476, 6, 65403, 65482, 2, 132, 65482, 2, 65459, 65475, 0, 76, 65475, 0, 65457, 65475, 1, 78, 65475, 1, 65459, 65477, 0, 76, 65477, 0, 65452, 65499, 1048619, 83, 65499, 1441835, 65439, 61, 655377, 96, 61, 655377, 65450, 61, 655373, 85, 61, 655373, 65403, 60, 31, 132, 60, 31, 65405, 61, 28, 130, 61, 28, 65403, 58, 27, 132, 58, 27, 65459, 60, 25, 76, 60, 25, 65456, 61, 33, 79, 61, 33, 65424, 56, 1048657, 111, 56, 1441873, 65413, 40, 64, 122, 40, 64, 65444, 38, 52, 91, 38, 52, 65453, 36, 61, 82, 36, 61, 65455, 37, 58, 80, 37, 58, 65409, 51, 655403, 126, 51, 655403, 65445, 54, 43, 90, 54, 43, 65477, 0, 1048599, 58, 0, 1441815, 65483, 65528, 37, 52, 65528, 37, 65487, 6, 1048641, 48, 6, 1441857, 65472, 9, 64, 63, 9, 64, 65480, 10, 63, 55, 10, 63, 65491, 65524, 32, 44, 65524, 32, 65489, 65523, 33, 46, 65523, 33, 65488, 0, 39, 47, 0, 39, 65468, 65524, 27, 67, 65524, 27, 65470, 65523, 29, 65, 65523, 29, 65469, 65505, 0, 66, 65505, 0, 65487, 65517, 3, 48, 65517, 3, 65469, 29, 0, 66, 29, 0, 65487, 18, 3, 48, 18, 3, 65469, 65489, 4, 66, 65489, 4, 65472, 65489, 2, 63, 65489, 2, 65501, 65490, 43, 34, 65490, 43, 65469, 46, 4, 66, 46, 4, 65472, 46, 2, 63, 46, 2, 65501, 45, 43, 34, 45, 43, 65507, 65511, 4, 28, 65511, 4)
+}
+
+[node name="Decor" type="Node3D" parent="Walls" unique_id=51619257]
+
+[node name="TeamGlowBlue" type="OmniLight3D" parent="Walls/Decor" unique_id=2018591415]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -78, 5, 0)
+light_color = Color(0.35, 0.5, 1, 1)
+light_energy = 2.0
+omni_range = 16.0
+
+[node name="TeamGlowRed" type="OmniLight3D" parent="Walls/Decor" unique_id=522291636]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 78, 5, 0)
+light_color = Color(1, 0.35, 0.3, 1)
+light_energy = 2.0
+omni_range = 16.0
+
+[node name="banner_Blue1" parent="Walls/Decor" unique_id=1707584844 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.2, 3.7, -9)
+
+[node name="banner_Red2" parent="Walls/Decor" unique_id=96573409 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.2, 3.7, -9)
+
+[node name="banner_Blue3" parent="Walls/Decor" unique_id=210823296 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.2, 3.7, 9)
+
+[node name="banner_Red4" parent="Walls/Decor" unique_id=483938114 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.2, 3.7, 9)
+
+[node name="WallTorch_Blue5" parent="Walls/Decor" unique_id=1259693481 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.1, 1.9, -13)
+
+[node name="WallTorch_Red6" parent="Walls/Decor" unique_id=737289171 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.1, 1.9, -13)
+
+[node name="WallTorch_Blue7" parent="Walls/Decor" unique_id=401239460 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.1, 1.9, 0)
+
+[node name="WallTorch_Red8" parent="Walls/Decor" unique_id=887404424 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.1, 1.9, 0)
+
+[node name="WallTorch_Blue9" parent="Walls/Decor" unique_id=339342805 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.1, 1.9, 13)
+
+[node name="WallTorch_Red10" parent="Walls/Decor" unique_id=387522795 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.1, 1.9, 13)
+
+[node name="WallTorch_Blue11" parent="Walls/Decor" unique_id=1474693652 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -76, 1.9, -15.1)
+
+[node name="WallTorch_Red12" parent="Walls/Decor" unique_id=1234093182 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76, 1.9, -15.1)
+
+[node name="WallTorch_Blue13" parent="Walls/Decor" unique_id=619212345 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -76, 1.9, 15.1)
+
+[node name="WallTorch_Red14" parent="Walls/Decor" unique_id=1365532457 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 76, 1.9, 15.1)
+
+[node name="plateFull_Blue15" parent="Walls/Decor" unique_id=1882249556 instance=ExtResource("43_plateFull")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -81.3, 0.71000004, -6)
+
+[node name="plateFull_Red16" parent="Walls/Decor" unique_id=1469956630 instance=ExtResource("43_plateFull")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 81.3, 0.71000004, -6)
+
+[node name="mug_Blue17" parent="Walls/Decor" unique_id=1700385035 instance=ExtResource("44_mug")]
+transform = Transform3D(0.76604444, 0, 0.6427876, 0, 1, 0, -0.6427876, 0, 0.76604444, -81, 0.9059093, -4.6)
+
+[node name="mug_Red18" parent="Walls/Decor" unique_id=1089884188 instance=ExtResource("44_mug")]
+transform = Transform3D(0.76604444, 0, -0.6427876, 0, 1, 0, 0.6427876, 0, 0.76604444, 81, 0.9059093, -4.6)
+
+[node name="plateHalf_Blue19" parent="Walls/Decor" unique_id=1800201264 instance=ExtResource("45_plateHalf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -81.4, 0.71, 4.6)
+
+[node name="plateHalf_Red20" parent="Walls/Decor" unique_id=895553542 instance=ExtResource("45_plateHalf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 81.4, 0.71, 4.6)
+
+[node name="mug_Blue21" parent="Walls/Decor" unique_id=2001574978 instance=ExtResource("44_mug")]
+transform = Transform3D(0.9396926, 0, -0.34202012, 0, 1, 0, 0.34202012, 0, 0.9396926, -81.1, 0.9059093, 6.1)
+
+[node name="mug_Red22" parent="Walls/Decor" unique_id=1744605243 instance=ExtResource("44_mug")]
+transform = Transform3D(0.9396926, 0, 0.34202012, 0, 1, 0, -0.34202012, 0, 0.9396926, 81.1, 0.9059093, 6.1)
+
+[node name="bookOpenA_Blue23" parent="Walls/Decor" unique_id=1240745038 instance=ExtResource("46_bookOpenA")]
+transform = Transform3D(0.9848077, 0, 0.17364818, 0, 1, 0, -0.17364818, 0, 0.9848077, -81.3, 0.74731374, 5.6)
+
+[node name="bookOpenA_Red24" parent="Walls/Decor" unique_id=256995804 instance=ExtResource("46_bookOpenA")]
+transform = Transform3D(0.9848077, 0, -0.17364818, 0, 1, 0, 0.17364818, 0, 0.9848077, 81.3, 0.74731374, 5.6)
+
+[node name="crate_Blue25" parent="Walls/Decor" unique_id=497620620 instance=ExtResource("47_crate")]
+transform = Transform3D(0.90630776, 0, 0.42261827, 0, 1, 0, -0.42261827, 0, 0.90630776, -82.2, 1.5860376, 14.2)
+
+[node name="crate_Red26" parent="Walls/Decor" unique_id=815658757 instance=ExtResource("47_crate")]
+transform = Transform3D(0.90630776, 0, -0.42261827, 0, 1, 0, 0.42261827, 0, 0.90630776, 82.2, 1.5860376, 14.2)
+
+[node name="quiver_full_Blue27" parent="Walls/Decor" unique_id=1519811853 instance=ExtResource("48_quiver_full")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -82.5, 0.3777805, -30.4)
+
+[node name="quiver_full_Red28" parent="Walls/Decor" unique_id=1688602162 instance=ExtResource("48_quiver_full")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 82.5, 0.3777805, -30.4)
+
+[node name="shield_rare_Blue29" parent="Walls/Decor" unique_id=227940110 instance=ExtResource("13_xlmdv")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -73, 0.45, -30.9)
+
+[node name="shield_rare_Red30" parent="Walls/Decor" unique_id=304075524 instance=ExtResource("13_xlmdv")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 73, 0.45, -30.9)
+
+[node name="WallTorch_Blue31" parent="Walls/Decor" unique_id=1108184280 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -76, 1.9, -31.1)
+
+[node name="WallTorch_Red32" parent="Walls/Decor" unique_id=260847597 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76, 1.9, -31.1)
+
+[node name="WallTorch_Blue33" parent="Walls/Decor" unique_id=1347769406 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.1, 1.9, -24)
+
+[node name="WallTorch_Red34" parent="Walls/Decor" unique_id=100156575 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.1, 1.9, -24)
+
+[node name="banner_Blue35" parent="Walls/Decor" unique_id=560111559 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.2, 3.7, -28.5)
+
+[node name="banner_Red36" parent="Walls/Decor" unique_id=255494836 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.2, 3.7, -28.5)
+
+[node name="spellBook_Blue37" parent="Walls/Decor" unique_id=897196768 instance=ExtResource("49_spellBook")]
+transform = Transform3D(0.9659258, 0, 0.25881904, 0, 1, 0, -0.25881904, 0, 0.9659258, -76.4, 0.8915826, 24.2)
+
+[node name="spellBook_Red38" parent="Walls/Decor" unique_id=1569057133 instance=ExtResource("49_spellBook")]
+transform = Transform3D(0.9659258, 0, -0.25881904, 0, 1, 0, 0.25881904, 0, 0.9659258, 76.4, 0.8915826, 24.2)
+
+[node name="potionSmall_blue_Blue39" parent="Walls/Decor" unique_id=1454218289 instance=ExtResource("50_potionSmall_")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -75.6, 0.7020754, 24)
+
+[node name="potionSmall_blue_Red40" parent="Walls/Decor" unique_id=367551268 instance=ExtResource("50_potionSmall_")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 75.6, 0.7020754, 24)
+
+[node name="bookA_Blue41" parent="Walls/Decor" unique_id=1167900775 instance=ExtResource("51_bookA")]
+transform = Transform3D(0.17364822, 0, 0.9848077, 0, 1, 0, -0.9848077, 0, 0.17364822, -77, 0.91802955, 24.4)
+
+[node name="bookA_Red42" parent="Walls/Decor" unique_id=1001301729 instance=ExtResource("51_bookA")]
+transform = Transform3D(0.17364822, 0, -0.9848077, 0, 1, 0, 0.9848077, 0, 0.17364822, 77, 0.91802955, 24.4)
+
+[node name="WallTorch_Blue43" parent="Walls/Decor" unique_id=240399632 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -83.1, 1.9, 29)
+
+[node name="WallTorch_Red44" parent="Walls/Decor" unique_id=1090878327 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 83.1, 1.9, 29)
+
+[node name="WallTorch_Blue45" parent="Walls/Decor" unique_id=177910868 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -68.9, 1.9, 27.5)
+
+[node name="WallTorch_Red46" parent="Walls/Decor" unique_id=1070697973 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 68.9, 1.9, 27.5)
+
+[node name="banner_Blue49" parent="Walls/Decor" unique_id=776074260 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -67.2, 3.7, -8)
+
+[node name="banner_Red50" parent="Walls/Decor" unique_id=165531691 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 67.2, 3.7, -8)
+
+[node name="banner_Blue51" parent="Walls/Decor" unique_id=2109375766 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -36.8, 3.7, -6)
+
+[node name="banner_Red52" parent="Walls/Decor" unique_id=143704735 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 36.8, 3.7, -6)
+
+[node name="WallTorch_Blue53" parent="Walls/Decor" unique_id=1824838104 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -62, 1.9, -15.1)
+
+[node name="WallTorch_Red54" parent="Walls/Decor" unique_id=64182819 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 62, 1.9, -15.1)
+
+[node name="WallTorch_Blue55" parent="Walls/Decor" unique_id=500518640 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42, 1.9, -15.1)
+
+[node name="WallTorch_Red56" parent="Walls/Decor" unique_id=1781618763 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 1.9, -15.1)
+
+[node name="WallTorch_Blue57" parent="Walls/Decor" unique_id=1674557679 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -67.1, 1.9, -12)
+
+[node name="WallTorch_Red58" parent="Walls/Decor" unique_id=318743617 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 67.1, 1.9, -12)
+
+[node name="banner_Blue63" parent="Walls/Decor" unique_id=459769930 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -67.2, 3.7, 8)
+
+[node name="banner_Red64" parent="Walls/Decor" unique_id=1026307547 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 67.2, 3.7, 8)
+
+[node name="banner_Blue65" parent="Walls/Decor" unique_id=1042780678 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -36.8, 3.7, 6)
+
+[node name="banner_Red66" parent="Walls/Decor" unique_id=403595827 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 36.8, 3.7, 6)
+
+[node name="WallTorch_Blue67" parent="Walls/Decor" unique_id=2040931915 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -62, 1.9, 15.1)
+
+[node name="WallTorch_Red68" parent="Walls/Decor" unique_id=512809256 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 62, 1.9, 15.1)
+
+[node name="WallTorch_Blue69" parent="Walls/Decor" unique_id=569146574 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -42, 1.9, 15.1)
+
+[node name="WallTorch_Red70" parent="Walls/Decor" unique_id=689065436 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 42, 1.9, 15.1)
+
+[node name="WallTorch_Blue71" parent="Walls/Decor" unique_id=1164146105 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -67.1, 1.9, 12)
+
+[node name="WallTorch_Red72" parent="Walls/Decor" unique_id=461161016 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 67.1, 1.9, 12)
+
+[node name="mug_Blue77" parent="Walls/Decor" unique_id=378076317 instance=ExtResource("44_mug")]
+transform = Transform3D(0.8660254, 0, 0.5, 0, 1, 0, -0.5, 0, 0.8660254, -60.6, 0.9059093, -27.9)
+
+[node name="mug_Red78" parent="Walls/Decor" unique_id=2107495273 instance=ExtResource("44_mug")]
+transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, 60.6, 0.9059093, -27.9)
+
+[node name="plate_Blue79" parent="Walls/Decor" unique_id=839904458 instance=ExtResource("52_plate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -59.8, 0.71, -27.6)
+
+[node name="plate_Red80" parent="Walls/Decor" unique_id=1175674794 instance=ExtResource("52_plate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 59.8, 0.71, -27.6)
+
+[node name="bookOpenA_Blue81" parent="Walls/Decor" unique_id=393575957 instance=ExtResource("46_bookOpenA")]
+transform = Transform3D(0.9396926, 0, -0.34202012, 0, 1, 0, 0.34202012, 0, 0.9396926, -55.3, 0.74731374, -29.8)
+
+[node name="bookOpenA_Red82" parent="Walls/Decor" unique_id=1970129966 instance=ExtResource("46_bookOpenA")]
+transform = Transform3D(0.9396926, 0, 0.34202012, 0, 1, 0, -0.34202012, 0, 0.9396926, 55.3, 0.74731374, -29.8)
+
+[node name="floorDecoration_shatteredBricks_Blue83" parent="Walls/Decor" unique_id=95962275 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.9659258, 0, 0.25881904, 0, 1, 0, -0.25881904, 0, 0.9659258, -47, 0.01, -22)
+
+[node name="floorDecoration_shatteredBricks_Red84" parent="Walls/Decor" unique_id=720567110 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.9659258, 0, -0.25881904, 0, 1, 0, 0.25881904, 0, 0.9659258, 47, 0.01, -22)
+
+[node name="banner_Blue85" parent="Walls/Decor" unique_id=1002287266 instance=ExtResource("41_banner")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -56, 3.7, -31.2)
+
+[node name="banner_Red86" parent="Walls/Decor" unique_id=1834664304 instance=ExtResource("42_banner_red")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56, 3.7, -31.2)
+
+[node name="WallTorch_Blue87" parent="Walls/Decor" unique_id=579157437 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -62, 1.9, -31.1)
+
+[node name="WallTorch_Red88" parent="Walls/Decor" unique_id=1979320378 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 62, 1.9, -31.1)
+
+[node name="WallTorch_Blue89" parent="Walls/Decor" unique_id=1903467857 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 1.9, -31.1)
+
+[node name="WallTorch_Red90" parent="Walls/Decor" unique_id=528655157 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 1.9, -31.1)
+
+[node name="WallTorch_Blue91" parent="Walls/Decor" unique_id=876041810 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -58, 1.9, -16.95)
+
+[node name="WallTorch_Red92" parent="Walls/Decor" unique_id=1558771317 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 58, 1.9, -16.95)
+
+[node name="floorDecoration_shatteredBricks_Blue99" parent="Walls/Decor" unique_id=683327210 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.34202015, 0, 0.9396926, 0, 1, 0, -0.9396926, 0, 0.34202015, -52, 0.01, 22)
+
+[node name="floorDecoration_shatteredBricks_Blue101" parent="Walls/Decor" unique_id=492452597 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.9848077, 0, 0.17364818, 0, 1, 0, -0.17364818, 0, 0.9848077, -58, 0.01, 27)
+
+[node name="CryptGlowBlue" type="OmniLight3D" parent="Walls/Decor" unique_id=1434393592]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -52, 3, 25)
+light_color = Color(0.45, 1, 0.55, 1)
+light_energy = 1.6
+omni_range = 12.0
+
+[node name="CryptGlowRed" type="OmniLight3D" parent="Walls/Decor" unique_id=1731312637]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52, 3, 25)
+light_color = Color(0.45, 1, 0.55, 1)
+light_energy = 1.6
+omni_range = 12.0
+
+[node name="WallTorch_Blue103" parent="Walls/Decor" unique_id=629365486 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -62, 1.9, 31.1)
+
+[node name="WallTorch_Red104" parent="Walls/Decor" unique_id=1289483222 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 62, 1.9, 31.1)
+
+[node name="WallTorch_Blue105" parent="Walls/Decor" unique_id=1428701817 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 1.9, 16.95)
+
+[node name="WallTorch_Red106" parent="Walls/Decor" unique_id=2038857699 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 1.9, 16.95)
+
+[node name="WallTorch_Blue113" parent="Walls/Decor" unique_id=1207699519 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -20.95, 1.9, -4)
+
+[node name="WallTorch_Red114" parent="Walls/Decor" unique_id=1907025584 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 20.95, 1.9, -4)
+
+[node name="WallTorch_Blue115" parent="Walls/Decor" unique_id=563287848 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -20.95, 1.9, 4)
+
+[node name="WallTorch_Red116" parent="Walls/Decor" unique_id=1070863877 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 20.95, 1.9, 4)
+
+[node name="WallTorch_Blue117" parent="Walls/Decor" unique_id=867764148 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 1.9, -15.1)
+
+[node name="WallTorch_Red118" parent="Walls/Decor" unique_id=954832969 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 1.9, -15.1)
+
+[node name="WallTorch_Blue119" parent="Walls/Decor" unique_id=1864037199 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -28, 1.9, 15.1)
+
+[node name="WallTorch_Red120" parent="Walls/Decor" unique_id=351384213 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 28, 1.9, 15.1)
+
+[node name="floorDecoration_shatteredBricks_Blue121" parent="Walls/Decor" unique_id=245492001 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.76604444, 0, 0.6427876, 0, 1, 0, -0.6427876, 0, 0.76604444, -24, 0.01, -20)
+
+[node name="floorDecoration_shatteredBricks_Red122" parent="Walls/Decor" unique_id=489906104 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.76604444, 0, -0.6427876, 0, 1, 0, 0.6427876, 0, 0.76604444, 24.971851, 0.01, -18.97788)
+
+[node name="WallTorch_Blue123" parent="Walls/Decor" unique_id=232888931 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 1.9, -23.1)
+
+[node name="WallTorch_Red124" parent="Walls/Decor" unique_id=1954840486 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 1.9, -23.1)
+
+[node name="WallTorch_Blue125" parent="Walls/Decor" unique_id=1823546248 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 1.9, -23.1)
+
+[node name="WallTorch_Red126" parent="Walls/Decor" unique_id=895342950 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1.9, -23.1)
+
+[node name="floorDecoration_shatteredBricks_Blue127" parent="Walls/Decor" unique_id=454237360 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.76604444, 0, 0.6427876, 0, 1, 0, -0.6427876, 0, 0.76604444, -29.02681, 0.01, 18.97788)
+
+[node name="floorDecoration_shatteredBricks_Red128" parent="Walls/Decor" unique_id=1682240089 instance=ExtResource("53_floorDecorat")]
+transform = Transform3D(0.76604444, 0, -0.6427876, 0, 1, 0, 0.6427876, 0, 0.76604444, 18.872656, 0.01, 19.011395)
+
+[node name="WallTorch_Blue129" parent="Walls/Decor" unique_id=2002624183 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -22, 1.9, 23.1)
+
+[node name="WallTorch_Red130" parent="Walls/Decor" unique_id=1582786314 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 22, 1.9, 23.1)
+
+[node name="WallTorch_Blue131" parent="Walls/Decor" unique_id=757392340 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -12, 1.9, 23.1)
+
+[node name="WallTorch_Red132" parent="Walls/Decor" unique_id=1053731490 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 12, 1.9, 23.1)
+
+[node name="WallTorch_Blue135" parent="Walls/Decor" unique_id=1521686470 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 1.9, -15.1)
+
+[node name="WallTorch_Red136" parent="Walls/Decor" unique_id=180499778 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1.9, -15.1)
+
+[node name="WallTorch_Blue137" parent="Walls/Decor" unique_id=195631369 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 1.9, -15.1)
+
+[node name="WallTorch_Red138" parent="Walls/Decor" unique_id=134989214 instance=ExtResource("12_8av44")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 1.9, -15.1)
+
+[node name="WallTorch_Blue139" parent="Walls/Decor" unique_id=1653177122 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -19.1, 1.9, -6)
+
+[node name="WallTorch_Red140" parent="Walls/Decor" unique_id=1125043446 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 19.1, 1.9, -6)
+
+[node name="banner_Blue141" parent="Walls/Decor" unique_id=398238343 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -19.2, 3.7, -4.6)
+
+[node name="banner_Red142" parent="Walls/Decor" unique_id=1112473395 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 19.2, 3.7, -4.6)
+
+[node name="WallTorch_Blue143" parent="Walls/Decor" unique_id=118484803 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -6, 1.9, 15.1)
+
+[node name="WallTorch_Red144" parent="Walls/Decor" unique_id=1127569842 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 6, 1.9, 15.1)
+
+[node name="WallTorch_Blue145" parent="Walls/Decor" unique_id=306507733 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -16, 1.9, 15.1)
+
+[node name="WallTorch_Red146" parent="Walls/Decor" unique_id=86739295 instance=ExtResource("12_8av44")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 16, 1.9, 15.1)
+
+[node name="WallTorch_Blue147" parent="Walls/Decor" unique_id=1355006180 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -19.1, 1.9, 6)
+
+[node name="WallTorch_Red148" parent="Walls/Decor" unique_id=1770039834 instance=ExtResource("12_8av44")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 19.1, 1.9, 6)
+
+[node name="banner_Blue149" parent="Walls/Decor" unique_id=1301979666 instance=ExtResource("41_banner")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -19.2, 3.7, 4.6)
+
+[node name="banner_Red150" parent="Walls/Decor" unique_id=535354061 instance=ExtResource("42_banner_red")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 19.2, 3.7, 4.6)
+
+[node name="BossCage" type="StaticBody3D" parent="Walls" unique_id=2069175739]
+collision_layer = 32
+collision_mask = 0
+
+[node name="West" type="CollisionShape3D" parent="Walls/BossCage" unique_id=625619907]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 20, 0)
+shape = SubResource("BoxShape3D_ep5sb")
+
+[node name="East" type="CollisionShape3D" parent="Walls/BossCage" unique_id=1428664475]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 20, 0)
+shape = SubResource("BoxShape3D_8dk4v")
+
+[node name="North" type="CollisionShape3D" parent="Walls/BossCage" unique_id=985128829]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, -16)
+shape = SubResource("BoxShape3D_gj0q8")
+
+[node name="South" type="CollisionShape3D" parent="Walls/BossCage" unique_id=1610680774]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, 16)
+shape = SubResource("BoxShape3D_6w0jg")
+
+[node name="Pillar4" type="CollisionShape3D" parent="Walls/BossCage" unique_id=617011462]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 20, -8)
+shape = SubResource("BoxShape3D_upnhw")
+
+[node name="Pillar5" type="CollisionShape3D" parent="Walls/BossCage" unique_id=1337565793]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 20, 8)
+shape = SubResource("BoxShape3D_nvilm")
+
+[node name="Pillar6" type="CollisionShape3D" parent="Walls/BossCage" unique_id=1889389523]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 20, -8)
+shape = SubResource("BoxShape3D_npimv")
+
+[node name="Pillar7" type="CollisionShape3D" parent="Walls/BossCage" unique_id=1696232591]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 20, 8)
+shape = SubResource("BoxShape3D_mp4y4")
+
+[node name="LevelBounds" type="StaticBody3D" parent="Walls" unique_id=796849992]
+collision_mask = 0
+
+[node name="West" type="CollisionShape3D" parent="Walls/LevelBounds" unique_id=1203585520]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -86, 20, 0)
+shape = SubResource("BoxShape3D_p77v1")
+
+[node name="East" type="CollisionShape3D" parent="Walls/LevelBounds" unique_id=2119752252]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 86, 20, 0)
+shape = SubResource("BoxShape3D_7v6q7")
+
+[node name="North" type="CollisionShape3D" parent="Walls/LevelBounds" unique_id=1228347463]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, -34)
+shape = SubResource("BoxShape3D_36odt")
+
+[node name="South" type="CollisionShape3D" parent="Walls/LevelBounds" unique_id=1411224951]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, 34)
+shape = SubResource("BoxShape3D_q5mkp")
+
+[node name="BossTrigger" type="Area3D" parent="Walls" unique_id=1128940189 groups=["ArenaZone"]]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+script = ExtResource("15_ne6ha")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls/BossTrigger" unique_id=1925344746]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+shape = SubResource("BoxShape3D_wmi0t")
+
+[node name="SpawnBlue" type="Marker3D" parent="." unique_id=1388019960]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -75, 0, 0)
+script = ExtResource("16_xn8s7")
+
+[node name="SpawnRed" type="Marker3D" parent="." unique_id=1307774976]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 75, 0, 0)
+script = ExtResource("16_xn8s7")
+team = 1
+
+[node name="ArmorPickups" type="Node3D" parent="." unique_id=1471835506]
+
+[node name="Armor_Blue" parent="ArmorPickups" unique_id=1370636487 instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, -18.5)
+
+[node name="Armor_Red" parent="ArmorPickups" unique_id=229073114 instance=ExtResource("40_armor")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44, 0, -18.5)
+
+[node name="Chests" type="Node3D" parent="." unique_id=1815327350]
+
+[node name="ChestBlue" parent="Chests" unique_id=1929462948 groups=["dungeon_nav"] instance=ExtResource("25_cgqqt")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -50, 0, 0)
+
+[node name="ChestRed" parent="Chests" unique_id=693191947 groups=["dungeon_nav"] instance=ExtResource("25_cgqqt")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 50, 0, 0)
+
+[node name="MobSpawns" type="Node3D" parent="." unique_id=2068363468]
+
+[node name="TreasureHall_Blue59" type="Marker3D" parent="MobSpawns" unique_id=1549674198 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -57, 0, -5)
+
+[node name="TreasureHall_Red60" type="Marker3D" parent="MobSpawns" unique_id=1194570817 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 57, 0, -5)
+
+[node name="TreasureHall_Blue61" type="Marker3D" parent="MobSpawns" unique_id=1312292657 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, -4)
+
+[node name="TreasureHall_Red62" type="Marker3D" parent="MobSpawns" unique_id=503430982 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44, 0, -4)
+
+[node name="TreasureHall_Blue73" type="Marker3D" parent="MobSpawns" unique_id=1700079668 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -57, 0, 5)
+
+[node name="TreasureHall_Red74" type="Marker3D" parent="MobSpawns" unique_id=996579368 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 57, 0, 5)
+
+[node name="TreasureHall_Blue75" type="Marker3D" parent="MobSpawns" unique_id=798721511 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, 4)
+
+[node name="TreasureHall_Red76" type="Marker3D" parent="MobSpawns" unique_id=226462484 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44, 0, 4)
+
+[node name="GuardRoom_Blue93" type="Marker3D" parent="MobSpawns" unique_id=1966370904 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -56, 0, -23)
+
+[node name="GuardRoom_Red94" type="Marker3D" parent="MobSpawns" unique_id=535137026 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56, 0, -23)
+
+[node name="GuardRoom_Blue95" type="Marker3D" parent="MobSpawns" unique_id=756809514 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -47, 0, -26)
+
+[node name="GuardRoom_Red96" type="Marker3D" parent="MobSpawns" unique_id=512560336 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 47, 0, -26)
+
+[node name="GuardRoom_Blue97" type="Marker3D" parent="MobSpawns" unique_id=1555332417 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42, 0, -21)
+
+[node name="GuardRoom_Red98" type="Marker3D" parent="MobSpawns" unique_id=1278349396 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 0, -21)
+
+[node name="Crypt_Blue107" type="Marker3D" parent="MobSpawns" unique_id=1355630965 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -56, 0, 22)
+
+[node name="Crypt_Red108" type="Marker3D" parent="MobSpawns" unique_id=1172823778 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56, 0, 22)
+
+[node name="Crypt_Blue109" type="Marker3D" parent="MobSpawns" unique_id=799908797 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, 27)
+
+[node name="Crypt_Red110" type="Marker3D" parent="MobSpawns" unique_id=218616644 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, 0, 27)
+
+[node name="Crypt_Blue111" type="Marker3D" parent="MobSpawns" unique_id=1036099805 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42, 0, 22)
+
+[node name="Crypt_Red112" type="Marker3D" parent="MobSpawns" unique_id=1633833118 groups=["MobSpawn"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 0, 22)
+
+[node name="Weapons" type="Node" parent="." unique_id=1472435251]
+
+[node name="Altar" parent="." unique_id=2138990566 groups=["dungeon_nav"] instance=ExtResource("26_k31i0")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -81, 0, 0)
+relic_hand_size = 3
+weapon_scene = ExtResource("18_gr3ut")
+
+[node name="Altar2" parent="." unique_id=466792934 groups=["dungeon_nav"] instance=ExtResource("26_k31i0")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 81, 0, 0)
+owner_team = 1
+relic_hand_size = 3
+weapon_scene = ExtResource("18_gr3ut")
+
+[node name="Boss" parent="." unique_id=446746520 instance=ExtResource("27_le4n0")]
+max_hp = 900.0
+wait_for_players = true
+
+[node name="BossHealthBar" parent="." unique_id=740523921 node_paths=PackedStringArray("boss") instance=ExtResource("28_pivql")]
+boss = NodePath("../Boss")
+
+[node name="PerkPicker" parent="." unique_id=469202979 instance=ExtResource("29_8kjxy")]
+
+[node name="Perks" type="Node" parent="." unique_id=1255383272 node_paths=PackedStringArray("picker")]
+script = ExtResource("30_us62g")
+picker = NodePath("../PerkPicker")

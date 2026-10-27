@@ -1,0 +1,47 @@
+[gd_scene format=3 uid="uid://gwtg3n8y37dp"]
+
+[ext_resource type="Script" uid="uid://cxfcslpgv6kke" path="res://Items/Weapons/Bow/crossbow_3d.gd" id="1_crossbow"]
+[ext_resource type="PackedScene" uid="uid://cwk6psod3apas" path="res://Items/Weapons/weapon_behavior.tscn" id="2_behavior"]
+[ext_resource type="PackedScene" uid="uid://d0n2uqwwnbatn" path="res://Items/Weapons/weapon_properties.tscn" id="3_properties"]
+[ext_resource type="PackedScene" uid="uid://cq1yr1m1s5rw4" path="res://Items/Weapons/Bow/arrow_3d.tscn" id="5_arrow"]
+[ext_resource type="PackedScene" uid="uid://dd145n33a3po2" path="res://Assets/Weapons/bow_A_withString.glb" id="model"]
+[ext_resource type="Resource" path="res://Items/Weapons/Moves/heavy_power_shot.tres" id="mv_heavy"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hit"]
+size = Vector3(0.78, 0.15, 1.96)
+
+[node name="Bow_3D" type="RigidBody3D" unique_id=92531580 node_paths=PackedStringArray("Properties", "Behavior") groups=["Weapon"]]
+collision_layer = 8
+collision_mask = 7
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+mass = 1.5
+script = ExtResource("1_crossbow")
+swing_sound = &"swing_club"
+plays_swipe_animation = false
+arrow_scene = ExtResource("5_arrow")
+fire_interval = 0.4
+Properties = NodePath("WeaponProperties")
+Behavior = NodePath("WeaponBehavior")
+grip = 3
+rides_left_hand = true
+swing_clip = &"CombatRanged/Ranged_Bow_Release"
+hold_clip = &"CombatRanged/Ranged_Bow_Aiming_Idle"
+heavy_move = ExtResource("mv_heavy")
+
+[node name="WeaponBehavior" parent="." unique_id=1417607145 instance=ExtResource("2_behavior")]
+base_damage = 20.0
+knockback_force = 8.0
+weapon_name = "Bow"
+
+[node name="WeaponProperties" parent="." unique_id=937272670 instance=ExtResource("3_properties")]
+weapon_name = "Bow"
+durability_scale = 1.5
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.34, -0.005, 0)
+shape = SubResource("BoxShape3D_hit")
+
+[node name="Model" parent="." instance=ExtResource("model")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 0, 0)
