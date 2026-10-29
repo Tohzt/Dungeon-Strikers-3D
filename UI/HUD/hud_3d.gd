@@ -1,13 +1,13 @@
 class_name HUD3D extends CanvasLayer
 @export var player: PlayerClass3D
 
-## Coins on the left (on levels with a shop), then the bars: red for
-## health, blue for the carry meter. The player's name is only over their
+## Coins on the left (on levels with a shop), then the bars: green for
+## health, purple for the carry meter. The player's name is only over their
 ## head (Nameplates3D).
 @onready var panel:       PanelContainer = $Panel
-## The red bar: the player's health.
+## The green bar: the player's health.
 @onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
-## The blue bar: the player's carry meter (see PlayerClass3D.carry).
+## The purple bar: the player's carry meter (see PlayerClass3D.carry).
 @onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
 
 ## Gap between the HUD panel and the screen edges.
@@ -72,11 +72,7 @@ func setup(p: PlayerClass3D, _slot: PlayerSlot, corner: int) -> void:
 		_coin_row = HBoxContainer.new()
 		_coin_row.add_theme_constant_override("separation", 6)
 		_coin_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var icon := TextureRect.new()
-		icon.texture = ShopMenu3D.COIN_ICON
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_coin_row.add_child(icon)
+		_coin_row.add_child(ShopMenu3D.coin_icon())
 		_coin_label = Label.new()
 		_coin_label.add_theme_color_override("font_color", FlyingCoin3D.GOLD)
 		_coin_label.add_theme_color_override("font_outline_color", Color.BLACK)

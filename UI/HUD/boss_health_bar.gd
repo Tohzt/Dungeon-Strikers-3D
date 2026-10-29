@@ -1,6 +1,6 @@
 class_name BossHealthBar3D extends CanvasLayer
 ## Souls-style boss bar along the bottom of the screen: the boss's name over
-## a long red bar, with a pale strip that lingers where the HP just was and
+## a long green bar, with a gold strip that lingers where the HP just was and
 ## then drains down to it. Appears when the fight starts; says so when the
 ## boss falls. Game3D binds each new boss to it.
 

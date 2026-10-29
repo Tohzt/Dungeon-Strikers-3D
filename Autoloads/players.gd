@@ -15,8 +15,8 @@ extends Node
 ## team_count picks the match format: 2 teams play end to end on the 2P
 ## field, 4 teams get a goal on every side (4P field; hidden for now, see
 ## TEAM_COUNTS). New seats start out
-## spread across the teams in order (see team_for_seat), and bots join
-## whichever team is smallest. The format also picks the level (map) and
+## spread across the teams in order (see team_for_seat), and bots fill
+## whatever seats each team has left (seats_per_team). The format also picks the level (map) and
 ## what every boss drops (boss_drop); see MatchMap for which go together.
 ## score_to_win is the goals (or kills, on levels without goals) to win.
 
@@ -63,10 +63,12 @@ var score_to_win: int = 5
 ## each boss is, see SlimeElement.pick). Online the server picks it and
 ## sends it with the match start; offline each match rolls its own.
 var match_seed: int = 0
-## Offline: seat bots until the match has this many players (0 = no bots).
-## Always a whole number of players per team; see bot_fill_options().
-## Starts at a full 4v4.
-var bot_fill_count: int = MAX_PLAYERS
+## How many seats each team has in the next match (index = team): people
+## take them first and bots fill the rest (see fill_bots). Never fewer than
+## the people on that team, nor more than max_team_size(). Online the server
+## keeps this and seats its bots to match (see Net.set_team_size). Starts
+## at a full 4v4.
+var seats_per_team: Array[int] = [MAX_PLAYERS / 2, MAX_PLAYERS / 2]
 
 ## Project actions captured before any per-slot copies are added.
 var _base_actions: Array[StringName] = []
@@ -97,15 +99,16 @@ func join(device: int, team: int = -1, index: int = -1, character: int = -1) -> 
 	return slot
 
 
-## A computer-controlled player in the next free seat (offline only).
-func add_bot() -> PlayerSlot:
+## A computer-controlled player in the next free seat (offline only), on
+## `team` (-1 = the smallest).
+func add_bot(team: int = -1) -> PlayerSlot:
 	if slots.size() >= MAX_PLAYERS:
 		return null
 	var slot := PlayerSlot.new()
 	slot.index = _next_free_index()
 	slot.device = PlayerSlot.BOT
 	slot.is_bot = true
-	_assign_team(slot, smallest_team(slot_teams()))
+	_assign_team(slot, team if team >= 0 else smallest_team(slot_teams()))
 	slot.character = unused_character(slot.team)
 	slot.display_name = PlayerNames.random(slot_names())
 	slots.append(slot)
@@ -113,25 +116,11 @@ func add_bot() -> PlayerSlot:
 	return slot
 
 
-## Seat bots until the match has bot_fill_count players.
+## Seat bots until every team has its seats_per_team.
 func fill_bots() -> void:
-	while slots.size() < bot_fill_count and add_bot():
-		pass
-
-
-## Match sizes the Bots option can fill to with the current team_count:
-## 0 (off), then every even split, e.g. 2 (1v1) and 4 (2v2) for two teams.
-func bot_fill_options() -> Array[int]:
-	var options: Array[int] = [0]
-	for count: int in range(team_count, MAX_PLAYERS + 1, team_count):
-		options.append(count)
-	return options
-
-
-## The next match size after bot_fill_count (menu toggles).
-func next_bot_fill_count() -> int:
-	var options: Array[int] = bot_fill_options()
-	return options[(options.find(bot_fill_count) + 1) % options.size()]
+	for team in team_count:
+		while team_sizes(slot_teams())[team] < seats_per_team[team] and add_bot(team):
+			pass
 
 
 ## Seats played by people, not bots.
@@ -213,13 +202,27 @@ func smallest_team(teams: Array[int]) -> int:
 	return sizes.find(sizes.min())
 
 
-## `seated` (the teams of players already in), plus the teams of the bots
-## fill_bots() would add to reach `total` players.
-func teams_with_bots(total: int, seated: Array[int]) -> Array[int]:
+## `seated` (the teams of the people already in), plus the teams of the
+## bots fill_bots() would add.
+func teams_with_bots(seated: Array[int]) -> Array[int]:
 	var teams: Array[int] = seated.duplicate()
-	while teams.size() < total:
-		teams.append(smallest_team(teams))
+	var sizes: Array[int] = team_sizes(seated)
+	for team in team_count:
+		for i in seats_per_team[team] - sizes[team]:
+			teams.append(team)
 	return teams
+
+
+## The most seats one team can have: an even share of MAX_PLAYERS.
+func max_team_size() -> int:
+	return MAX_PLAYERS / team_count
+
+
+## Give `team` `size` seats, kept between the `people` already on it (and
+## at least one) and max_team_size().
+func set_team_size(team: int, size: int, people: int = 0) -> void:
+	if team >= 0 and team < seats_per_team.size():
+		seats_per_team[team] = clampi(size, maxi(people, 1), max_team_size())
 
 
 # ===== NAMES =====
@@ -296,8 +299,10 @@ func set_team_count(count: int) -> void:
 	team_count = count
 	if not MatchMap.fits(map, team_count, boss_drop):
 		map = MatchMap.first_fitting(team_count, boss_drop)
-	if not bot_fill_options().has(bot_fill_count):
-		bot_fill_count = bot_fill_options()[-1]
+	seats_per_team.resize(team_count)
+	for team in team_count:
+		seats_per_team[team] = clampi(seats_per_team[team] if seats_per_team[team] > 0 else max_team_size(),
+			1, max_team_size())
 	for slot: PlayerSlot in slots:
 		_assign_team(slot, slot.team)
 		slot.character = Roster.for_team(slot.character, slot.team)

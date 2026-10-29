@@ -1,6 +1,6 @@
 class_name Scoreboard3D extends CanvasLayer
 ## Team scores (kills, or goals in modes won by goals; or each base's
-## health, see setup_health) on a thin wooden banner hanging from the
+## health, see setup_health) on a thin stone banner hanging from the
 ## top-middle of the screen, each in its team's color. Kills, goals and other happenings go
 ## to a quiet feed in the bottom-right corner; the winner is shown big.
 
@@ -20,9 +20,15 @@ const CALL_OUT_FADE := 0.2
 ## A base's health bar (see setup_health), how long a hit takes to drain
 ## it, and the flash it gives.
 const HEALTH_BAR_SIZE := Vector2(200, 26)
-const HEALTH_BAR_BACK := Color(0.1, 0.08, 0.06, 0.85)
+const HEALTH_BAR_BACK := Color(0.07, 0.07, 0.09, 0.85)
 const HEALTH_DRAIN_TIME := 0.5
 const HEALTH_HIT_FLASH := Color(1.0, 0.35, 0.35)
+
+## The winner's line: this big, unless it has to shrink to fit the screen
+## (keeping this much space at each side).
+const WINNER_FONT_SIZE := 96
+const WINNER_MIN_FONT_SIZE := 32
+const WINNER_SIDE_MARGIN := 40.0
 
 @onready var row: HBoxContainer = $Banner/Row
 @onready var _log: VBoxContainer = $Log
@@ -50,7 +56,7 @@ func _ready() -> void:
 	_call_out.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_call_out.modulate.a = 0.0
 	add_child(_call_out)
-	_winner = _make_label("", Color.WHITE, 96)
+	_winner = _make_label("", Color.WHITE, WINNER_FONT_SIZE)
 	_winner.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_winner.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_winner.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -167,7 +173,25 @@ func call_out(text: String, color: Color) -> void:
 func show_winner(text: String, color: Color) -> void:
 	_winner.text = text
 	_winner.add_theme_color_override("font_color", color)
+	var size: int = _fitting_size(text, WINNER_FONT_SIZE, _winner.get_viewport_rect().size.x - 2.0 * WINNER_SIDE_MARGIN)
+	_winner.add_theme_font_size_override("font_size", size)
+	_winner.add_theme_constant_override("outline_size", maxi(roundi(size / 5.0), 4))
+	_winner.reset_size()  # Shrink back round the new text, still centered
+	_winner.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
 	_winner.show()
+
+
+## The biggest font size up to `size` at which every line of `text` fits
+## in `width` (outline included).
+func _fitting_size(text: String, size: int, width: float) -> int:
+	var font: Font = _winner.get_theme_font(&"font")
+	var widest: float = 0.0
+	for line: String in text.split("\n"):
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+	widest += size / 5.0 * 2.0
+	if widest <= width:
+		return size
+	return maxi(floori(size * width / widest), WINNER_MIN_FONT_SIZE)
 
 
 func hide_winner() -> void:

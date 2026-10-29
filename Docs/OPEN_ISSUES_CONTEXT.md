@@ -57,8 +57,11 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 
 ## 4. Unfinished features (from the old TODO list)
 
-- **Attack dummy.** A training target for trying weapons (`GameTools3D` in
-  `Game/tools.gd` has the old test-room builder, though no map uses it now).
+- **Training room and attack dummy.** The title screen has a Training
+  button (disabled for now, `MainMenu`'s `%TrainingButton`). It should open a
+  solo room with a dummy to hit, where players can try out characters,
+  weapons and perks. `GameTools3D` in `Game/tools.gd` has the old test-room
+  builder, though no map uses it now.
 
 ## 5. Playtesting still needed
 

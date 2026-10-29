@@ -208,7 +208,7 @@ func _build_perk_lists() -> void:
 func _make_perk_card(perk: Perk, owned: int) -> PanelContainer:
 	var card := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.16, 0.09, 0.06, 0.92)
+	style.bg_color = Color(0.1, 0.1, 0.13, 0.92)
 	style.border_color = perk.category_color()
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(5)

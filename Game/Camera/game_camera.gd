@@ -262,10 +262,11 @@ func _process(delta: float) -> void:
 			desired_offset = dir * strength * strength * reach
 		aim_offset = aim_offset.lerp(desired_offset, clamp(delta * controller_aim_ease, 0.0, 1.0))
 		look_target = target_pos + aim_offset
-	elif not Input.is_action_pressed(handler.action("face_movement") if handler else &"face_movement"):
+	elif not (focus is PlayerClass3D and (focus as PlayerClass3D).is_perk_locked()) \
+			and not Input.is_action_pressed(handler.action("face_movement") if handler else &"face_movement"):
 		# Keyboard/mouse mode: pull toward the cursor while aiming at it (i.e.
-		# not holding Ctrl to face the walking direction);
-		# otherwise look_target stays on the player
+		# not holding Ctrl to face the walking direction, and not pointing
+		# at a shop or perk cards); otherwise look_target stays on the player
 		# Get mouse position in world space (projected onto ground plane)
 		# Clamp mouse position to viewport bounds to ensure it's within the game window
 		var viewport: Viewport = get_viewport()

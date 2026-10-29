@@ -21,7 +21,7 @@ class_name Altar3D extends WeaponStand3D
 ## A shop altar (see `shop`) shows nothing on top: interact opens its shop
 ## (ShopMenu3D), where coins buy an upgrade for the buyer's own kit, a
 ## breakable weapon (rolled from the current tier, so the stock gets better
-## as the tier goes up), perk cards, and bombs and flasks. Every player has
+## as the tier goes up), perk cards (one per restock), and bombs and flasks. Every player has
 ## their own stock, rolled afresh every shop_restock_time. All it shows
 ## is a quiet hint: its ring glows gold while someone here can afford
 ## something, and a coin floats over it while they're in reach.
@@ -92,8 +92,9 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 ## Breakable weapons (any kind) in each stock, from the current tier.
 ## Everything but the kit upgrade sells out until the next restock.
 @export_range(0, 4) var shop_weapon_slots: int = 1
-## Perk cards in each stock (never relics), each taken on the spot.
-@export_range(0, 4) var shop_perk_slots: int = 2
+## Perk cards in each stock (never relics), taken on the spot. Only one
+## can be bought per restock: the rest lock until the next one.
+@export_range(0, 4) var shop_perk_slots: int = 3
 ## Bombs and big flasks on sale at once (see Throwable3D), put in the
 ## buyer's item slot (PlayerClass3D.stored_item). Each is a bomb at bomb_chance, else a
 ## flask, and no two alike.
@@ -386,7 +387,7 @@ func _add_held(tier_index: int, pick: int, tier_rarity: int) -> void:
 	if item.is_perk:
 		item.pivot.add_child(_make_gem(PERK_COLOR))
 	else:
-		item.pivot.add_child(_make_display_copy(item.scene, item.rarity))
+		item.pivot.add_child(make_display_copy(item.scene, item.rarity))
 	add_child(item.pivot)
 	_held.append(item)
 	_idle_time = 0.0
@@ -597,7 +598,7 @@ func start_reward(roll: PackedInt32Array) -> void:
 	if reward == Reward.WEAPON:
 		_reward_scene = reward_weapons.weapons[roll[1]]
 		_reward_rarity = roll[2]
-		_reward_pivot.add_child(_make_display_copy(_reward_scene, _reward_rarity))
+		_reward_pivot.add_child(make_display_copy(_reward_scene, _reward_rarity))
 	else:
 		_reward_pivot.add_child(_make_gem(RELIC_COLOR))
 	add_child(_reward_pivot)
@@ -895,7 +896,7 @@ static func weapon_info(scene: PackedScene) -> Array:
 func make_preview(offer: ShopOffer, player: PlayerClass3D) -> Node3D:
 	match offer.kind:
 		ShopOffer.Kind.WEAPON:
-			return _make_display_copy(offer.scene, offer.rarity) if offer.scene else null
+			return make_display_copy(offer.scene, offer.rarity) if offer.scene else null
 		ShopOffer.Kind.KIT:
 			var scenes: Array[PackedScene] = Roster.kit_of(player.slot.character if player.slot else 0)
 			var shown: Array[PackedScene] = []
@@ -906,20 +907,25 @@ func make_preview(offer: ShopOffer, player: PlayerClass3D) -> Node3D:
 				return null
 			var group := Node3D.new()
 			for i in shown.size():
-				var copy: Node3D = _make_display_copy(shown[i], kit_rarity_after(offer, player))
+				var copy: Node3D = make_display_copy(shown[i], kit_rarity_after(offer, player))
 				copy.position.x = (i - (shown.size() - 1) * 0.5) * KIT_PREVIEW_SPACING
 				group.add_child(copy)
 			return group
 		ShopOffer.Kind.THROWABLE:
-			if offer.throwable_kind == Throwable3D.Kind.FLASK:
-				# Wrapped, so the menu's framing counts the model's own scale
-				var holder := Node3D.new()
-				holder.add_child(Potion.model(&"jug", throwable_color(offer), Potion.LARGE_HEIGHT))
-				return holder
-			var bomb := BombModel3D.new()
-			bomb.set_color(throwable_color(offer))
-			return bomb
+			return throwable_preview(offer)
 	return null
+
+
+## A bomb or big flask offer's model, for looks only.
+static func throwable_preview(offer: ShopOffer) -> Node3D:
+	if offer.throwable_kind == Throwable3D.Kind.FLASK:
+		# Wrapped, so a menu's framing counts the model's own scale
+		var holder := Node3D.new()
+		holder.add_child(Potion.model(&"jug", throwable_color(offer), Potion.LARGE_HEIGHT))
+		return holder
+	var bomb := BombModel3D.new()
+	bomb.set_color(throwable_color(offer))
+	return bomb
 
 
 ## Whether `player` may shop here and is in reach of it.
@@ -952,12 +958,13 @@ func can_afford_any(player: PlayerClass3D) -> bool:
 	return false
 
 
-## Whether `offer` would do `player` any good: not once it's sold, a repair
+## Whether `offer` would do `player` any good: not once it's sold (or a
+## perk locked by another bought this restock), a repair
 ## only when it's our team's altar and one of our towers is hurt, a kit
 ## upgrade until their kit's Legendary, a bomb or flask while their item
 ## slot is empty.
 func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
-	if offer.sold:
+	if offer.sold or offer.locked:
 		return false
 	match offer.kind:
 		ShopOffer.Kind.REPAIR:
@@ -1084,6 +1091,7 @@ func _decide_buy(player: PlayerClass3D, index: int) -> void:
 ## Every machine: `player_name` paid for their offers[index] and gets it (a
 ## weapon in hand, a perk at once; a repair was done by the server). It's
 ## sold out, unless `replacement` (an encoded ShopOffer) takes its place.
+## A perk locks the player's other perks here until the next restock.
 @rpc("authority", "call_local", "reliable")
 func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, replacement: PackedInt32Array) -> void:
 	var offers: Array = _stocks.get(player_name, [])
@@ -1117,6 +1125,10 @@ func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, 
 		offers[index] = next
 	else:
 		offer.sold = true
+	if offer.kind == ShopOffer.Kind.PERK:
+		for other: ShopOffer in offers:
+			if other.kind == ShopOffer.Kind.PERK and other != offer:
+				other.locked = true
 	_stock_changed(player_name)
 	if player and not _is_ours(player) and owner_team != NEUTRAL and game:
 		game.scoreboard.announce("%s raided %s's shop!" % [player.slot.label() if player.slot else player_name,
@@ -1263,8 +1275,7 @@ func _make_shop_hint() -> void:
 	_shop_coin = Sprite3D.new()
 	_shop_coin.texture = ShopMenu3D.COIN_ICON
 	_shop_coin.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_shop_coin.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	_shop_coin.pixel_size = 0.02
+	_shop_coin.pixel_size = 0.01
 	_shop_coin.no_depth_test = true
 	_shop_coin.position.y = SHOP_COIN_HEIGHT
 	_shop_coin.visible = false

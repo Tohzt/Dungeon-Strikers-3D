@@ -49,14 +49,14 @@ func _build_display() -> void:
 		_display = null
 	if not weapon_scene:
 		return
-	_display = _make_display_copy(weapon_scene, rarity)
+	_display = make_display_copy(weapon_scene, rarity)
 	_display.visible = cooldown_left <= 0.0
 	display_anchor.add_child(_display)
 
 
 ## A copy of `scene` for looks only: never processed, not in the physics
 ## world. Glows in `tier`'s rarity color.
-func _make_display_copy(scene: PackedScene, tier: int) -> Node3D:
+static func make_display_copy(scene: PackedScene, tier: int) -> Node3D:
 	var copy: Node3D = scene.instantiate()
 	copy.process_mode = Node.PROCESS_MODE_DISABLED
 	if copy is Weapon3D:

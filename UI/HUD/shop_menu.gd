@@ -4,9 +4,12 @@ class_name ShopMenu3D extends CanvasLayer
 ## screen for every player on this machine who's browsing one (side by
 ## side when several are; FitCenterContainer shrinks them to fit). Each is
 ## browsed with its owner's own device while everyone else keeps playing.
-## Each section of offers (ShopOffer.SECTION_TITLES) is a row: the buyer's
-## own kit upgrade and a breakable weapon, perks, bombs and flasks, a tower
-## repair. Weapons, kits, bombs and flasks show a spinning preview, perks
+## Each section of offers (ShopOffer.SECTION_TITLES) is a tab, one shown at
+## a time so the cards stay big: the buyer's own kit upgrade and a
+## breakable weapon, perks, bombs and flasks, a tower repair. Left/right
+## browses a tab, up/down switches tabs. A strip under the title shows how
+## far the buyer's kit is upgraded. Weapons, kits, bombs and flasks show a
+## spinning preview, perks
 ## their card, a repair the tower's health. Browsing holds the player still
 ## (PlayerClass3D.is_perk_locked), so only this machine needs to know who's
 ## shopping; a buy goes to the server (Altar3D.buy), and once it's sold
@@ -15,30 +18,33 @@ class_name ShopMenu3D extends CanvasLayer
 ## Ignore input this long after opening, so the interact press that opened
 ## it doesn't also close it.
 const INPUT_DELAY := 0.3
-const WEAPON_CARD_SIZE := Vector2(240, 290)
-const PREVIEW_SIZE := Vector2i(180, 130)
-const PERK_CARD_SIZE := Vector2(210, 250)
-const THROWABLE_CARD_SIZE := Vector2(220, 290)
+## Every card is this size, so switching tabs doesn't resize the shop.
+const CARD_SIZE := ItemCards.CARD_SIZE
+const CARD_TEXT_WIDTH := ItemCards.CARD_TEXT_WIDTH
 const UPGRADE_COLOR := Color(0.55, 1.0, 0.5)
-const CARD_TINT := Color(0.62, 0.55, 0.52)
-const WELL_COLOR := Color(0.07, 0.04, 0.03, 0.75)
 const CARD_GAP := 14
 const SHOP_GAP := 40
-const UNAFFORDABLE := Color(1.0, 0.35, 0.3)
+const UNAFFORDABLE := ItemCards.WARNING_COLOR
 const SECTION_COLOR := Color(0.95, 0.8, 0.45)
+## What each tab (ShopOffer.SECTION_TITLES) is for, under the tabs.
+const SECTION_BLURBS: Dictionary[String, String] = {
+	"Weapons": "Upgrade your own kit for good, or buy a weapon that breaks with use.",
+	"Perks": "Boosts that last for the rest of the match. Pick one per restock.",
+	"Bombs & Flasks": "Goes in your item slot, to throw when you need it.",
+	"Towers": "Patch up your team's towers.",
+}
+## The kit strip's rarity pips.
+const PIP_SIZE := Vector2(16, 16)
+const EMPTY_PIP := Color(1, 1, 1, 0.15)
+## An unpicked tab's text.
+const TAB_DIM := 0.6
 ## Cards that aren't picked fade back (more so if you can't afford them).
 const UNSELECTED_DIM := 0.85
 const UNAFFORDABLE_DIM := 0.75
-const PREVIEW_SPIN := 1.2
-const PREVIEW_FOV := 35.0
-const COIN_ICON := preload("res://Assets/UI/icon_coin.png")
-const GRIP_NAMES: Dictionary[Weapon3D.Grip, String] = {
-	Weapon3D.Grip.MAIN_HAND: "One-handed",
-	Weapon3D.Grip.OFF_HAND: "Off hand",
-	Weapon3D.Grip.EITHER_HAND: "Either hand",
-	Weapon3D.Grip.TWO_HANDED: "Two-handed",
-}
-
+const COIN_ICON := preload("res://Assets/UI/coin.png")
+## How big the coin icon is drawn in the UI (the texture is twice that, so
+## it stays sharp in 3D and on big windows).
+const COIN_ICON_SIZE := Vector2(26, 28)
 ## One drawn offer.
 class Card:
 	var panel: PanelContainer
@@ -48,7 +54,7 @@ class Card:
 	var spinner: Node3D
 	## A repair's line on how its tower is doing, kept up to date.
 	var tower_status: Label
-	## The picked card (it draws the focus corners).
+	## The picked card (it draws the focus frame).
 	var selected: bool = false
 
 ## One player's open shop.
@@ -63,8 +69,13 @@ class Stall:
 	var root: PanelContainer
 	var coin_label: Label
 	var restock_label: Label
-	## offers indices, one array per row (a section).
+	## offers indices, one array per tab (a section).
 	var rows: Array[PackedInt32Array] = []
+	## Per tab: its button, its row of cards, its section title.
+	var tabs: Array[PanelContainer] = []
+	var pages: Array[HBoxContainer] = []
+	var sections: Array[String] = []
+	var blurb: Label
 	## By offer index.
 	var cards: Array[Card] = []
 	## What it was last drawn from: the stock and the coins.
@@ -73,35 +84,15 @@ class Stall:
 
 var _stalls: Array[Stall] = []
 var _row: HBoxContainer
-## Looks come from the project theme (Assets/default_theme.tres), like the
-## rest of the UI: the wooden panel, the focus corners round the picked
-## card, and the theme's text colors (cards: see _card_style).
-var _theme: Theme
-var _text_color: Color
-var _muted_color: Color
-## Cards are dark against the wooden panel (the theme's dark inset, a text
-## box's, darker still), and previews sit in a darker well inside them.
-var _card_style: StyleBoxTexture
-var _well_style: StyleBoxFlat
+## Draws the cards, in the project theme's look (see ItemCards).
+var _cards := ItemCards.new()
+var _theme: Theme = _cards.theme
+var _text_color: Color = _cards.text_color
+var _muted_color: Color = _cards.muted_color
 
 
 func _ready() -> void:
 	layer = 9  # Under the perk cards
-	_theme = ThemeDB.get_project_theme()
-	if not _theme:
-		_theme = ThemeDB.get_default_theme()
-	_text_color = _theme.get_color(&"font_color", &"Label")
-	_muted_color = _text_color.darkened(0.12)
-	_card_style = (_theme.get_stylebox(&"normal", &"LineEdit") as StyleBoxTexture).duplicate() as StyleBoxTexture
-	_card_style.modulate_color = CARD_TINT
-	_card_style.content_margin_left = 12.0
-	_card_style.content_margin_right = 12.0
-	_card_style.content_margin_top = 10.0
-	_card_style.content_margin_bottom = 12.0
-	_well_style = StyleBoxFlat.new()
-	_well_style.bg_color = WELL_COLOR
-	_well_style.set_corner_radius_all(6)
-	_well_style.set_content_margin_all(4.0)
 	# Shrinks the popups if enough players are shopping to run them off screen
 	var fit := FitCenterContainer.new()
 	fit.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -166,7 +157,7 @@ func _process(delta: float) -> void:
 		stall.restock_label.text = _restock_text(stall.altar)
 		for card: Card in stall.cards:
 			if card.spinner:
-				card.spinner.rotate_y(PREVIEW_SPIN * delta)
+				card.spinner.rotate_y(ItemCards.PREVIEW_SPIN * delta)
 			if card.tower_status:
 				card.tower_status.text = _tower_status(stall.altar)
 		if stall.input_delay > 0.0:
@@ -203,7 +194,7 @@ func _just_pressed(stall: Stall, base: StringName) -> bool:
 	return InputMap.has_action(input_action) and Input.is_action_just_pressed(input_action)
 
 
-## Move the selection `across` within its row, or `down` to the next row
+## Move the selection `across` within its tab, or `down` to the next tab
 ## (to about the same place along it).
 func _step(stall: Stall, across: int, down: int) -> void:
 	var at: Vector2i = _place_of(stall, stall.selected)
@@ -271,7 +262,7 @@ func _redraw(stall: Stall) -> void:
 	var color: Color = player.slot.color if player.slot else Color.WHITE
 	var uses_mouse: bool = player.Input_Handler and player.Input_Handler.uses_mouse()
 
-	stall.root = PanelContainer.new()  # The theme's wooden panel
+	stall.root = PanelContainer.new()  # The theme's stone panel
 	stall.root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_row.add_child(stall.root)
 	var column := VBoxContainer.new()
@@ -291,26 +282,47 @@ func _redraw(stall: Stall) -> void:
 	header.add_child(title)
 	stall.restock_label = _label(_restock_text(stall.altar), 18, _muted_color)
 	header.add_child(stall.restock_label)
-	header.add_child(_coin_icon())
+	header.add_child(coin_icon())
 	stall.coin_label = _label("%d" % stall.drawn_coins, 30, FlyingCoin3D.GOLD)
 	header.add_child(stall.coin_label)
 
-	# A row per section, in ShopOffer.ORDER (offers come grouped that way)
+	column.add_child(_kit_strip(player))
+
+	# A tab per section, in ShopOffer.ORDER (offers come grouped that way)
+	var tab_bar := HBoxContainer.new()
+	tab_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tab_bar.add_theme_constant_override("separation", 6)
+	column.add_child(tab_bar)
+	stall.blurb = _label("", 18, _muted_color)
+	column.add_child(stall.blurb)
+	var page_holder := VBoxContainer.new()  # Only the open tab's row shows
+	page_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(page_holder)
+	stall.tabs.clear()
+	stall.pages.clear()
+	stall.sections.clear()
 	var offers: Array[ShopOffer] = stall.offers
 	stall.cards.resize(offers.size())
+	var most_cards: int = 1
 	var i: int = 0
 	while i < offers.size():
 		var section: String = ShopOffer.SECTION_TITLES.get(offers[i].kind, "")
-		column.add_child(_label(section.to_upper(), 22, SECTION_COLOR, 0.0, true))
-		var row := HBoxContainer.new()
-		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", CARD_GAP)
-		column.add_child(row)
+		var tab_index: int = stall.tabs.size()
+		var tab: PanelContainer = _make_tab(section)
+		tab_bar.add_child(tab)
+		if uses_mouse:
+			tab.gui_input.connect(_on_tab_input.bind(stall, tab_index))
+		else:
+			tab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var page := HBoxContainer.new()
+		page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		page.alignment = BoxContainer.ALIGNMENT_CENTER
+		page.add_theme_constant_override("separation", CARD_GAP)
+		page_holder.add_child(page)
 		var indices := PackedInt32Array()
 		while i < offers.size() and ShopOffer.SECTION_TITLES.get(offers[i].kind, "") == section:
 			var card: Card = _make_card(stall, offers[i])
-			row.add_child(card.panel)
+			page.add_child(card.panel)
 			stall.cards[i] = card
 			indices.append(i)
 			if uses_mouse:
@@ -319,11 +331,22 @@ func _redraw(stall: Stall) -> void:
 			else:
 				card.panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			i += 1
+		most_cards = maxi(most_cards, indices.size())
 		stall.rows.append(indices)
+		stall.tabs.append(tab)
+		stall.pages.append(page)
+		stall.sections.append(section)
+	# As big as the fullest tab, so switching tabs doesn't resize the shop
+	var tallest: float = CARD_SIZE.y
+	for page: HBoxContainer in stall.pages:
+		tallest = maxf(tallest, page.get_combined_minimum_size().y)
+	page_holder.custom_minimum_size = Vector2(most_cards * CARD_SIZE.x + (most_cards - 1) * CARD_GAP, tallest)
+	stall.blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stall.blurb.custom_minimum_size.x = page_holder.custom_minimum_size.x
 
-	var hint: String = "WASD or point, click to buy, F or Esc to leave" if uses_mouse \
-		else "D-pad to browse, Attack to buy, Interact to leave"
-	column.add_child(_label(hint, 18, _text_color))
+	var hint: String = "A/D or point to browse, W/S or click a tab to switch, click to buy, F or Esc to leave" if uses_mouse \
+		else "D-pad left/right to browse, up/down to switch tab, Attack to buy, Interact to leave"
+	column.add_child(_label(hint, 16, _muted_color, page_holder.custom_minimum_size.x))
 	stall.selected = clampi(stall.selected, 0, maxi(offers.size() - 1, 0))
 	_update_prices(stall)
 
@@ -339,14 +362,24 @@ func _update_prices(stall: Stall) -> void:
 	stall.coin_label.text = "%d" % stall.drawn_coins
 	for i in stall.cards.size():
 		var card: Card = stall.cards[i]
-		if card:
+		if card and not stall.offers[i].locked:  # "Next restock" stays muted
 			card.price_label.add_theme_color_override("font_color",
 				FlyingCoin3D.GOLD if _can_buy(stall, stall.offers[i]) else UNAFFORDABLE)
 	_highlight(stall)
 
 
-## The picked card gets the theme's focus corners; the rest fade back.
+## The picked card gets the theme's focus frame; the rest fade back. Only
+## the picked card's tab is open.
 func _highlight(stall: Stall) -> void:
+	var open_tab: int = maxi(_place_of(stall, stall.selected).x, 0)
+	for t in stall.tabs.size():
+		var open: bool = t == open_tab
+		stall.pages[t].visible = open
+		stall.tabs[t].add_theme_stylebox_override(&"panel", _theme.get_stylebox(&"normal" if open else &"disabled", &"Button"))
+		var dim: float = 1.0 if open else TAB_DIM
+		stall.tabs[t].modulate = Color(dim, dim, dim)
+	if open_tab < stall.sections.size():
+		stall.blurb.text = SECTION_BLURBS.get(stall.sections[open_tab], "")
 	for i in stall.cards.size():
 		var card: Card = stall.cards[i]
 		if not card:
@@ -362,7 +395,52 @@ func _highlight(stall: Stall) -> void:
 ## Drawn under the card's contents, but its corners sit outside the card.
 func _draw_focus(card: Card) -> void:
 	if card.selected:
-		_theme.get_stylebox(&"focus", &"Button").draw(card.panel.get_canvas_item(), Rect2(Vector2.ZERO, card.panel.size))
+		_cards.draw_focus(card.panel)
+
+
+## Clicking a tab opens it, picking the first thing in it.
+func _on_tab_input(event: InputEvent, stall: Stall, tab_index: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT \
+			and tab_index < stall.rows.size() and not stall.rows[tab_index].is_empty():
+		_select(stall, stall.rows[tab_index][0])
+
+
+## A tab's button: the section's name, with how many offers it holds.
+func _make_tab(section: String) -> PanelContainer:
+	var tab := PanelContainer.new()
+	tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tab.add_child(_label(section.to_upper(), 20, SECTION_COLOR))
+	return tab
+
+
+## "Your kit: Sword" with a pip per rarity (lit up to the kit's), and what
+## the upgrades so far are worth.
+func _kit_strip(player: PlayerClass3D) -> Control:
+	var strip := HBoxContainer.new()
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.alignment = BoxContainer.ALIGNMENT_CENTER
+	strip.add_theme_constant_override("separation", 8)
+	var kit_name: String = Roster.kit_name_of(player.slot.character if player.slot else 0)
+	strip.add_child(_label("Your kit: %s" % kit_name, 18, _text_color))
+	var pips := HBoxContainer.new()
+	pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pips.add_theme_constant_override("separation", 4)
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for tier in WeaponRarity.Tier.size():
+		var pip := ColorRect.new()
+		pip.custom_minimum_size = PIP_SIZE
+		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pip.color = _rarity_color(tier) if tier <= player.kit_rarity else EMPTY_PIP
+		pips.add_child(pip)
+	strip.add_child(pips)
+	var rarity: int = player.kit_rarity
+	var status: String = WeaponRarity.NAMES[rarity]
+	if rarity > WeaponRarity.Tier.COMMON:
+		status += "  +%d%% damage" % roundi((WeaponRarity.KIT_POWER[rarity] - 1.0) * 100.0)
+	if rarity >= WeaponRarity.Tier.LEGENDARY:
+		status += "  (max)"
+	strip.add_child(_label(status, 18, _rarity_color(rarity)))
+	return strip
 
 
 func _on_card_input(event: InputEvent, stall: Stall, index: int) -> void:
@@ -375,41 +453,31 @@ func _on_card_input(event: InputEvent, stall: Stall, index: int) -> void:
 func _make_card(stall: Stall, offer: ShopOffer) -> Card:
 	var card := Card.new()
 	card.price = stall.altar.price_of(offer, stall.player)
-	card.panel = PanelContainer.new()
-	card.panel.add_theme_stylebox_override(&"panel", _card_style)
+	card.panel = _cards.make_card()
 	card.panel.draw.connect(_draw_focus.bind(card))
-	var column := VBoxContainer.new()
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_theme_constant_override("separation", 6)
-	card.panel.add_child(column)
+	var column: VBoxContainer = ItemCards.column_of(card.panel)
 	match offer.kind:
 		ShopOffer.Kind.WEAPON:
-			card.panel.custom_minimum_size = WEAPON_CARD_SIZE
 			_fill_weapon_card(card, column, stall.player, stall.altar, offer)
 		ShopOffer.Kind.KIT:
-			card.panel.custom_minimum_size = WEAPON_CARD_SIZE
 			_fill_kit_card(card, column, stall.player, stall.altar, offer)
 		ShopOffer.Kind.THROWABLE:
-			card.panel.custom_minimum_size = THROWABLE_CARD_SIZE
 			_fill_throwable_card(card, column, stall.player, stall.altar, offer)
 		ShopOffer.Kind.PERK:
-			card.panel.custom_minimum_size = PERK_CARD_SIZE
 			_fill_perk_card(column, stall.player, stall.altar, offer)
 		ShopOffer.Kind.REPAIR:
-			card.panel.custom_minimum_size = PERK_CARD_SIZE
 			_fill_repair_card(card, column, stall.altar)
-	var spacer := Control.new()
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(spacer)
+	_cards.add_spacer(column)
 	var price_row := HBoxContainer.new()
 	price_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	price_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	price_row.add_theme_constant_override("separation", 6)
 	if offer.sold:
 		card.price_label = _label("SOLD", 26, UNAFFORDABLE)
+	elif offer.locked:
+		card.price_label = _label("Next restock", 22, _muted_color)
 	else:
-		price_row.add_child(_coin_icon())
+		price_row.add_child(coin_icon())
 		card.price_label = _label("%d" % card.price, 26, FlyingCoin3D.GOLD)
 	price_row.add_child(card.price_label)
 	column.add_child(price_row)
@@ -417,21 +485,16 @@ func _make_card(stall: Stall, offer: ShopOffer) -> Card:
 
 
 func _fill_weapon_card(card: Card, column: VBoxContainer, player: PlayerClass3D, altar: Altar3D, offer: ShopOffer) -> void:
-	var info: Array = Altar3D.weapon_info(offer.scene)
 	_add_preview(card, column, player, altar, offer)
-	column.add_child(_label(WeaponRarity.NAMES[offer.rarity].to_upper(), 16, _rarity_color(offer.rarity)))
-	column.add_child(_label(info[0], 24, _text_color, WEAPON_CARD_SIZE.x - 24))
-	var details: String = GRIP_NAMES.get(info[1], "")
-	if info[2] != "":
-		details += "  -  Heavy: %s" % info[2]
-	column.add_child(_label(details, 16, _muted_color, WEAPON_CARD_SIZE.x - 24))
-	column.add_child(_label("Breaks with use", 16, UNAFFORDABLE.lightened(0.3), WEAPON_CARD_SIZE.x - 24))
+	_cards.fill_weapon(column, offer.scene, "NEW WEAPON  -  %s" % WeaponRarity.NAMES[offer.rarity].to_upper(),
+		_rarity_color(offer.rarity))
+	column.add_child(_label("Breaks with use", 16, UNAFFORDABLE.lightened(0.3), CARD_TEXT_WIDTH))
 
 
 ## The buyer's own kit, one or two rarities up: it never breaks, and each
 ## rarity hits harder (WeaponRarity.KIT_POWER).
 func _fill_kit_card(card: Card, column: VBoxContainer, player: PlayerClass3D, altar: Altar3D, offer: ShopOffer) -> void:
-	var text_width: float = WEAPON_CARD_SIZE.x - 24
+	var text_width: float = CARD_TEXT_WIDTH
 	_add_preview(card, column, player, altar, offer)
 	var kit_name: String = Roster.kit_name_of(player.slot.character if player.slot else 0)
 	if not player.can_upgrade_kit():
@@ -441,85 +504,44 @@ func _fill_kit_card(card: Card, column: VBoxContainer, player: PlayerClass3D, al
 		return
 	var after: int = altar.kit_rarity_after(offer, player)
 	var jump: String = "  x2!" if after - player.kit_rarity > 1 else ""
-	column.add_child(_label("%s -> %s%s" % [WeaponRarity.NAMES[player.kit_rarity].to_upper(),
-		WeaponRarity.NAMES[after].to_upper(), jump], 16, _rarity_color(after)))
+	column.add_child(_label("KIT UPGRADE%s" % jump, 16, UPGRADE_COLOR))
+	column.add_child(_label("%s -> %s" % [WeaponRarity.NAMES[player.kit_rarity].to_upper(),
+		WeaponRarity.NAMES[after].to_upper()], 16, _rarity_color(after)))
 	column.add_child(_label(kit_name, 24, _text_color, text_width))
 	var bonus: int = roundi((WeaponRarity.KIT_POWER[after] - 1.0) * 100.0)
-	column.add_child(_label("Yours for good  -  +%d%% damage" % bonus, 16, UPGRADE_COLOR, text_width))
+	column.add_child(_label("+%d%% damage, for good" % bonus, 16, UPGRADE_COLOR, text_width))
 
 
 func _fill_throwable_card(card: Card, column: VBoxContainer, player: PlayerClass3D, altar: Altar3D, offer: ShopOffer) -> void:
-	var text_width: float = THROWABLE_CARD_SIZE.x - 24
 	_add_preview(card, column, player, altar, offer)
-	var is_bomb: bool = offer.throwable_kind == Throwable3D.Kind.BOMB
-	column.add_child(_label("BOMB" if is_bomb else "FLASK", 16, Altar3D.throwable_color(offer).lightened(0.2)))
-	column.add_child(_label(Altar3D.throwable_title(offer), 22, _text_color, text_width))
-	column.add_child(_label(_throwable_text(offer), 16, _muted_color, text_width))
-
-
-## What a bomb or flask does, in a line.
-func _throwable_text(offer: ShopOffer) -> String:
-	if offer.throwable_kind == Throwable3D.Kind.BOMB:
-		var fuse: String = "Throw it within %ds!" % roundi(Throwable3D.BOMB_FUSE)
-		match offer.variant:
-			Bomb3D.Type.FIRE:
-				return "Sets the blast on fire. " + fuse
-			Bomb3D.Type.POISON:
-				return "Poisons the blast. " + fuse
-			Bomb3D.Type.ICE:
-				return "Chills the blast. " + fuse
-		return fuse
-	var flask: Dictionary = Potion.large(offer.variant)
-	if flask.get("allies", false):
-		return "Shatters where it lands, healing your team."
-	return "Shatters where it lands, splashing enemies%s." % (" and leaving a puddle" if flask.has("patch") else "")
+	_cards.fill_throwable(column, offer)
 
 
 ## An offer's model spinning in the card, sunk into a dark well.
 func _add_preview(card: Card, column: VBoxContainer, player: PlayerClass3D, altar: Altar3D, offer: ShopOffer) -> void:
-	var preview: SubViewportContainer = _make_preview(card, player, altar, offer)
-	if not preview:
-		return
-	var inset := PanelContainer.new()
-	inset.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	inset.add_theme_stylebox_override(&"panel", _well_style)
-	inset.add_child(preview)
-	column.add_child(inset)
+	card.spinner = _cards.add_preview(column, altar.make_preview(offer, player))
 
 
 func _rarity_color(rarity: int) -> Color:
-	return Color.WHITE if rarity <= WeaponRarity.Tier.COMMON \
-		else Color(WeaponRarity.COLORS[rarity], 1.0).lightened(0.2)
+	return ItemCards.rarity_color(rarity)
 
 
 func _fill_perk_card(column: VBoxContainer, player: PlayerClass3D, altar: Altar3D, offer: ShopOffer) -> void:
 	var perk: Perk = altar.perk_of(offer)
 	if not perk:
 		return
-	var text_width: float = PERK_CARD_SIZE.x - 24
-	column.add_child(_label(perk.category_name().to_upper(), 16, perk.category_color(), text_width))
-	column.add_child(_label(perk.title, 22, _text_color, text_width))
-	var rule := ColorRect.new()
-	rule.color = perk.category_color().darkened(0.3)
-	rule.custom_minimum_size = Vector2(0, 2)
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(rule)
-	column.add_child(_label(perk.description, 17, _muted_color, text_width))
+	_cards.fill_perk(column, perk)
 	var owned: int = player.perks.count(perk)
 	if owned > 0:
-		column.add_child(_label("Owned x%d" % owned, 16, Color(0.95, 0.8, 0.4), text_width))
+		column.add_child(_label("Owned x%d" % owned, 16, Color(0.95, 0.8, 0.4), CARD_TEXT_WIDTH))
 
 
 func _fill_repair_card(card: Card, column: VBoxContainer, altar: Altar3D) -> void:
-	var text_width: float = PERK_CARD_SIZE.x - 24
+	var text_width: float = CARD_TEXT_WIDTH
 	var color: Color = Players.TEAM_COLORS[altar.owner_team % Players.TEAM_COLORS.size()] if altar.owner_team >= 0 else Color.WHITE
 	column.add_child(_label("TOWER", 16, color, text_width))
 	column.add_child(_label(altar.offer_title(ShopOffer.repair()), 22, _text_color, text_width))
-	var rule := ColorRect.new()
-	rule.color = color.darkened(0.3)
-	rule.custom_minimum_size = Vector2(0, 2)
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(rule)
+	_cards.add_rule(column, color.darkened(0.3))
 	column.add_child(_label("Puts back %d%% of your most damaged tower's health." % roundi(altar.repair_share * 100.0),
 		15, _muted_color, text_width))
 	card.tower_status = _label(_tower_status(altar), 17, Color(0.95, 0.8, 0.4), text_width)
@@ -534,93 +556,17 @@ func _tower_status(altar: Altar3D) -> String:
 	return "%s: %d / %d" % [Tower3D.NAMES[tower.kind], ceili(tower.hp), roundi(tower.max_hp)]
 
 
-## The offer, spinning in a little world of its own, framed to fit.
-func _make_preview(card: Card, player: PlayerClass3D, altar: Altar3D, offer: ShopOffer) -> SubViewportContainer:
-	var model: Node3D = altar.make_preview(offer, player)
-	if not model:
-		return null
-	var container := SubViewportContainer.new()
-	container.stretch = true
-	container.custom_minimum_size = PREVIEW_SIZE
-	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var viewport := SubViewport.new()
-	viewport.own_world_3d = true
-	viewport.transparent_bg = true
-	viewport.size = PREVIEW_SIZE
-	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	container.add_child(viewport)
-	var environment := Environment.new()
-	environment.background_mode = Environment.BG_CLEAR_COLOR
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.9, 0.85, 0.8)
-	environment.ambient_light_energy = 0.6
-	var world := WorldEnvironment.new()
-	world.environment = environment
-	viewport.add_child(world)
-	var light := DirectionalLight3D.new()
-	light.rotation = Vector3(deg_to_rad(-40.0), deg_to_rad(30.0), 0.0)
-	light.light_energy = 1.4
-	viewport.add_child(light)
-	card.spinner = Node3D.new()
-	viewport.add_child(card.spinner)
-	card.spinner.add_child(model)
-	# Center it on the spinner and back the camera off until it all fits
-	var box: AABB = _bounds(model)
-	model.position = -box.get_center()
-	var camera := Camera3D.new()
-	camera.fov = PREVIEW_FOV
-	var radius: float = maxf(box.size.length() / 2.0, 0.1)
-	var distance: float = radius / tan(deg_to_rad(PREVIEW_FOV) / 2.0) * 1.05
-	var eye := Vector3(0, radius * 0.25, distance)
-	camera.transform = Transform3D(Basis.looking_at(-eye), eye)
-	viewport.add_child(camera)
-	return container
-
-
-## Everything `root` draws, in its own space.
-func _bounds(root: Node3D) -> AABB:
-	var box := AABB()
-	var first: bool = true
-	for node: Node in root.find_children("*", "VisualInstance3D", true, false):
-		var visual := node as VisualInstance3D
-		var local: Transform3D = _transform_to(root, visual)
-		var part: AABB = local * visual.get_aabb()
-		box = part if first else box.merge(part)
-		first = false
-	return box if not first else AABB(Vector3(-0.5, -0.5, -0.5), Vector3.ONE)
-
-
-## `node`'s transform in `root`'s space (works outside the tree too).
-func _transform_to(root: Node3D, node: Node3D) -> Transform3D:
-	var xform: Transform3D = Transform3D.IDENTITY
-	var current: Node = node
-	while current and current != root:
-		if current is Node3D:
-			xform = (current as Node3D).transform * xform
-		current = current.get_parent()
-	return xform
-
-
-func _coin_icon() -> TextureRect:
+## A coin icon for a row of UI (the shop's prices, the HUD's coin count).
+static func coin_icon() -> TextureRect:
 	var icon := TextureRect.new()
 	icon.texture = COIN_ICON
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.custom_minimum_size = COIN_ICON_SIZE
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return icon
 
 
-## `wrap_width` > 0 wraps the text at that width; `left` aligns it left.
 func _label(text: String, size: int, color: Color, wrap_width: float = 0.0, left: bool = false) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if left else HORIZONTAL_ALIGNMENT_CENTER
-	if wrap_width > 0.0:
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.custom_minimum_size.x = wrap_width
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	# The theme's dark-brown outline, a little thicker on big text
-	label.add_theme_constant_override("outline_size", maxi(4, int(size / 5.0)))
-	return label
+	return _cards.label(text, size, color, wrap_width, left)

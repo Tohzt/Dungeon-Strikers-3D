@@ -1,0 +1,99 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://UI/Menus/Codex/codex_menu.gd" id="1_codex"]
+[ext_resource type="Texture2D" uid="uid://dhjs54l4crge8" path="res://Assets/UI/menu_background.png" id="2_bg"]
+
+[node name="CodexMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_codex")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 24
+
+[node name="Frame" type="PanelContainer" parent="Margin"]
+layout_mode = 2
+
+[node name="Column" type="VBoxContainer" parent="Margin/Frame"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Margin/Frame/Column"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Margin/Frame/Column/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.96, 0.78, 0.42, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.06, 0.09, 1)
+theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 40
+text = "Codex"
+
+[node name="Back" type="Button" parent="Margin/Frame/Column/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 44)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 20
+text = "Back"
+
+[node name="Tabs" type="HBoxContainer" parent="Margin/Frame/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="Blurb" type="Label" parent="Margin/Frame/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Hint" type="Label" parent="Margin/Frame/Column"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Tab: LB / RB or Q / E.   Back: B / Esc."
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/Frame/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+horizontal_scroll_mode = 0
+
+[node name="Center" type="CenterContainer" parent="Margin/Frame/Column/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Grid" type="GridContainer" parent="Margin/Frame/Column/Scroll/Center"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 5

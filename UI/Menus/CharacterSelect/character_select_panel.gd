@@ -29,6 +29,8 @@ const TAB_HEIGHT := 32
 const NAME_FONT_SIZE := 22
 const SMALL_FONT_SIZE := 15
 const PLAYER_NAME_FONT_SIZE := 24
+## The smallest a long character name shrinks to before it's cut short.
+const MIN_NAME_FONT_SIZE := 14
 
 var interactive: bool = true:
 	set(value):
@@ -88,8 +90,8 @@ func _init(stage_size: Vector2 = Vector2(300, 240)) -> void:
 	_style.set_corner_radius_all(6)
 	_style.set_border_width_all(3)
 	_style.set_content_margin_all(8)
-	_style.bg_color = Color(0.12, 0.06, 0.04, 0.85)
-	_style.border_color = Color(0.2, 0.09, 0.05)
+	_style.bg_color = Color(0.08, 0.08, 0.1, 0.85)
+	_style.border_color = Color(0.2, 0.2, 0.24)
 	add_theme_stylebox_override("panel", _style)
 
 	var column := VBoxContainer.new()
@@ -192,6 +194,7 @@ func show_choice(new_team: int, new_character: int) -> void:
 		_tabs[i].button_pressed = i == team
 		_tabs[i].modulate = Color.WHITE if i == team else Color(1, 1, 1, 0.55)
 	_name.text = Roster.name_of(character)
+	_fit_name.call_deferred()
 	_kit.text = Roster.kit_name_of(character)
 	_stage.show_choice(team, character)
 
@@ -200,8 +203,8 @@ func show_choice(new_team: int, new_character: int) -> void:
 func show_empty(text: String) -> void:
 	_set_empty(true)
 	_empty.text = text
-	_style.bg_color = Color(0.12, 0.06, 0.04, 0.55)
-	_style.border_color = Color(0.2, 0.09, 0.05)
+	_style.bg_color = Color(0.08, 0.08, 0.1, 0.55)
+	_style.border_color = Color(0.2, 0.2, 0.24)
 
 
 func _set_empty(on: bool) -> void:
@@ -276,9 +279,22 @@ func _arrow(text: String, step: int) -> Button:
 	return button
 
 
+## A long character name shrinks until it fits its row (once laid out).
+func _fit_name() -> void:
+	var font: Font = _name.get_theme_font(&"font")
+	var font_size: int = NAME_FONT_SIZE
+	while font_size > MIN_NAME_FONT_SIZE \
+			and font.get_string_size(_name.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > _name.size.x:
+		font_size -= 1
+	_name.add_theme_font_size_override("font_size", font_size)
+
+
+## Long text is cut short with "..." rather than widening the panel, so
+## picking a character with a long name or kit doesn't shift the lobby.
 func _label(font_size: int) -> Label:
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.add_theme_font_size_override("font_size", font_size)
 	return label
 

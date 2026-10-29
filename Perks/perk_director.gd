@@ -29,7 +29,10 @@ const OFFER_SIZE := 3
 ## Online: don't ask the server to open the cards again this soon.
 const OPEN_RETRY_MSEC := 500
 
-@export var catalog: PerkCatalog = preload("res://Perks/perk_catalog.tres")
+## Every perk in the game (the Codex lists these too).
+const CATALOG: PerkCatalog = preload("res://Perks/perk_catalog.tres")
+
+@export var catalog: PerkCatalog = CATALOG
 @export var picker: PerkPicker3D
 ## Online: seconds a draft or intermission waits before picking at random
 ## for anyone who hasn't finished (0 = wait forever). Offline everyone is

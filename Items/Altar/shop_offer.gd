@@ -1,7 +1,7 @@
 class_name ShopOffer extends RefCounted
 ## One thing a shop altar sells (see Altar3D.shop). Offers sharing a section
-## title (SECTION_TITLES) make one row of the shop menu (ShopMenu3D), the
-## rows in ORDER. A new kind goes here, in ORDER and SECTION_TITLES, in
+## title (SECTION_TITLES) make one tab of the shop menu (ShopMenu3D), the
+## tabs in ORDER. A new kind goes here, in ORDER and SECTION_TITLES, in
 ## Altar3D's rolling/selling/pricing, and in ShopMenu3D's cards.
 ##
 ## Sent over the network as ENCODED_SIZE ints (see encode), and turned back
@@ -13,10 +13,10 @@ class_name ShopOffer extends RefCounted
 ## Values go over the network: append only.
 enum Kind { WEAPON, PERK, REPAIR, KIT, THROWABLE }
 
-## The menu's order, left to right and top to bottom: your own kit just
-## before the breakable weapon, in the same row.
+## The menu's order, tab by tab and left to right: your own kit just
+## before the breakable weapon, in the same tab.
 const ORDER: Array[Kind] = [Kind.KIT, Kind.WEAPON, Kind.PERK, Kind.THROWABLE, Kind.REPAIR]
-## Each kind's row heading in the menu (kinds with the same one share a row).
+## Each kind's tab in the menu (kinds with the same one share a tab).
 const SECTION_TITLES: Dictionary[Kind, String] = {
 	Kind.KIT: "Weapons",
 	Kind.WEAPON: "Weapons",
@@ -43,6 +43,9 @@ var variant: int = 0
 ## Bought: it stays in the menu, sold out, until the next restock. Set
 ## on every machine (see Altar3D._sold), never sent.
 var sold: bool = false
+## PERK: another perk was bought from this stock, so this one can't be
+## until the next restock. Set like sold.
+var locked: bool = false
 
 
 static func weapon(tier_index: int, weapon_pick: int, weapon_rarity: int) -> ShopOffer:

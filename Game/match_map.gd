@@ -29,8 +29,10 @@ const NO_DROPS: Array[Map] = [Map.PITCH]
 
 ## Drops the host can pick, in the order the lobby's Ball button cycles.
 ## Each will get its own boss later; for now the one boss drops any of them.
-## The first is the default.
-const DROPS: Array[BossDrop.Kind] = [BossDrop.Kind.BOMB, BossDrop.Kind.BALL, BossDrop.Kind.SKULL]
+## The first is the default. Only the bomb is offered for now: the ball and
+## skull still work, so add BossDrop.Kind.BALL / SKULL back here to offer
+## them (the Ball button shows once there's more than one).
+const DROPS: Array[BossDrop.Kind] = [BossDrop.Kind.BOMB]
 ## Whether a ball needs a map with goals (see fits). Off: every map plays
 ## with the ball.
 const BALL_NEEDS_GOALS := false

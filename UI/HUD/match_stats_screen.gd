@@ -31,8 +31,13 @@ const LINES: Array[Array] = [
 	["damage", "Damage"], ["boss_damage", "Boss dmg"],
 ]
 
-const BACKGROUND := Color(0.05, 0.03, 0.025, 0.95)
-const CARD_COLOR := Color(0.12, 0.06, 0.04, 0.92)
+const BACKGROUND := preload("res://Assets/UI/menu_background.png")
+## Cards are the theme's stone panel; the players on this machine get
+## theirs tinted gold.
+const LOCAL_CARD_TINT := Color(1.35, 1.15, 0.65)
+const CARD_PADDING := 14.0
+## The team-colored line under each card's figure.
+const TEAM_RULE_HEIGHT := 3.0
 ## Whole row of cards stays within this width; each card is between these.
 const ROW_WIDTH := 1060.0
 const CARD_WIDTH := Vector2(120.0, 210.0)
@@ -62,8 +67,10 @@ func setup(rows: Array, winner: int, title: String, team_scores: Dictionary[int,
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(root)
-	var background := ColorRect.new()
-	background.color = BACKGROUND
+	var background := TextureRect.new()
+	background.texture = BACKGROUND
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(background)
 
@@ -187,12 +194,10 @@ func _mvp_score(row: Dictionary) -> float:
 
 func _card(row: Dictionary, won: bool, width: float, awards: Array, is_local: bool) -> Control:
 	var color: Color = Players.team_color(row.team)
-	var style := StyleBoxFlat.new()
-	style.set_corner_radius_all(6)
-	style.set_border_width_all(4 if is_local else 2)
-	style.set_content_margin_all(6)
-	style.bg_color = CARD_COLOR
-	style.border_color = MVP_COLOR if is_local else color.darkened(0.3)
+	var style: StyleBox = _theme_panel().duplicate()
+	style.set_content_margin_all(CARD_PADDING)
+	if is_local and style is StyleBoxTexture:
+		(style as StyleBoxTexture).modulate_color = LOCAL_CARD_TINT
 	var card := PanelContainer.new()
 	card.custom_minimum_size.x = width
 	card.add_theme_stylebox_override("panel", style)
@@ -200,7 +205,12 @@ func _card(row: Dictionary, won: bool, width: float, awards: Array, is_local: bo
 	column.add_theme_constant_override("separation", 2)
 	card.add_child(column)
 
-	column.add_child(_figure(row.character, won, Vector2(width - 12.0, minf(width * 1.15, 210.0))))
+	var figure_width: float = width - 2.0 * CARD_PADDING
+	column.add_child(_figure(row.character, won, Vector2(figure_width, minf(figure_width * 1.15, 210.0))))
+	var rule := ColorRect.new()
+	rule.color = color
+	rule.custom_minimum_size.y = TEAM_RULE_HEIGHT
+	column.add_child(rule)
 	var name_label := _label(row.label, color, 20 if width > 150.0 else 16)
 	name_label.add_theme_font_override("font", NameTag.font())
 	column.add_child(_trimmed(name_label))
@@ -225,6 +235,12 @@ func _card(row: Dictionary, won: bool, width: float, awards: Array, is_local: bo
 	for title: String in awards:
 		column.add_child(_label(("★ " if title == MVP else "") + title, MVP_COLOR if title == MVP else AWARD_COLOR, 15 if title == MVP else 13))
 	return card
+
+
+## The project theme's panel (the stone frame).
+func _theme_panel() -> StyleBox:
+	var theme: Theme = ThemeDB.get_project_theme()
+	return theme.get_stylebox(&"panel", &"PanelContainer") if theme else StyleBoxEmpty.new()
 
 
 ## `character` in its own little world, cheering if `won`, else slumped.

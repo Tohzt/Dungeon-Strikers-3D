@@ -47,7 +47,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 30
+const PROTOCOL_VERSION := 31
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -59,8 +59,9 @@ var peers: Array[int] = []
 ## by the server and sent to everyone with the peer list, along with the
 ## leader's match format (Players.team_count, map, boss_drop and score_to_win).
 var loadouts: Dictionary = {}
-## Bots the leader added in the lobby, as [team, character, name] each. They sit
-## in the seats after the players' and are run by the server.
+## Bots filling the seats people haven't taken (see Players.seats_per_team,
+## which the leader sets), as [team, character, name] each. They sit in the
+## seats after the players' and are run by the server.
 var bots: Array = []
 var in_match := false
 ## Every machine has the match scene loaded, so match nodes (players, ball,
@@ -214,16 +215,16 @@ func set_player_name(text: String) -> void:
 		_request_name.rpc_id(SERVER_ID, text)
 
 
-## Leader only: seat a bot on the smallest team (the server runs it).
-func add_bot() -> void:
+## Leader only: how many seats `team` has. The server fills the ones
+## people don't take with bots (and runs them).
+func set_team_size(team: int, size: int) -> void:
 	if is_host and not in_match:
-		_request_add_bot.rpc_id(SERVER_ID)
+		_request_team_size.rpc_id(SERVER_ID, team, size)
 
 
-## Leader only: remove the last bot added.
-func remove_bot() -> void:
-	if is_host and not in_match:
-		_request_remove_bot.rpc_id(SERVER_ID)
+## How many people (not bots) are on `team`.
+func people_on(team: int) -> int:
+	return peers.filter(func(id: int) -> bool: return loadout_of(id)[0] == team).size()
 
 
 ## Leader only: the number of teams to play with.
@@ -362,6 +363,7 @@ func _close_session() -> void:
 	peers.clear()
 	loadouts.clear()
 	bots.clear()
+	Players.seats_per_team.fill(Players.max_team_size())
 	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0] as MatchMap.Map, MatchMap.DROPS[0] as BossDrop.Kind, 5)
 	in_match = false
 	match_synced = false
@@ -380,6 +382,8 @@ func _to_session(method: Callable, ...args: Array) -> void:
 
 
 func _broadcast_peers() -> void:
+	if not in_match:
+		_fit_bots()
 	for id: int in peers:
 		# Skip anyone whose connection just dropped but isn't cleaned up yet.
 		if multiplayer.get_peers().has(id):
@@ -396,10 +400,25 @@ func _apply_format(format: Array) -> void:
 	Players.set_match_format(format[0], format[1], format[2], format[3])
 
 
-## A new player starts on the smallest team, as the seat's usual character.
+## Server: add or remove bots so each team has its Players.seats_per_team
+## (people take seats first; the newest bots on a team go first).
+func _fit_bots() -> void:
+	for team in Players.team_count:
+		var people: int = people_on(team)
+		Players.set_team_size(team, Players.seats_per_team[team], people)
+		var wanted: int = Players.seats_per_team[team] - people
+		var mine: Array = bots.filter(func(bot: Array) -> bool: return bot[0] == team)
+		for i in range(mine.size() - 1, wanted - 1, -1):
+			bots.erase(mine[i])
+		for i in wanted - mine.size():
+			bots.append([team, _unused_character(team), PlayerNames.random(_taken_names())])
+
+
+## A new player starts on the team with the fewest people (taking a bot's
+## seat), as the seat's usual character.
 func _add_loadout(id: int) -> void:
 	var teams: Array[int] = []
-	for loadout: Array in loadouts.values() + bots:
+	for loadout: Array in loadouts.values():
 		teams.append(loadout[0])
 	var team: int = Players.smallest_team(teams)
 	loadouts[id] = [team, Roster.for_team(Players.default_character(peers.find(id)), team),
@@ -538,9 +557,6 @@ func _request_join(code: String, version: int) -> void:
 	elif peers.size() >= MAX_PLAYERS:
 		_reject(id, "That session is full.")
 	elif not peers.has(id):
-		# A person takes a bot's seat if that's all that's left
-		if seat_count() >= MAX_PLAYERS:
-			bots.pop_back()
 		peers.append(id)
 		_add_loadout(id)
 		print("Peer %d joined session %s." % [id, code])
@@ -556,7 +572,11 @@ func _version_mismatch(version: int) -> String:
 func _request_loadout(team: int, character: int) -> void:
 	var id: int = multiplayer.get_remote_sender_id()
 	if is_server and not in_match and peers.has(id):
-		loadouts[id] = _clamp_loadout(team, character) + [name_in(loadout_of(id))]
+		var picked: Array = _clamp_loadout(team, character)
+		# A team full of people stays shut; the character still changes
+		if picked[0] != loadout_of(id)[0] and people_on(picked[0]) >= Players.max_team_size():
+			picked = _clamp_loadout(loadout_of(id)[0], character)
+		loadouts[id] = picked + [name_in(loadout_of(id))]
 		_broadcast_peers()
 
 
@@ -599,10 +619,9 @@ func _request_score_to_win(score: int) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _request_add_bot() -> void:
-	if _from_leader_in_lobby() and seat_count() < MAX_PLAYERS:
-		var team: int = Players.smallest_team(seat_teams())
-		bots.append([team, _unused_character(team), PlayerNames.random(_taken_names())])
+func _request_team_size(team: int, size: int) -> void:
+	if _from_leader_in_lobby() and team >= 0 and team < Players.team_count:
+		Players.set_team_size(team, size, people_on(team))
 		_broadcast_peers()
 
 
@@ -615,13 +634,6 @@ func _unused_character(team: int) -> int:
 		if not taken.has(character):
 			return character
 	return choices[bots.size() % choices.size()]
-
-
-@rpc("any_peer", "reliable")
-func _request_remove_bot() -> void:
-	if _from_leader_in_lobby() and not bots.is_empty():
-		bots.pop_back()
-		_broadcast_peers()
 
 
 func _from_leader_in_lobby() -> bool:

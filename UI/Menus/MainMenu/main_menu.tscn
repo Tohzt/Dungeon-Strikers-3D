@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://UI/Menus/MainMenu/main_menu.gd" id="1_menu"]
 [ext_resource type="Script" path="res://UI/Controls/fit_center_container.gd" id="2_fit"]
+[ext_resource type="Script" path="res://UI/Controls/smooth_panel_container.gd" id="4_smooth"]
+[ext_resource type="Texture2D" uid="uid://dhjs54l4crge8" path="res://Assets/UI/menu_background.png" id="3_bg"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -12,14 +14,16 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_menu")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.075, 0.05, 0.045, 1)
+texture = ExtResource("3_bg")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="Center" type="Container" parent="."]
 layout_mode = 1
@@ -29,6 +33,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_fit")
+ease_speed = 12.0
 
 [node name="Content" type="VBoxContainer" parent="Center"]
 layout_mode = 2
@@ -38,7 +43,7 @@ theme_override_constants/separation = 20
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/outline_size = 14
-theme_override_colors/font_outline_color = Color(0.16, 0.07, 0.04, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.06, 0.09, 1)
 theme_override_colors/font_color = Color(0.96, 0.78, 0.42, 1)
 theme_override_font_sizes/font_size = 56
 text = "Dungeon Strikers"
@@ -47,6 +52,7 @@ horizontal_alignment = 1
 [node name="Frame" type="PanelContainer" parent="Center/Content"]
 layout_mode = 2
 size_flags_horizontal = 4
+script = ExtResource("4_smooth")
 
 [node name="Home" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
@@ -55,19 +61,12 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="SinglePlayerButton" type="Button" parent="Center/Content/Frame/Home"]
+[node name="LocalButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
-text = "Single Player"
-
-[node name="LocalMultiplayerButton" type="Button" parent="Center/Content/Frame/Home"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Local Multiplayer"
+text = "Local"
 
 [node name="OnlineButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
@@ -76,192 +75,28 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Online"
 
+[node name="CodexButton" type="Button" parent="Center/Content/Frame/Home"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Codex"
+
+[node name="TrainingButton" type="Button" parent="Center/Content/Frame/Home"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+disabled = true
+tooltip_text = "A practice room with a dummy, to try out characters, weapons and perks. Not built yet."
+text = "Training (coming soon)"
+
 [node name="QuitButton" type="Button" parent="Center/Content/Frame/Home"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Quit"
-
-[node name="SinglePlayer" type="VBoxContainer" parent="Center/Content/Frame"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/separation = 12
-
-[node name="Options" type="GridContainer" parent="Center/Content/Frame/SinglePlayer"]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 12
-columns = 3
-
-[node name="SoloTeams" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Teams: 2"
-
-[node name="SoloBots" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Bots: Off"
-
-[node name="SoloMap" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Map: Dungeon"
-
-[node name="SoloDrop" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Boss Drop: Skull"
-
-[node name="SoloScore" type="Button" parent="Center/Content/Frame/SinglePlayer/Options"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Score to Win:  <  5  >"
-
-[node name="Prompt" type="Label" parent="Center/Content/Frame/SinglePlayer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "Choose your device"
-horizontal_alignment = 1
-
-[node name="Devices" type="HBoxContainer" parent="Center/Content/Frame/SinglePlayer"]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/separation = 12
-
-[node name="KeyboardMouse" type="Button" parent="Center/Content/Frame/SinglePlayer/Devices"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 52)
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Keyboard & Mouse"
-
-[node name="Controller" type="Button" parent="Center/Content/Frame/SinglePlayer/Devices"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 52)
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Controller"
-
-[node name="SinglePlayerBack" type="Button" parent="Center/Content/Frame/SinglePlayer"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Back"
-
-[node name="Lobby" type="VBoxContainer" parent="Center/Content/Frame"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="LobbyHint" type="Label" parent="Center/Content/Frame/Lobby"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Join: A / Start or Enter / Space.   Character: D-pad / stick, or A / D.
-Team: LB / RB, or Q / E.   Leave: B / Esc.   Empty seats are filled with bots."
-horizontal_alignment = 1
-
-[node name="Seats" type="HBoxContainer" parent="Center/Content/Frame/Lobby"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/separation = 10
-
-[node name="LobbyRoster" type="Label" parent="Center/Content/Frame/Lobby"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-horizontal_alignment = 1
-
-[node name="LobbyOptions" type="GridContainer" parent="Center/Content/Frame/Lobby"]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 12
-columns = 3
-
-[node name="LobbyTeams" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Teams: 2"
-
-[node name="LobbyBots" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Bots: Off"
-
-[node name="LobbyMap" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Map: Dungeon"
-
-[node name="LobbyDrop" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Boss Drop: Skull"
-
-[node name="LobbyScore" type="Button" parent="Center/Content/Frame/Lobby/LobbyOptions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Score to Win:  <  5  >"
-
-[node name="LobbyActions" type="HBoxContainer" parent="Center/Content/Frame/Lobby"]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/separation = 12
-
-[node name="Start" type="Button" parent="Center/Content/Frame/Lobby/LobbyActions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 52)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 24
-text = "Start (2+ players)"
-
-[node name="LobbyBack" type="Button" parent="Center/Content/Frame/Lobby/LobbyActions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 52)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Back"
 
 [node name="Online" type="VBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
@@ -407,48 +242,66 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="OnlineLobby" type="VBoxContainer" parent="Center/Content/Frame"]
+[node name="Lobby" type="HBoxContainer" parent="Center/Content/Frame"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LeftSeats" type="VBoxContainer" parent="Center/Content/Frame/Lobby"]
+unique_name_in_owner = true
+layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Main" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
+[node name="Middle" type="VBoxContainer" parent="Center/Content/Frame/Lobby"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 10
+
+[node name="TopRow" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="PlayersButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/TopRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(264, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Players:  <  1  >"
+
+[node name="ScoreButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/TopRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(264, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Score to Win:  <  5  >"
+
+[node name="CodePanel" type="PanelContainer" parent="Center/Content/Frame/Lobby/Middle"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_constants/separation = 16
-
-[node name="Side" type="VBoxContainer" parent="Center/Content/Frame/OnlineLobby/Main"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="CodePanel" type="PanelContainer" parent="Center/Content/Frame/OnlineLobby/Main/Side"]
-layout_mode = 2
 theme_type_variation = &"PlankPanel"
-size_flags_horizontal = 4
 
-[node name="Row" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby/Main/Side/CodePanel"]
+[node name="Code" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle/CodePanel"]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Code" type="VBoxContainer" parent="Center/Content/Frame/OnlineLobby/Main/Side/CodePanel/Row"]
-layout_mode = 2
-
-[node name="Caption" type="Label" parent="Center/Content/Frame/OnlineLobby/Main/Side/CodePanel/Row/Code"]
+[node name="Caption" type="Label" parent="Center/Content/Frame/Lobby/Middle/CodePanel/Code"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
-text = "ACCESS CODE"
+text = "ACCESS
+CODE"
 horizontal_alignment = 1
 
-[node name="CodeLabel" type="Label" parent="Center/Content/Frame/OnlineLobby/Main/Side/CodePanel/Row/Code"]
+[node name="CodeLabel" type="Label" parent="Center/Content/Frame/Lobby/Middle/CodePanel/Code"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "------"
 horizontal_alignment = 1
 
-[node name="CopyCode" type="Button" parent="Center/Content/Frame/OnlineLobby/Main/Side/CodePanel/Row"]
+[node name="CopyCode" type="Button" parent="Center/Content/Frame/Lobby/Middle/CodePanel/Code"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 52)
 layout_mode = 2
@@ -456,83 +309,69 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 24
 text = "Copy"
 
-[node name="OnlineCards" type="GridContainer" parent="Center/Content/Frame/OnlineLobby/Main/Side"]
+[node name="TeamColumns" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 6
+theme_override_constants/separation = 40
+
+[node name="Options" type="GridContainer" parent="Center/Content/Frame/Lobby/Middle"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 10
 columns = 2
 
-[node name="OnlineStatus" type="Label" parent="Center/Content/Frame/OnlineLobby/Main/Side"]
+[node name="TeamsButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/Options"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = ""
-horizontal_alignment = 1
-
-[node name="FormatRow" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/separation = 12
-
-[node name="OnlineTeams" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 44)
-layout_mode = 2
-size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
-[node name="OnlineBots" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
+[node name="MapButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/Options"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 44)
+custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
-size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
-text = "Bots:  <  0  >"
+text = "Map"
 
-[node name="OnlineMap" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
+[node name="DropButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/Options"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 44)
+custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
-size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
-text = "Map: Dungeon"
+text = "Ball"
 
-[node name="OnlineDrop" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
+[node name="LobbyStatus" type="Label" parent="Center/Content/Frame/Lobby/Middle"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 44)
+custom_minimum_size = Vector2(540, 0)
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Boss Drop: Skull"
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="OnlineScore" type="Button" parent="Center/Content/Frame/OnlineLobby/FormatRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(200, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 20
-text = "Score to Win:  <  5  >"
-
-[node name="ActionRow" type="HBoxContainer" parent="Center/Content/Frame/OnlineLobby"]
+[node name="Actions" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle"]
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="OnlineStart" type="Button" parent="Center/Content/Frame/OnlineLobby/ActionRow"]
+[node name="Start" type="Button" parent="Center/Content/Frame/Lobby/Middle/Actions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 52)
+custom_minimum_size = Vector2(264, 52)
 layout_mode = 2
-size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 24
-text = "Start (2+ players)"
+text = "Start"
 
-[node name="OnlineLeave" type="Button" parent="Center/Content/Frame/OnlineLobby/ActionRow"]
+[node name="LobbyBack" type="Button" parent="Center/Content/Frame/Lobby/Middle/Actions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
+custom_minimum_size = Vector2(264, 52)
 layout_mode = 2
-size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
-text = "Leave"
+text = "Back"
+
+[node name="RightSeats" type="VBoxContainer" parent="Center/Content/Frame/Lobby"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dvy85aoet17ah"
-path="res://.godot/imported/icon_question.png-3d5eac8538b172408628018200abf75f.ctex"
+uid="uid://bw7tdfvnltbgj"
+path="res://.godot/imported/coin.png-59bd64c31c2d3c574fc2bf9cf5ecb903.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/UI/icon_question.png"
-dest_files=["res://.godot/imported/icon_question.png-3d5eac8538b172408628018200abf75f.ctex"]
+source_file="res://Assets/UI/coin.png"
+dest_files=["res://.godot/imported/coin.png-59bd64c31c2d3c574fc2bf9cf5ecb903.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

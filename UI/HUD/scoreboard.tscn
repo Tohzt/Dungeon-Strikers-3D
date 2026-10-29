@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://UI/HUD/scoreboard_3d.gd" id="1_score"]
-[ext_resource type="Texture2D" uid="uid://c5o4qxoxxmbgd" path="res://Assets/UI/panel.png" id="2_panel"]
+[ext_resource type="Texture2D" uid="uid://c72sj0c7vxfxd" path="res://Assets/UI/panel.png" id="2_panel"]
 
 [sub_resource type="StyleBoxTexture" id="Banner"]
 content_margin_left = 36.0
@@ -12,7 +12,7 @@ texture = ExtResource("2_panel")
 texture_margin_left = 24.0
 texture_margin_right = 24.0
 texture_margin_bottom = 24.0
-region_rect = Rect2(0, 72, 142, 72)
+region_rect = Rect2(0, 96, 224, 97)
 axis_stretch_horizontal = 2
 axis_stretch_vertical = 2
 
