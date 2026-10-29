@@ -66,23 +66,41 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 ## 5. Playtesting still needed
 
 - Consumable cards (`PlayerClass3D.consumables`, two slots, since
-  2026-10-29; replaced the one-slot item slot of 2026-10-27): shop
-  bombs/flasks and item boxes' bombs, flasks and giant weapons go in a free
-  slot (full slots grey out shop throwables, and item boxes stop rolling
-  them). Tapping Use Item (G / D-pad Down) uses the first; holding it opens
-  the card hand (`CardHand`): perks fanned at the bottom, the two slots to
-  the right; mouse hovers to pick and clicks to use, a pad flicks the right
-  stick and presses RB / Interact. Attacks and Interact are muted while it's
-  open. Cards are kept through death; bots use giant weapons at once and
-  throwables once they have a target. Check the hold time
-  (`PlayerInputHandler3D.HAND_HOLD_TIME`), the pad controls, and how the
-  hands sit with 2-4 local players.
+  2026-10-29; replaced the one-slot item slot of 2026-10-27, which is now
+  gone, HUD label and tap-to-use included): shop bombs/flasks and item
+  boxes' bombs, flasks and giant weapons go in a free slot (full slots grey
+  out shop throwables, and item boxes stop rolling them). Holding Use Item
+  (G / D-pad Down) opens the card hand (`CardHand`): perks fanned at the
+  bottom, the two slots to the right; mouse hovers to pick and clicks to
+  use, a pad flicks the right stick and presses RB / Interact. Attacks and
+  Interact are muted while it's open. Cards are kept through death; bots
+  use giant weapons at once and throwables once they have a target. Check
+  whether losing the quick tap-to-use feels slow, the pad controls, and how
+  the hands sit with 2-4 local players.
 - Swing feel and time-to-kill since the animated-attack rework (players
   have 250 HP, a sword hit is 40, `kills_to_win` is 5).
 - The per-weapon ball interactions (`WeaponBehavior3D` `ball_*` exports)
   have only been tried offline; check them online.
 - Advanced controls' hold-to-throw for weapons wasn't covered by the
   scripted test after the player refactor; try it in game.
+
+## 6. Found in bot matches (2026-10-29)
+
+From 18 headless 4v4 bot matches of 15 minutes on Pitch (bombs, Score to
+Win 5, so 500 base HP):
+- **Bomb matches rarely end.** Only 1 of 18 was won in 15 minutes. Each
+  match saw 2-6 bombs scored and 4-13 go off out on the field. Bots carry
+  a bomb like a ball and pay no attention to its fuse
+  (`BotInputHandler3D._carry_ball`): they could shoot or throw it on from
+  further out when it's nearly out. Worth checking whether people
+  find the pace too slow too, or whether it's just the bots.
+- **A rare non-finite vector.** About 1 match in 18 logged "Vector3 cannot
+  be normalized, the elements must be finite" twice, right after a bomb
+  went off on the field. No node was left with a NaN position or velocity
+  afterwards, so it's a vector worked out from bad numbers somewhere in
+  that blast's aftermath. Couldn't reproduce it with the call stack
+  tracked (`debug/settings/gdscript/always_track_call_stacks` in an
+  `override.cfg`), which is how to find it next time.
 
 ## Testing tips
 
@@ -96,6 +114,12 @@ There are no automated tests, but the game runs headless well:
   changes to a map, run with `--fixed-fps 60`, gives a repeatable bot
   match: compare counts like kills and swing frames before and after a
   change. With `seed()` set, the same code gives identical results.
+- `res://Tools/Bench/bot_bench.tscn` is that bot match, ready made: it
+  prints frame times, draw calls, triangles, node count and the score as it
+  goes, and lists hitches (frames over 50ms) at the end. Windowed it
+  measures rendering; headless, game logic only (see `BotBench`). On
+  2026-10-29 a windowed 8-bot match averaged ~2.5ms a frame here, with no
+  hitches over 50ms once effects were preloaded.
 - For online, run a server (`-- --server`) and two clients
   (`-- --address=127.0.0.1`) headless; a temporary client scene can call
   `Net.host()` / `Net.join()` / `Net.start_match()` and script the players.

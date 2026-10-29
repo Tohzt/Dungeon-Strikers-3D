@@ -961,8 +961,8 @@ func can_afford_any(player: PlayerClass3D) -> bool:
 ## Whether `offer` would do `player` any good: not once it's sold (or a
 ## perk locked by another bought this restock), a repair
 ## only when it's our team's altar and one of our towers is hurt, a kit
-## upgrade until their kit's Legendary, a bomb or flask while their item
-## slot is empty.
+## upgrade until their kit's Legendary, a bomb or flask while they have a
+## free consumable slot.
 func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
 	if offer.sold or offer.locked:
 		return false

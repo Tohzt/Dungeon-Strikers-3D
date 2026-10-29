@@ -147,7 +147,7 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 		var card: Vector2i = player.consumables[card_slot]
 		if not Consumable.is_throwable(card) \
 				or _item_target(player, game, card.x as Throwable3D.Kind, card.y, false):
-			use_item = true
+			player.use_consumable(card_slot)
 	# Only ever aimed (locked on) for a throw, below
 	if not player.holds_throwable():
 		lock_target = null

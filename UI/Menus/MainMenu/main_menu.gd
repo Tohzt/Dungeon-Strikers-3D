@@ -368,11 +368,11 @@ func _people_on(team: int) -> int:
 ## A team's size picker: one seat more (step 1) or fewer (-1). Online the
 ## leader asks the server, which seats or unseats its bots to match.
 func _step_team_size(step: int, team: int) -> void:
-	var size: int = _team_size(team) + step
+	var seats: int = _team_size(team) + step
 	if Net.in_session():
-		Net.set_team_size(team, size)
+		Net.set_team_size(team, seats)
 		return
-	Players.set_team_size(team, size, _people_on(team))
+	Players.set_team_size(team, seats, _people_on(team))
 	_refresh_lobby()
 
 

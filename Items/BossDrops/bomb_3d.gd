@@ -98,7 +98,9 @@ func color() -> Color:
 
 func _process(delta: float) -> void:
 	super(delta)
-	if not PerkDirector.halted():
+	# Not while everyone's held still: picking perks, or the match's opening
+	# camera move (the first kickoff's bomb drops during it)
+	if not PerkDirector.halted() and (not Global.Game3D or Global.Game3D.camera_active):
 		fuse_left = maxf(fuse_left - delta, 0.0)
 	_model.set_urgency(1.0 - fuse_left / FUSE_TIME)
 	_countdown.global_position = global_position + Vector3.UP * 1.0

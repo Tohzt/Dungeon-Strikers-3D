@@ -19,11 +19,6 @@ var signals_connected: bool = false
 ## puts it away again.
 var _perk_label: Label
 const PERK_READY_COLOR := Color(1.0, 0.8, 0.3)
-## The consumable a tap of Use Item would use (see PlayerClass3D.consumables),
-## how many more there are, and the button, under the bars; hidden while
-## the slots are empty.
-var _item_label: Label
-var _items_drawn: Array[Vector2i] = []
 ## The player's cards, while they hold Use Item, on a layer of their own.
 var _hand: CardHand
 ## "Knocked out: 7s" under the bars while the player is down (knockout modes).
@@ -64,13 +59,6 @@ func setup(p: PlayerClass3D, _slot: PlayerSlot, corner: int) -> void:
 		_perk_label.add_theme_font_size_override("font_size", 20)
 		_perk_label.hide()
 		$Panel/Row/Bars.add_child(_perk_label)
-	if not _item_label:
-		_item_label = Label.new()
-		_item_label.add_theme_color_override("font_outline_color", Color.BLACK)
-		_item_label.add_theme_constant_override("outline_size", 6)
-		_item_label.add_theme_font_size_override("font_size", 20)
-		_item_label.hide()
-		$Panel/Row/Bars.add_child(_item_label)
 	if not _hand:
 		var hand_layer := CanvasLayer.new()
 		hand_layer.layer = CardHand.LAYER
@@ -105,7 +93,6 @@ func _process(_delta: float) -> void:
 		_update_picker()
 		_update_perk_button()
 		_update_coins()
-		_update_item()
 	if player and player.Entity and !signals_connected:
 		signals_connected = true
 		_connect_signals(player.Entity)
@@ -151,26 +138,6 @@ func _update_perk_button() -> void:
 		perks.close_for(player)
 	elif perks.can_open(player):
 		perks.open_for(player)
-
-
-# ===== ITEM SLOT =====
-
-func _update_item() -> void:
-	if player.consumables == _items_drawn:
-		return
-	_items_drawn = player.consumables.duplicate()
-	var first: int = player.first_consumable()
-	_item_label.visible = first >= 0
-	if not _item_label.visible:
-		return
-	var card: Vector2i = player.consumables[first]
-	var more: int = player.consumables.size() - player.consumables.count(PlayerClass3D.NO_ITEM) - 1
-	var button: String = "G" if not player.slot or player.slot.uses_keyboard_mouse() else "D-pad Down"
-	_item_label.text = "%s%s (%s)" % [Consumable.title_of(card).to_upper(), " +%d" % more if more > 0 else "", button]
-	_item_label.add_theme_color_override("font_color", Consumable.color_of(card).lightened(0.2))
-	_item_label.pivot_offset = _item_label.size / 2.0
-	_item_label.scale = Vector2.ONE * COIN_POP_SCALE
-	create_tween().tween_property(_item_label, "scale", Vector2.ONE, 0.15)
 
 
 # ===== COINS =====

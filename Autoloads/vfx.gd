@@ -87,6 +87,35 @@ var _overlays: Dictionary[StringName, Material] = {}
 var _silent: bool = DisplayServer.get_name() == "headless"
 
 
+## Start loading every effect in the background as the game boots. Loading
+## one (and compiling its shaders) the first time it's shown froze the game
+## for up to half a second mid-match.
+func _ready() -> void:
+	if _silent:
+		return
+	for path: String in _paths():
+		ResourceLoader.load_threaded_request(path)
+
+
+## Every scene and material this needs, under DIR.
+func _paths() -> PackedStringArray:
+	var paths: PackedStringArray = []
+	for effect: Array in EFFECTS.values():
+		if not paths.has(DIR + effect[0]):
+			paths.append(DIR + effect[0])
+	for overlay_entry: Array in OVERLAYS.values():
+		paths.append(DIR + overlay_entry[0])
+	return paths
+
+
+## `path`'s resource: picked up from the loading started in _ready (waiting
+## for it if it isn't done yet), or loaded now.
+func _load(path: String) -> Resource:
+	if ResourceLoader.load_threaded_get_status(path) != ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+		return ResourceLoader.load_threaded_get(path)
+	return load(path)
+
+
 ## Show `id` at `at` (or ahead of it, see EFFECTS) on this machine only,
 ## pointing along `dir` (flat).
 ## `mirror` flips which way it sweeps (a left-hand swing). `size` scales it
@@ -304,7 +333,7 @@ func overlay(id: StringName) -> Material:
 	if _silent or not OVERLAYS.has(id):
 		return null
 	if not _overlays.has(id):
-		var material := (load(DIR + OVERLAYS[id][0]) as ShaderMaterial).duplicate() as ShaderMaterial
+		var material := (_load(DIR + OVERLAYS[id][0]) as ShaderMaterial).duplicate() as ShaderMaterial
 		material.set_shader_parameter(&"primary_color", OVERLAYS[id][1])
 		material.set_shader_parameter(&"secondary_color", OVERLAYS[id][2])
 		_overlays[id] = material
@@ -318,7 +347,7 @@ func _world() -> Node:
 	return get_tree().current_scene
 
 
-## Loaded the first time it's shown.
+## Picked up the first time it's shown (see _ready).
 func _scene(id: StringName) -> PackedScene:
 	if _scenes.has(id):
 		return _scenes[id]
@@ -326,5 +355,5 @@ func _scene(id: StringName) -> PackedScene:
 		push_error("Unknown effect: %s" % id)
 		_scenes[id] = null
 		return null
-	_scenes[id] = load(DIR + EFFECTS[id][0]) as PackedScene
+	_scenes[id] = _load(DIR + EFFECTS[id][0]) as PackedScene
 	return _scenes[id]

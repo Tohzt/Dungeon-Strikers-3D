@@ -68,6 +68,7 @@ var match_seed: int = 0
 ## the people on that team, nor more than max_team_size(). Online the server
 ## keeps this and seats its bots to match (see Net.set_team_size). Starts
 ## at a full 4v4.
+@warning_ignore("integer_division")
 var seats_per_team: Array[int] = [MAX_PLAYERS / 2, MAX_PLAYERS / 2]
 ## Whether bots take the seats nobody's in. Off, only people play (a team
 ## with nobody on it can't start the match).
@@ -222,6 +223,7 @@ func teams_with_bots(seated: Array[int]) -> Array[int]:
 
 ## The most seats one team can have: an even share of MAX_PLAYERS.
 func max_team_size() -> int:
+	@warning_ignore("integer_division")
 	return MAX_PLAYERS / team_count
 
 

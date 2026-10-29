@@ -15,15 +15,15 @@ var throw_held: bool = false
 var shoot_held: bool = false
 var interact: bool = false
 var interact_held: bool = false
-## Use Item (G / D-pad Down) tapped: use our first consumable card (see
-## PlayerClass3D.consumables). Stays set until the player acts on it.
-var use_item: bool = false
-## Use Item held past HAND_HOLD_TIME: our cards are showing (see CardHand),
-## to pick one with the mouse or right stick. The attack and interact
-## buttons go to the cards meanwhile.
+## Use Item (G / D-pad Down) held: our cards are showing (see CardHand),
+## to pick one with the mouse or right stick and use it. The attack and
+## interact buttons go to the cards meanwhile.
 var hand_open: bool = false
-const HAND_HOLD_TIME := 0.18
-var _use_item_held_for: float = 0.0
+## Attack buttons let go of by release_all while still down: they read as up
+## until actually released. A menu reads its buttons a frame before the
+## player does, so otherwise the click that closed it would also swing.
+var _ignored: Array[StringName] = []
+const ATTACK_BUTTONS: Array[StringName] = [&"attack_light", &"attack_heavy", &"throw", &"shoot"]
 # The roll button (Space / A) rolls on press, or slides while sprinting.
 # The controller's dodge button (B) also rolls on a quick tap (on release)
 # and sprints while held; keyboard sprints with Shift.
@@ -110,15 +110,14 @@ func release_all() -> void:
 	heavy_held = false
 	throw_held = false
 	shoot_held = false
+	_ignored = ATTACK_BUTTONS.duplicate()
 	move_dodge = false
 	dodge_dur = 0.0
 	dodge_request_msec = -1
 	look_dir = Vector3.ZERO
 	aim_release_timer = 0.0
 	interact = false
-	use_item = false
 	hand_open = false
-	_use_item_held_for = 0.0
 
 
 func _process(delta: float) -> void:
@@ -128,11 +127,11 @@ func _process(delta: float) -> void:
 	var input_2d: Vector2 = Input.get_vector(action("move_left"), action("move_right"), action("move_up"), action("move_down"))
 	move_dir = Vector3(input_2d.x, 0, input_2d.y).normalized()
 	
-	light_held = Input.is_action_pressed(action("attack_light"))
-	heavy_held = Input.is_action_pressed(action("attack_heavy"))
-	throw_held = Input.is_action_pressed(action("throw"))
-	shoot_held = Input.is_action_pressed(action("shoot"))
-	_handle_use_item(delta)
+	light_held = _held(&"attack_light")
+	heavy_held = _held(&"attack_heavy")
+	throw_held = _held(&"throw")
+	shoot_held = _held(&"shoot")
+	hand_open = Input.is_action_pressed(action("use_item"))
 	if hand_open:
 		light_held = false
 		heavy_held = false
@@ -146,6 +145,14 @@ func _process(delta: float) -> void:
 	_handle_input_look(delta)
 
 
+## Whether an attack button is down, unless it's been down since release_all.
+func _held(base: StringName) -> bool:
+	var pressed: bool = Input.is_action_pressed(action(base))
+	if not pressed:
+		_ignored.erase(base)
+	return pressed and not _ignored.has(base)
+
+
 ## The match's opening camera move isn't done: stand still and let go of
 ## everything until it is.
 func _held_for_intro() -> bool:
@@ -154,18 +161,6 @@ func _held_for_intro() -> bool:
 	release_all()
 	move_dir = Vector3.ZERO
 	return true
-
-
-## Use Item: a tap uses our first card (on release, since until then it
-## can't be told apart from a hold); held, it opens our hand of cards.
-func _handle_use_item(delta: float) -> void:
-	if Input.is_action_pressed(action("use_item")):
-		_use_item_held_for += delta
-		hand_open = _use_item_held_for >= HAND_HOLD_TIME
-	elif _use_item_held_for > 0.0:
-		use_item = use_item or not hand_open
-		_use_item_held_for = 0.0
-		hand_open = false
 
 
 ## Space / A rolls on press, Shift sprints while held. Controller: B tap =

@@ -8,6 +8,7 @@ extends EditorScript
 ##                              4m grid (medium tiles fill one cell). No collision:
 ##                              levels put one flat floor body underneath instead,
 ##                              so balls and players never catch on tile seams.
+##                              Flat tiles cast no shadow (see FLAT_FLOORS).
 ## - dungeon_props_library.res  Furniture and clutter, shifted to sit on y=0.
 ##                              Meant for a 0.5m grid. Big pieces get a box
 ##                              collider; small clutter has none.
@@ -87,6 +88,11 @@ const FLOORS : Array[String] = [
 	"tileBrickA_large",
 	"tileSpikes", "tileSpikes_large", "tileSpikes_shallow",
 ]
+## Floor tiles flat enough that their shadow only ever lands on themselves,
+## where it can't be seen: they skip the shadow pass. The brick tiles are
+## detailed (~700 triangles each), so drawing a floor of them into every
+## shadow cascade was a third of the arena's triangles. Spikes keep theirs.
+const FLAT_FLOOR_PREFIX := "tileBrick"
 
 ## Big enough to block movement (and bots path around them).
 const PROPS_SOLID : Array[String] = [
@@ -141,6 +147,7 @@ static func build() -> void:
 	for piece_name in FLOORS:
 		if not _add(floors, piece_name, Collision.NONE, Align.FLOOR_TOP):
 			return
+	set_floor_shadows(floors)
 	_save(floors, FLOOR_PATH)
 
 	var props := MeshLibrary.new()
@@ -199,6 +206,13 @@ static func _add(library: MeshLibrary, piece_name: String, collision: Collision,
 			library.set_item_shapes(id, [box, Transform3D(Basis(), bounds.get_center())])
 	instance.free()
 	return true
+
+
+## Turns shadows off for the flat floor tiles in `library` (FLAT_FLOOR_PREFIX).
+static func set_floor_shadows(library: MeshLibrary) -> void:
+	for id: int in library.get_item_list():
+		if library.get_item_name(id).begins_with(FLAT_FLOOR_PREFIX):
+			library.set_item_mesh_cast_shadow(id, RenderingServer.SHADOW_CASTING_SETTING_OFF)
 
 
 ## A post in the middle plus a box out to the cell edge for each arm.

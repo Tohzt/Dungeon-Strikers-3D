@@ -151,8 +151,8 @@ var throwables_made: int = 0
 var giant_weapons_made: int = 0
 ## The consumable slots (Mario Kart style): cards for bombs and big flasks
 ## bought at a shop or found in an item box, and item boxes' giant weapons
-## (see Consumable), NO_ITEM when empty. Use Item (G / D-pad Down) tapped
-## uses the first; held, it shows our cards (CardHand) to pick one from.
+## (see Consumable), NO_ITEM when empty. Holding Use Item (G / D-pad Down)
+## shows our cards (CardHand) to pick one from; bots use theirs directly.
 ## The same on every machine.
 var consumables: Array[Vector2i] = [NO_ITEM, NO_ITEM]
 const NO_ITEM := Vector2i(-1, -1)
@@ -465,7 +465,6 @@ func _physics_process(delta: float) -> void:
 	if perk_locked:
 		direction = _walk_to_altar()
 		Input_Handler.interact = false
-		Input_Handler.use_item = false
 		Input_Handler.dodge_request_msec = -1
 	else:
 		at_altar = false
@@ -477,9 +476,6 @@ func _physics_process(delta: float) -> void:
 		# Carrying, our hands are full: no taking weapons
 		if not hands_full() and not _grab_nearest_ball() and not _pick_up_nearest_weapon():
 			_take_from_nearest_stand()
-	if Input_Handler.use_item:
-		Input_Handler.use_item = false
-		use_consumable(first_consumable())
 	_update_carry(delta)
 	_update_throwable()
 	on_ice = GroundPatch3D.effects_on(self)

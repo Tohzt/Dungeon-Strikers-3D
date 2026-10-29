@@ -373,10 +373,10 @@ func _update_prices(stall: Stall) -> void:
 func _highlight(stall: Stall) -> void:
 	var open_tab: int = maxi(_place_of(stall, stall.selected).x, 0)
 	for t in stall.tabs.size():
-		var open: bool = t == open_tab
-		stall.pages[t].visible = open
-		stall.tabs[t].add_theme_stylebox_override(&"panel", _theme.get_stylebox(&"normal" if open else &"disabled", &"Button"))
-		var dim: float = 1.0 if open else TAB_DIM
+		var is_open: bool = t == open_tab
+		stall.pages[t].visible = is_open
+		stall.tabs[t].add_theme_stylebox_override(&"panel", _theme.get_stylebox(&"normal" if is_open else &"disabled", &"Button"))
+		var dim: float = 1.0 if is_open else TAB_DIM
 		stall.tabs[t].modulate = Color(dim, dim, dim)
 	if open_tab < stall.sections.size():
 		stall.blurb.text = SECTION_BLURBS.get(stall.sections[open_tab], "")
