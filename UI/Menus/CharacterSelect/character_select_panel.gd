@@ -26,6 +26,8 @@ signal name_typed(text: String)
 signal name_rerolled
 
 const TAB_HEIGHT := 32
+## Space between the panel's rows.
+const ROW_GAP := 6
 const NAME_FONT_SIZE := 22
 const SMALL_FONT_SIZE := 15
 const PLAYER_NAME_FONT_SIZE := 24
@@ -95,7 +97,7 @@ func _init(stage_size: Vector2 = Vector2(300, 240)) -> void:
 	add_theme_stylebox_override("panel", _style)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
+	column.add_theme_constant_override("separation", ROW_GAP)
 	add_child(column)
 
 	_header = _label(SMALL_FONT_SIZE)
@@ -208,6 +210,14 @@ func show_empty(text: String) -> void:
 
 
 func _set_empty(on: bool) -> void:
+	if on:
+		# As tall as the rows it stands in for, so the panel keeps its height
+		# when someone sits down
+		var height: float = _stage_size.y
+		for row: Control in [_tabs_row, _player_name_row, _name_row, _kit]:
+			if (row != _tabs_row or teams_shown) and (row != _player_name_row or names_shown):
+				height += row.get_combined_minimum_size().y + ROW_GAP
+		_empty.custom_minimum_size.y = height
 	_empty.visible = on
 	_stage_box.visible = not on
 	_tabs_row.visible = not on and teams_shown

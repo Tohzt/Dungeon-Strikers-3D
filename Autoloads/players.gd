@@ -69,6 +69,9 @@ var match_seed: int = 0
 ## keeps this and seats its bots to match (see Net.set_team_size). Starts
 ## at a full 4v4.
 var seats_per_team: Array[int] = [MAX_PLAYERS / 2, MAX_PLAYERS / 2]
+## Whether bots take the seats nobody's in. Off, only people play (a team
+## with nobody on it can't start the match).
+var fill_with_bots: bool = true
 
 ## Project actions captured before any per-slot copies are added.
 var _base_actions: Array[StringName] = []
@@ -116,8 +119,10 @@ func add_bot(team: int = -1) -> PlayerSlot:
 	return slot
 
 
-## Seat bots until every team has its seats_per_team.
+## Seat bots until every team has its seats_per_team (if fill_with_bots).
 func fill_bots() -> void:
+	if not fill_with_bots:
+		return
 	for team in team_count:
 		while team_sizes(slot_teams())[team] < seats_per_team[team] and add_bot(team):
 			pass
@@ -206,6 +211,8 @@ func smallest_team(teams: Array[int]) -> int:
 ## bots fill_bots() would add.
 func teams_with_bots(seated: Array[int]) -> Array[int]:
 	var teams: Array[int] = seated.duplicate()
+	if not fill_with_bots:
+		return teams
 	var sizes: Array[int] = team_sizes(seated)
 	for team in team_count:
 		for i in seats_per_team[team] - sizes[team]:
@@ -337,11 +344,16 @@ func set_boss_drop(kind: BossDrop.Kind) -> void:
 
 
 ## The whole format at once, as the online leader picked it (already
-## consistent, so nothing gives way).
-func set_match_format(count: int, new_map: MatchMap.Map, kind: BossDrop.Kind, score: int) -> void:
+## consistent, so nothing gives way): team count, map, drop, score to win,
+## seats_per_team and fill_with_bots.
+func set_match_format(count: int, new_map: MatchMap.Map, kind: BossDrop.Kind, score: int,
+		seats: Array = [], fill: bool = true) -> void:
 	map = new_map
 	boss_drop = kind
 	set_score_to_win(score)
+	if not seats.is_empty():
+		seats_per_team.assign(seats)
+	fill_with_bots = fill
 	set_team_count(count)
 
 

@@ -10,8 +10,8 @@ seats) or online.
 
 Open `project.godot` in Godot 4.7 and run it. The main menu offers Local
 and Online play, which share one lobby: each team's size is set on its own
-(say two friends against three bots), people take the seats first and bots
-fill the rest. Locally, each controller or the keyboard joins by pressing A
+(say two friends against three bots): people take the seats first, and
+bots fill the rest unless Fill with Bots is off. Locally, each controller or the keyboard joins by pressing A
 or Enter. The Codex lists every weapon, perk, bomb, flask and potion;
 Training (a practice room with a dummy) isn't built yet.
 
@@ -52,9 +52,9 @@ Known problems and unfinished work are tracked in `Docs/OPEN_ISSUES_CONTEXT.md`.
     (player and bot input handlers).
 - `Items/`: weapons (`Weapons/`: base scripts, `Moves/`, then one folder per
   weapon kind), altars/shops, chests, weapon stands, boss drops, coins,
-  potions, throwables and other pickups.
+  potions, throwables, consumable cards (`Consumables/`) and other pickups.
 - `Combat/`: hits, attack waves and elements. `Perks/`: rogue-lite perks.
-- `UI/`: the in-match `HUD/`, `Menus/` (main, pause, character select, Codex), `Cards/` (the item cards the shop and Codex share) and
+- `UI/`: the in-match `HUD/`, `Menus/` (main, pause, character select, Codex), `Cards/` (the item cards the shop, Codex and the in-match card hand share) and
   shared `Controls/`.
 - `Assets/`: third-party art, audio, VFX, fonts and the UI theme.
 - `Tools/`: `deploy_server.sh` and the GridMap palette generator in

@@ -65,10 +65,18 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 
 ## 5. Playtesting still needed
 
-- The item slot (`PlayerClass3D.stored_item`, Use Item = G / D-pad Down,
-  added 2026-10-27): one slot; a full slot greys out shop bombs/flasks and
-  item boxes stop rolling them; it's kept through death; bots take it out
-  once they have a target. Check those calls feel right.
+- Consumable cards (`PlayerClass3D.consumables`, two slots, since
+  2026-10-29; replaced the one-slot item slot of 2026-10-27): shop
+  bombs/flasks and item boxes' bombs, flasks and giant weapons go in a free
+  slot (full slots grey out shop throwables, and item boxes stop rolling
+  them). Tapping Use Item (G / D-pad Down) uses the first; holding it opens
+  the card hand (`CardHand`): perks fanned at the bottom, the two slots to
+  the right; mouse hovers to pick and clicks to use, a pad flicks the right
+  stick and presses RB / Interact. Attacks and Interact are muted while it's
+  open. Cards are kept through death; bots use giant weapons at once and
+  throwables once they have a target. Check the hold time
+  (`PlayerInputHandler3D.HAND_HOLD_TIME`), the pad controls, and how the
+  hands sit with 2-4 local players.
 - Swing feel and time-to-kill since the animated-attack rework (players
   have 250 HP, a sword hit is 40, `kills_to_win` is 5).
 - The per-weapon ball interactions (`WeaponBehavior3D` `ball_*` exports)

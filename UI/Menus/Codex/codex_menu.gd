@@ -28,7 +28,7 @@ const TAB_TITLES: Dictionary[Tab, String] = {
 const TAB_BLURBS: Dictionary[Tab, String] = {
 	Tab.WEAPONS: "Every character's signature kit, and the weapons found on altars and sold in shops (those break with use).",
 	Tab.PERKS: "Bought at shop altars, they last the rest of the match. Two of the right ones evolve into something stronger.",
-	Tab.THROWABLES: "Bought at shops or found in item boxes. They go in your item slot, to throw when you need them.",
+	Tab.THROWABLES: "Bought at shops or found in item boxes. They go in your consumable slots, to throw when you need them.",
 	Tab.POTIONS: "Spilled by chests and item boxes: run through one to drink it.",
 }
 

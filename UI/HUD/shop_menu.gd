@@ -30,7 +30,7 @@ const SECTION_COLOR := Color(0.95, 0.8, 0.45)
 const SECTION_BLURBS: Dictionary[String, String] = {
 	"Weapons": "Upgrade your own kit for good, or buy a weapon that breaks with use.",
 	"Perks": "Boosts that last for the rest of the match. Pick one per restock.",
-	"Bombs & Flasks": "Goes in your item slot, to throw when you need it.",
+	"Bombs & Flasks": "Goes in a consumable slot, to throw when you need it (hold G / D-pad Down).",
 	"Towers": "Patch up your team's towers.",
 }
 ## The kit strip's rarity pips.

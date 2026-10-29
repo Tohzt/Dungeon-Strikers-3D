@@ -146,15 +146,17 @@ const BALL_FUMBLE_SPEED := 5.0
 
 ## What we're holding (every machine), if anything.
 var held_throwable: Throwable3D = null
-## Names the throwables we're handed, the same on every machine.
+## Names the throwables and giant weapons we're handed, the same on every machine.
 var throwables_made: int = 0
-## The item slot (Mario Kart style): a bomb or flask bought at a shop or
-## found in an item box waits here, as Vector2i(Throwable3D.Kind, variant),
-## until Use Item (G / D-pad Down) takes it out into our hands. NO_ITEM
-## when empty. The same on every machine.
-var stored_item: Vector2i = NO_ITEM
+var giant_weapons_made: int = 0
+## The consumable slots (Mario Kart style): cards for bombs and big flasks
+## bought at a shop or found in an item box, and item boxes' giant weapons
+## (see Consumable), NO_ITEM when empty. Use Item (G / D-pad Down) tapped
+## uses the first; held, it shows our cards (CardHand) to pick one from.
+## The same on every machine.
+var consumables: Array[Vector2i] = [NO_ITEM, NO_ITEM]
 const NO_ITEM := Vector2i(-1, -1)
-signal stored_item_changed
+signal consumables_changed
 
 # ===== TRAILS & ICE =====
 # The ice_trail and fire_trail perk stats (wild items) leave patches behind
@@ -477,7 +479,7 @@ func _physics_process(delta: float) -> void:
 			_take_from_nearest_stand()
 	if Input_Handler.use_item:
 		Input_Handler.use_item = false
-		use_stored_item()
+		use_consumable(first_consumable())
 	_update_carry(delta)
 	_update_throwable()
 	on_ice = GroundPatch3D.effects_on(self)
@@ -1433,33 +1435,48 @@ func hands_full() -> bool:
 	return carries_ball() or holds_throwable()
 
 
-## Whether our item slot has something in it.
-func has_stored_item() -> bool:
-	return stored_item != NO_ITEM
+## The first filled consumable slot, or -1 if they're all empty.
+func first_consumable() -> int:
+	for i in consumables.size():
+		if consumables[i] != NO_ITEM:
+			return i
+	return -1
 
 
-## Every machine: put a throwable (`kind_`, `variant_` as in Throwable3D)
-## in our item slot, replacing whatever was there.
-func store_item(kind_: Throwable3D.Kind, variant_: int) -> void:
-	stored_item = Vector2i(kind_, variant_)
-	stored_item_changed.emit()
+func has_free_consumable_slot() -> bool:
+	return consumables.has(NO_ITEM)
 
 
-## Owner: take what's in our item slot out into our hands (a bomb's fuse
-## starts now), if they're free.
-func use_stored_item() -> void:
-	if has_stored_item() and not hands_full() and not is_dead():
-		Net.everywhere(_take_out_item, stored_item.x, stored_item.y)
+## Every machine: put `card` (see Consumable) in our first free consumable
+## slot, or in place of the last one if they're full.
+func store_consumable(card: Vector2i) -> void:
+	var index: int = consumables.find(NO_ITEM)
+	consumables[index if index >= 0 else consumables.size() - 1] = card
+	consumables_changed.emit()
+
+
+## Whether the card in slot `index` can be used right now.
+func can_use_consumable(index: int) -> bool:
+	return index >= 0 and index < consumables.size() and consumables[index] != NO_ITEM \
+		and not hands_full() and not is_dead() and not is_perk_locked()
+
+
+## Owner: use the card in slot `index` (a throwable comes out into our
+## hands, and a bomb's fuse starts now; a giant weapon goes in a hand).
+func use_consumable(index: int) -> void:
+	if can_use_consumable(index):
+		Net.everywhere(_use_consumable, index, consumables[index].x, consumables[index].y)
 
 
 @rpc("any_peer", "call_local", "reliable")
-func _take_out_item(kind_: int, variant_: int) -> void:
+func _use_consumable(index: int, kind_: int, variant_: int) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender != 0 and sender != get_multiplayer_authority():
 		return
-	stored_item = NO_ITEM
-	stored_item_changed.emit()
-	Throwable3D.give(self, kind_ as Throwable3D.Kind, variant_)
+	if index >= 0 and index < consumables.size():
+		consumables[index] = NO_ITEM
+		consumables_changed.emit()
+	Consumable.use(self, Vector2i(kind_, variant_))
 
 
 ## Owner: throw what we hold, at what we're locked on to (just far enough

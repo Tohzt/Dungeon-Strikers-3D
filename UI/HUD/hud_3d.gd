@@ -19,10 +19,13 @@ var signals_connected: bool = false
 ## puts it away again.
 var _perk_label: Label
 const PERK_READY_COLOR := Color(1.0, 0.8, 0.3)
-## What's in the player's item slot (see PlayerClass3D.stored_item) and the
-## button that takes it out, under the bars; hidden while it's empty.
+## The consumable a tap of Use Item would use (see PlayerClass3D.consumables),
+## how many more there are, and the button, under the bars; hidden while
+## the slots are empty.
 var _item_label: Label
-var _item_drawn: Vector2i = PlayerClass3D.NO_ITEM
+var _items_drawn: Array[Vector2i] = []
+## The player's cards, while they hold Use Item, on a layer of their own.
+var _hand: CardHand
 ## "Knocked out: 7s" under the bars while the player is down (knockout modes).
 var _down_label: Label
 ## While a killed player is down: who they'll get back up as (see
@@ -68,6 +71,13 @@ func setup(p: PlayerClass3D, _slot: PlayerSlot, corner: int) -> void:
 		_item_label.add_theme_font_size_override("font_size", 20)
 		_item_label.hide()
 		$Panel/Row/Bars.add_child(_item_label)
+	if not _hand:
+		var hand_layer := CanvasLayer.new()
+		hand_layer.layer = CardHand.LAYER
+		add_child(hand_layer)
+		_hand = CardHand.new()
+		hand_layer.add_child(_hand)
+	_hand.setup(player, corner)
 	if not _coin_row:
 		_coin_row = HBoxContainer.new()
 		_coin_row.add_theme_constant_override("separation", 6)
@@ -146,16 +156,18 @@ func _update_perk_button() -> void:
 # ===== ITEM SLOT =====
 
 func _update_item() -> void:
-	if player.stored_item == _item_drawn:
+	if player.consumables == _items_drawn:
 		return
-	_item_drawn = player.stored_item
-	_item_label.visible = player.has_stored_item()
+	_items_drawn = player.consumables.duplicate()
+	var first: int = player.first_consumable()
+	_item_label.visible = first >= 0
 	if not _item_label.visible:
 		return
-	var kind: Throwable3D.Kind = _item_drawn.x as Throwable3D.Kind
+	var card: Vector2i = player.consumables[first]
+	var more: int = player.consumables.size() - player.consumables.count(PlayerClass3D.NO_ITEM) - 1
 	var button: String = "G" if not player.slot or player.slot.uses_keyboard_mouse() else "D-pad Down"
-	_item_label.text = "%s (%s)" % [Throwable3D.title_of(kind, _item_drawn.y).to_upper(), button]
-	_item_label.add_theme_color_override("font_color", Throwable3D.color_of(kind, _item_drawn.y).lightened(0.2))
+	_item_label.text = "%s%s (%s)" % [Consumable.title_of(card).to_upper(), " +%d" % more if more > 0 else "", button]
+	_item_label.add_theme_color_override("font_color", Consumable.color_of(card).lightened(0.2))
 	_item_label.pivot_offset = _item_label.size / 2.0
 	_item_label.scale = Vector2.ONE * COIN_POP_SCALE
 	create_tween().tween_property(_item_label, "scale", Vector2.ONE, 0.15)

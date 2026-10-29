@@ -47,7 +47,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 31
+const PROTOCOL_VERSION := 34
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -222,6 +222,12 @@ func set_team_size(team: int, size: int) -> void:
 		_request_team_size.rpc_id(SERVER_ID, team, size)
 
 
+## Leader only: whether bots fill the seats nobody's in.
+func set_fill_with_bots(on: bool) -> void:
+	if is_host and not in_match:
+		_request_fill_with_bots.rpc_id(SERVER_ID, on)
+
+
 ## How many people (not bots) are on `team`.
 func people_on(team: int) -> int:
 	return peers.filter(func(id: int) -> bool: return loadout_of(id)[0] == team).size()
@@ -364,7 +370,8 @@ func _close_session() -> void:
 	loadouts.clear()
 	bots.clear()
 	Players.seats_per_team.fill(Players.max_team_size())
-	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0] as MatchMap.Map, MatchMap.DROPS[0] as BossDrop.Kind, 5)
+	Players.set_match_format(Players.TEAM_COUNTS[0], MatchMap.MAPS[0] as MatchMap.Map, MatchMap.DROPS[0] as BossDrop.Kind, 5,
+		Players.seats_per_team, true)
 	in_match = false
 	match_synced = false
 	_loaded.clear()
@@ -391,13 +398,15 @@ func _broadcast_peers() -> void:
 	peers_changed.emit()
 
 
-## [team_count, map, boss_drop, score_to_win], as sent to everyone.
+## [team_count, map, boss_drop, score_to_win, seats_per_team,
+## fill_with_bots], as sent to everyone.
 func _format() -> Array:
-	return [Players.team_count, Players.map, Players.boss_drop, Players.score_to_win]
+	return [Players.team_count, Players.map, Players.boss_drop, Players.score_to_win, Players.seats_per_team,
+		Players.fill_with_bots]
 
 
 func _apply_format(format: Array) -> void:
-	Players.set_match_format(format[0], format[1], format[2], format[3])
+	Players.set_match_format(format[0], format[1], format[2], format[3], format[4], format[5])
 
 
 ## Server: add or remove bots so each team has its Players.seats_per_team
@@ -406,7 +415,7 @@ func _fit_bots() -> void:
 	for team in Players.team_count:
 		var people: int = people_on(team)
 		Players.set_team_size(team, Players.seats_per_team[team], people)
-		var wanted: int = Players.seats_per_team[team] - people
+		var wanted: int = Players.seats_per_team[team] - people if Players.fill_with_bots else 0
 		var mine: Array = bots.filter(func(bot: Array) -> bool: return bot[0] == team)
 		for i in range(mine.size() - 1, wanted - 1, -1):
 			bots.erase(mine[i])
@@ -622,6 +631,13 @@ func _request_score_to_win(score: int) -> void:
 func _request_team_size(team: int, size: int) -> void:
 	if _from_leader_in_lobby() and team >= 0 and team < Players.team_count:
 		Players.set_team_size(team, size, people_on(team))
+		_broadcast_peers()
+
+
+@rpc("any_peer", "reliable")
+func _request_fill_with_bots(on: bool) -> void:
+	if _from_leader_in_lobby():
+		Players.fill_with_bots = on
 		_broadcast_peers()
 
 

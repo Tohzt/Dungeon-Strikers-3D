@@ -12,3 +12,6 @@ Steam/*
 
 # Agent instructions (local only)
 CLAUDE.md
+
+# Scratch drop folder for incoming assets (local only, keep the folder)
+Assets/_Temp/

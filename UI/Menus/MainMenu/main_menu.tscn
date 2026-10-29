@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://csbxv6vcnwqc1"]
 
-[ext_resource type="Script" path="res://UI/Menus/MainMenu/main_menu.gd" id="1_menu"]
-[ext_resource type="Script" path="res://UI/Controls/fit_center_container.gd" id="2_fit"]
-[ext_resource type="Script" path="res://UI/Controls/smooth_panel_container.gd" id="4_smooth"]
+[ext_resource type="Script" uid="uid://gi8fie0apnv2" path="res://UI/Menus/MainMenu/main_menu.gd" id="1_menu"]
+[ext_resource type="Script" uid="uid://chcqtaalyb7fu" path="res://UI/Controls/fit_center_container.gd" id="2_fit"]
 [ext_resource type="Texture2D" uid="uid://dhjs54l4crge8" path="res://Assets/UI/menu_background.png" id="3_bg"]
+[ext_resource type="Script" uid="uid://qutyocoyxp5t" path="res://UI/Controls/smooth_panel_container.gd" id="4_smooth"]
 
-[node name="MainMenu" type="Control"]
+[node name="MainMenu" type="Control" unique_id=1303822213]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -14,7 +14,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_menu")
 
-[node name="Background" type="TextureRect" parent="."]
+[node name="Background" type="TextureRect" parent="." unique_id=1359706449]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -25,7 +25,7 @@ texture = ExtResource("3_bg")
 expand_mode = 1
 stretch_mode = 6
 
-[node name="Center" type="Container" parent="."]
+[node name="Center" type="Container" parent="." unique_id=1860728669]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -35,70 +35,70 @@ grow_vertical = 2
 script = ExtResource("2_fit")
 ease_speed = 12.0
 
-[node name="Content" type="VBoxContainer" parent="Center"]
+[node name="Content" type="VBoxContainer" parent="Center" unique_id=1291429498]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="Title" type="Label" parent="Center/Content"]
+[node name="Title" type="Label" parent="Center/Content" unique_id=1677696703]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/outline_size = 14
-theme_override_colors/font_outline_color = Color(0.07, 0.06, 0.09, 1)
 theme_override_colors/font_color = Color(0.96, 0.78, 0.42, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.06, 0.09, 1)
+theme_override_constants/outline_size = 14
 theme_override_font_sizes/font_size = 56
 text = "Dungeon Strikers"
 horizontal_alignment = 1
 
-[node name="Frame" type="PanelContainer" parent="Center/Content"]
+[node name="Frame" type="PanelContainer" parent="Center/Content" unique_id=1175860763]
 layout_mode = 2
 size_flags_horizontal = 4
 script = ExtResource("4_smooth")
 
-[node name="Home" type="VBoxContainer" parent="Center/Content/Frame"]
+[node name="Home" type="VBoxContainer" parent="Center/Content/Frame" unique_id=278641775]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="LocalButton" type="Button" parent="Center/Content/Frame/Home"]
+[node name="LocalButton" type="Button" parent="Center/Content/Frame/Home" unique_id=2097956628]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Local"
 
-[node name="OnlineButton" type="Button" parent="Center/Content/Frame/Home"]
+[node name="OnlineButton" type="Button" parent="Center/Content/Frame/Home" unique_id=928406799]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Online"
 
-[node name="CodexButton" type="Button" parent="Center/Content/Frame/Home"]
+[node name="CodexButton" type="Button" parent="Center/Content/Frame/Home" unique_id=118624698]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Codex"
 
-[node name="TrainingButton" type="Button" parent="Center/Content/Frame/Home"]
+[node name="TrainingButton" type="Button" parent="Center/Content/Frame/Home" unique_id=872988603]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
+tooltip_text = "A practice room with a dummy, to try out characters, weapons and perks. Not built yet."
 theme_override_font_sizes/font_size = 24
 disabled = true
-tooltip_text = "A practice room with a dummy, to try out characters, weapons and perks. Not built yet."
 text = "Training (coming soon)"
 
-[node name="QuitButton" type="Button" parent="Center/Content/Frame/Home"]
+[node name="QuitButton" type="Button" parent="Center/Content/Frame/Home" unique_id=1047099666]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Quit"
 
-[node name="Online" type="VBoxContainer" parent="Center/Content/Frame"]
+[node name="Online" type="VBoxContainer" parent="Center/Content/Frame" unique_id=124356936]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(320, 0)
@@ -106,28 +106,28 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="HostButton" type="Button" parent="Center/Content/Frame/Online"]
+[node name="HostButton" type="Button" parent="Center/Content/Frame/Online" unique_id=1518396166]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Host Game"
 
-[node name="JoinButton" type="Button" parent="Center/Content/Frame/Online"]
+[node name="JoinButton" type="Button" parent="Center/Content/Frame/Online" unique_id=840489552]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Join Game"
 
-[node name="OnlineBack" type="Button" parent="Center/Content/Frame/Online"]
+[node name="OnlineBack" type="Button" parent="Center/Content/Frame/Online" unique_id=2112183043]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="HostSetup" type="VBoxContainer" parent="Center/Content/Frame"]
+[node name="HostSetup" type="VBoxContainer" parent="Center/Content/Frame" unique_id=282581330]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(400, 0)
@@ -135,18 +135,18 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="Prompt" type="Label" parent="Center/Content/Frame/HostSetup"]
+[node name="Prompt" type="Label" parent="Center/Content/Frame/HostSetup" unique_id=1253545916]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
-autowrap_mode = 3
 text = "Pick an access code, or leave it blank for a random one"
 horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="CodeRow" type="HBoxContainer" parent="Center/Content/Frame/HostSetup"]
+[node name="CodeRow" type="HBoxContainer" parent="Center/Content/Frame/HostSetup" unique_id=1251917016]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="HostCodeInput" type="LineEdit" parent="Center/Content/Frame/HostSetup/CodeRow"]
+[node name="HostCodeInput" type="LineEdit" parent="Center/Content/Frame/HostSetup/CodeRow" unique_id=2145213798]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -156,36 +156,35 @@ placeholder_text = "Random"
 alignment = 1
 max_length = 8
 
-[node name="RandomCode" type="Button" parent="Center/Content/Frame/HostSetup/CodeRow"]
+[node name="RandomCode" type="Button" parent="Center/Content/Frame/HostSetup/CodeRow" unique_id=1218005621]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Random"
 
-[node name="HostConfirm" type="Button" parent="Center/Content/Frame/HostSetup"]
+[node name="HostConfirm" type="Button" parent="Center/Content/Frame/HostSetup" unique_id=509172636]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Host"
 
-[node name="HostStatus" type="Label" parent="Center/Content/Frame/HostSetup"]
+[node name="HostStatus" type="Label" parent="Center/Content/Frame/HostSetup" unique_id=379733869]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
 theme_override_font_sizes/font_size = 18
-text = ""
 horizontal_alignment = 1
 
-[node name="HostBack" type="Button" parent="Center/Content/Frame/HostSetup"]
+[node name="HostBack" type="Button" parent="Center/Content/Frame/HostSetup" unique_id=2014630287]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="JoinSetup" type="VBoxContainer" parent="Center/Content/Frame"]
+[node name="JoinSetup" type="VBoxContainer" parent="Center/Content/Frame" unique_id=731728497]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(400, 0)
@@ -193,17 +192,17 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="Prompt" type="Label" parent="Center/Content/Frame/JoinSetup"]
+[node name="Prompt" type="Label" parent="Center/Content/Frame/JoinSetup" unique_id=1079743258]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "Enter the access code from your host"
 horizontal_alignment = 1
 
-[node name="CodeRow" type="HBoxContainer" parent="Center/Content/Frame/JoinSetup"]
+[node name="CodeRow" type="HBoxContainer" parent="Center/Content/Frame/JoinSetup" unique_id=1549391420]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="JoinCodeInput" type="LineEdit" parent="Center/Content/Frame/JoinSetup/CodeRow"]
+[node name="JoinCodeInput" type="LineEdit" parent="Center/Content/Frame/JoinSetup/CodeRow" unique_id=1093436493]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -213,95 +212,71 @@ placeholder_text = "Access code"
 alignment = 1
 max_length = 8
 
-[node name="PasteCode" type="Button" parent="Center/Content/Frame/JoinSetup/CodeRow"]
+[node name="PasteCode" type="Button" parent="Center/Content/Frame/JoinSetup/CodeRow" unique_id=1939957997]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Paste"
 
-[node name="JoinConfirm" type="Button" parent="Center/Content/Frame/JoinSetup"]
+[node name="JoinConfirm" type="Button" parent="Center/Content/Frame/JoinSetup" unique_id=1059905739]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Join"
 
-[node name="JoinStatus" type="Label" parent="Center/Content/Frame/JoinSetup"]
+[node name="JoinStatus" type="Label" parent="Center/Content/Frame/JoinSetup" unique_id=1665019640]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
 theme_override_font_sizes/font_size = 18
-text = ""
 horizontal_alignment = 1
 
-[node name="JoinBack" type="Button" parent="Center/Content/Frame/JoinSetup"]
+[node name="JoinBack" type="Button" parent="Center/Content/Frame/JoinSetup" unique_id=1797334494]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
 
-[node name="Lobby" type="HBoxContainer" parent="Center/Content/Frame"]
+[node name="Lobby" type="VBoxContainer" parent="Center/Content/Frame" unique_id=1334021830]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="LeftSeats" type="VBoxContainer" parent="Center/Content/Frame/Lobby"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="Middle" type="VBoxContainer" parent="Center/Content/Frame/Lobby"]
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_constants/separation = 10
-
-[node name="TopRow" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle"]
-layout_mode = 2
-size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="PlayersButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/TopRow"]
+[node name="Seats" type="HBoxContainer" parent="Center/Content/Frame/Lobby" unique_id=1622769495]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Players:  <  1  >"
+size_flags_horizontal = 4
+theme_override_constants/separation = 10
 
-[node name="ScoreButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/TopRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(264, 44)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Score to Win:  <  5  >"
-
-[node name="CodePanel" type="PanelContainer" parent="Center/Content/Frame/Lobby/Middle"]
+[node name="CodePanel" type="PanelContainer" parent="Center/Content/Frame/Lobby" unique_id=1541029611]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"PlankPanel"
 
-[node name="Code" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle/CodePanel"]
+[node name="Code" type="HBoxContainer" parent="Center/Content/Frame/Lobby/CodePanel" unique_id=1185189973]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Caption" type="Label" parent="Center/Content/Frame/Lobby/Middle/CodePanel/Code"]
+[node name="Caption" type="Label" parent="Center/Content/Frame/Lobby/CodePanel/Code" unique_id=971863845]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "ACCESS
 CODE"
 horizontal_alignment = 1
 
-[node name="CodeLabel" type="Label" parent="Center/Content/Frame/Lobby/Middle/CodePanel/Code"]
+[node name="CodeLabel" type="Label" parent="Center/Content/Frame/Lobby/CodePanel/Code" unique_id=1084614367]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "------"
 horizontal_alignment = 1
 
-[node name="CopyCode" type="Button" parent="Center/Content/Frame/Lobby/Middle/CodePanel/Code"]
+[node name="CopyCode" type="Button" parent="Center/Content/Frame/Lobby/CodePanel/Code" unique_id=808404040]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(140, 52)
 layout_mode = 2
@@ -309,13 +284,46 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 24
 text = "Copy"
 
-[node name="TeamColumns" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle"]
+[node name="OnlineRoster" type="Label" parent="Center/Content/Frame/Lobby" unique_id=1567274169]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+
+[node name="MatchRow" type="HBoxContainer" parent="Center/Content/Frame/Lobby" unique_id=683107530]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_constants/separation = 40
+theme_override_constants/separation = 12
 
-[node name="Options" type="GridContainer" parent="Center/Content/Frame/Lobby/Middle"]
+[node name="PlayersButton" type="Button" parent="Center/Content/Frame/Lobby/MatchRow" unique_id=546566223]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(264, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Players:  <  1  >"
+
+[node name="ScoreButton" type="Button" parent="Center/Content/Frame/Lobby/MatchRow" unique_id=1479370012]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(264, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Score to Win:  <  5  >"
+
+[node name="BotsButton" type="Button" parent="Center/Content/Frame/Lobby/MatchRow" unique_id=423469480]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(264, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Fill with Bots: On"
+
+[node name="TeamSizes" type="HBoxContainer" parent="Center/Content/Frame/Lobby" unique_id=1405296924]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+
+[node name="Options" type="GridContainer" parent="Center/Content/Frame/Lobby" unique_id=939412851]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
@@ -323,55 +331,49 @@ theme_override_constants/h_separation = 12
 theme_override_constants/v_separation = 10
 columns = 2
 
-[node name="TeamsButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/Options"]
+[node name="TeamsButton" type="Button" parent="Center/Content/Frame/Lobby/Options" unique_id=1915103008]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Teams: 2"
 
-[node name="MapButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/Options"]
+[node name="MapButton" type="Button" parent="Center/Content/Frame/Lobby/Options" unique_id=594417099]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Map"
 
-[node name="DropButton" type="Button" parent="Center/Content/Frame/Lobby/Middle/Options"]
+[node name="DropButton" type="Button" parent="Center/Content/Frame/Lobby/Options" unique_id=26576942]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(264, 44)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Ball"
 
-[node name="LobbyStatus" type="Label" parent="Center/Content/Frame/Lobby/Middle"]
+[node name="LobbyStatus" type="Label" parent="Center/Content/Frame/Lobby" unique_id=1089578776]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(540, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
-autowrap_mode = 3
 
-[node name="Actions" type="HBoxContainer" parent="Center/Content/Frame/Lobby/Middle"]
+[node name="Actions" type="HBoxContainer" parent="Center/Content/Frame/Lobby" unique_id=1177249248]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_constants/separation = 12
 
-[node name="Start" type="Button" parent="Center/Content/Frame/Lobby/Middle/Actions"]
+[node name="Start" type="Button" parent="Center/Content/Frame/Lobby/Actions" unique_id=113638839]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(264, 52)
+custom_minimum_size = Vector2(320, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "Start"
 
-[node name="LobbyBack" type="Button" parent="Center/Content/Frame/Lobby/Middle/Actions"]
+[node name="LobbyBack" type="Button" parent="Center/Content/Frame/Lobby/Actions" unique_id=761850376]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(264, 52)
+custom_minimum_size = Vector2(320, 52)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
-
-[node name="RightSeats" type="VBoxContainer" parent="Center/Content/Frame/Lobby"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 10

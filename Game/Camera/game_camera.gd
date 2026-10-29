@@ -69,6 +69,10 @@ var can_zoom: bool = true
 ## player over a wall.
 @export var wall_max_shift: float = 10.0
 @export var wall_fov_padding: float = 2.5  # World units kept visible around a player while slid out
+## How much more of the field fits on screen at full tilt (1.35 = 35% more),
+## eased in with the tilt, so being zoomed in doesn't feel cramped against
+## the bottom wall.
+@export var tilt_zoom_out: float = 1.35
 
 @export_group("Audio")
 ## Sounds are heard from this far back from the middle of the view (along
@@ -230,7 +234,7 @@ func _process(delta: float) -> void:
 	# aiming, widening only to show a goal they and the ball are near (see
 	# _focus_points).
 	if targets.is_empty():
-		fov = lerp(fov, zoom_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
+		fov = lerp(fov, _base_fov(), clamp(delta * group_zoom_speed, 0.0, 1.0))
 		return
 	var focus: Node3D = targets[0]
 	var handler: PlayerInputHandler3D = focus.get("Input_Handler")
@@ -308,7 +312,7 @@ func _process(delta: float) -> void:
 	_set_view_center(look_target + context_shift)
 	var ideal_pos: Vector3 = _ideal_position(look_target + context_shift + _wall_offset())
 	# Slid out from a wall: widen to keep the player on screen.
-	var target_fov: float = zoom_fov
+	var target_fov: float = _base_fov()
 	if wall_shift > 0.01:
 		target_fov = _fov_to_fit([target_pos], ideal_pos, wall_fov_padding)
 	fov = lerp(fov, target_fov, clamp(delta * group_zoom_speed, 0.0, 1.0))
@@ -567,7 +571,8 @@ func _fov_to_fit(points: Array[Vector3], camera_pos: Vector3, padding: float) ->
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var aspect: float = viewport_size.x / viewport_size.y
 	var to_camera_space: Basis = view_basis.inverse()
-	var needed_tan: float = tan(deg_to_rad(zoom_fov) * 0.5)
+	var base_fov: float = _base_fov()
+	var needed_tan: float = tan(deg_to_rad(base_fov) * 0.5)
 	for p: Vector3 in points:
 		var local: Vector3 = to_camera_space * (p - camera_pos)
 		var depth: float = -local.z
@@ -575,7 +580,14 @@ func _fov_to_fit(points: Array[Vector3], camera_pos: Vector3, padding: float) ->
 		needed_tan = max(needed_tan,
 			(abs(local.y) + padding) / depth,
 			(abs(local.x) + padding) / depth / aspect)
-	return clamp(rad_to_deg(2.0 * atan(needed_tan)), zoom_fov, max(group_max_fov, zoom_fov))
+	return clamp(rad_to_deg(2.0 * atan(needed_tan)), base_fov, max(group_max_fov, base_fov))
+
+
+## The player's chosen zoom, widened by tilt_zoom_out as the view tilts
+## over a wall (see top_down_blend).
+func _base_fov() -> float:
+	var widen: float = lerp(1.0, tilt_zoom_out, top_down_blend)
+	return min(rad_to_deg(2.0 * atan(tan(deg_to_rad(zoom_fov) * 0.5) * widen)), max_fov)
 
 
 ## Where the camera sits (fixed height and angle) so look_target is centered.

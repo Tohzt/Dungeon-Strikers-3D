@@ -10,8 +10,8 @@ class_name WildItem extends RefCounted
 enum Kind {
 	BUFF,     ## A timed perk (see PlayerClass3D.add_timed_perk)
 	INSTANT,  ## Happens on the spot (see ItemBox3D._apply)
-	WEAPON,   ## A giant weapon, straight into a free hand
-	HELD,     ## Something to throw, held up in both hands (see Throwable3D)
+	WEAPON,   ## A giant weapon, kept as a consumable card (see Consumable)
+	HELD,     ## Something to throw, kept as a consumable card (see Consumable)
 }
 
 ## A giant weapon's size and power (an item can say otherwise: "size", "power").

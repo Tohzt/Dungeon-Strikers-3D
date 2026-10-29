@@ -743,7 +743,7 @@ func _win(team: int, reason: String = "") -> void:
 	scoreboard.show_winner(text, _team_color(team))
 	match_won.emit(team)
 	if Net.decides():
-		Net.everywhere(_show_stats, team, text, stats.rows(players))
+		Net.everywhere(_show_stats, team, stats.rows(players))
 	if Net.in_session():
 		Net.finish_match()  # Back to the lobby (the server decides when)
 
@@ -752,7 +752,7 @@ func _win(team: int, reason: String = "") -> void:
 ## stats (MatchStats.rows) over the winner's banner. Offline the match waits
 ## there for Play Again; online the server sends everyone to the lobby.
 @rpc("authority", "call_local", "reliable")
-func _show_stats(team: int, title: String, rows: Array) -> void:
+func _show_stats(team: int, rows: Array) -> void:
 	if Net.is_server:
 		return
 	await get_tree().create_timer(STATS_DELAY).timeout
@@ -762,10 +762,7 @@ func _show_stats(team: int, title: String, rows: Array) -> void:
 		local_names.append(String(player.name))
 	var screen := MatchStatsScreen.new()
 	add_child(screen)
-	if bombs:
-		screen.setup(rows, team, title, base_hp, "base HP", local_names)
-	else:
-		screen.setup(rows, team, title, scores if goals_to_win > 0 else kills, "goals" if goals_to_win > 0 else "kills", local_names)
+	screen.setup(rows, team, local_names)
 	if not Net.in_session():
 		get_tree().paused = true
 

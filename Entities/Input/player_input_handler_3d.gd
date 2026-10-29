@@ -15,9 +15,15 @@ var throw_held: bool = false
 var shoot_held: bool = false
 var interact: bool = false
 var interact_held: bool = false
-## Use Item (G / D-pad Down): take what's in the item slot out into our
-## hands (see PlayerClass3D.stored_item). Stays set until the player acts on it.
+## Use Item (G / D-pad Down) tapped: use our first consumable card (see
+## PlayerClass3D.consumables). Stays set until the player acts on it.
 var use_item: bool = false
+## Use Item held past HAND_HOLD_TIME: our cards are showing (see CardHand),
+## to pick one with the mouse or right stick. The attack and interact
+## buttons go to the cards meanwhile.
+var hand_open: bool = false
+const HAND_HOLD_TIME := 0.18
+var _use_item_held_for: float = 0.0
 # The roll button (Space / A) rolls on press, or slides while sprinting.
 # The controller's dodge button (B) also rolls on a quick tap (on release)
 # and sprints while held; keyboard sprints with Shift.
@@ -111,6 +117,8 @@ func release_all() -> void:
 	aim_release_timer = 0.0
 	interact = false
 	use_item = false
+	hand_open = false
+	_use_item_held_for = 0.0
 
 
 func _process(delta: float) -> void:
@@ -124,11 +132,15 @@ func _process(delta: float) -> void:
 	heavy_held = Input.is_action_pressed(action("attack_heavy"))
 	throw_held = Input.is_action_pressed(action("throw"))
 	shoot_held = Input.is_action_pressed(action("shoot"))
+	_handle_use_item(delta)
+	if hand_open:
+		light_held = false
+		heavy_held = false
+		throw_held = false
+		shoot_held = false
 	# Stays set until the player acts on it
-	if Input.is_action_just_pressed(action("interact")):
+	elif Input.is_action_just_pressed(action("interact")):
 		interact = true
-	if Input.is_action_just_pressed(action("use_item")):
-		use_item = true
 	_handle_input_dodge(delta)
 	_handle_lock_on()
 	_handle_input_look(delta)
@@ -142,6 +154,18 @@ func _held_for_intro() -> bool:
 	release_all()
 	move_dir = Vector3.ZERO
 	return true
+
+
+## Use Item: a tap uses our first card (on release, since until then it
+## can't be told apart from a hold); held, it opens our hand of cards.
+func _handle_use_item(delta: float) -> void:
+	if Input.is_action_pressed(action("use_item")):
+		_use_item_held_for += delta
+		hand_open = _use_item_held_for >= HAND_HOLD_TIME
+	elif _use_item_held_for > 0.0:
+		use_item = use_item or not hand_open
+		_use_item_held_for = 0.0
+		hand_open = false
 
 
 ## Space / A rolls on press, Shift sprints while held. Controller: B tap =

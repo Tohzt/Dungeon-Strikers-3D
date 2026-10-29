@@ -1,6 +1,5 @@
 class_name MatchStatsScreen extends CanvasLayer
-## The end of a match: who won, the final score, and a card for every
-## player, the winners first. Each card shows the character they finished
+## The end of a match: who won, and a card for every player, the winners first. Each card shows the character they finished
 ## the match as in 3D (cheering if they won, slumped on the floor if not),
 ## their kills, deaths, goals and damage, and any awards they took (most
 ## kills, top scorer...). Made by Game3D from the rows MatchStats sends.
@@ -32,12 +31,14 @@ const LINES: Array[Array] = [
 ]
 
 const BACKGROUND := preload("res://Assets/UI/menu_background.png")
-## Cards are the theme's stone panel; the players on this machine get
-## theirs tinted gold.
+## Each card is the player's name, character and figure standing on top of
+## the theme's stone panel holding their stats; the players on this machine
+## get their panel tinted gold.
 const LOCAL_CARD_TINT := Color(1.35, 1.15, 0.65)
-const CARD_PADDING := 14.0
-## The team-colored line under each card's figure.
-const TEAM_RULE_HEIGHT := 3.0
+## Room above and below the stats inside the stone frame.
+const CARD_PADDING := 24.0
+## Extra room at the panel's sides so the stats clear the stone frame.
+const CARD_SIDE_PADDING := 22.0
 ## Whole row of cards stays within this width; each card is between these.
 const ROW_WIDTH := 1060.0
 const CARD_WIDTH := Vector2(120.0, 210.0)
@@ -55,11 +56,9 @@ var _lobby_in: float = -1.0
 var _countdown: Label
 
 
-## `rows` from MatchStats.rows, `winner` the winning team, `title` the
-## winner's line (e.g. "The Humans win!"), `team_scores` each team's final
-## score in `score_word` ("goals" or "kills"). `local_names` are the players
-## on this machine, whose cards stand out.
-func setup(rows: Array, winner: int, title: String, team_scores: Dictionary[int, int], score_word: String, local_names: Array[String]) -> void:
+## `rows` from MatchStats.rows, `winner` the winning team. `local_names` are
+## the players on this machine, whose cards stand out.
+func setup(rows: Array, winner: int, local_names: Array[String]) -> void:
 	layer = 20
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
@@ -89,8 +88,7 @@ func setup(rows: Array, winner: int, title: String, team_scores: Dictionary[int,
 	column.add_theme_constant_override("separation", 10)
 	margin.add_child(column)
 
-	column.add_child(_label(title, Players.team_color(winner), 44))
-	column.add_child(_score_line(winner, team_scores, score_word))
+	column.add_child(_label("%s win!" % Players.team_name(winner), Players.team_color(winner), 44))
 
 	var awards: Dictionary = _awards(rows)
 	var ordered: Array = rows.duplicate()
@@ -146,23 +144,6 @@ func _process(delta: float) -> void:
 	_countdown.text = "Back to the lobby in %d..." % ceili(_lobby_in)
 
 
-## "Humans 5 - 3 Skeletons" (each in its team's color), winner first.
-func _score_line(winner: int, team_scores: Dictionary[int, int], score_word: String) -> Control:
-	var line := HBoxContainer.new()
-	line.alignment = BoxContainer.ALIGNMENT_CENTER
-	line.add_theme_constant_override("separation", 14)
-	var teams: Array[int] = []
-	teams.assign(team_scores.keys())
-	teams.sort_custom(func(a: int, b: int) -> bool: return (-1 if a == winner else a) < (-1 if b == winner else b))
-	for i in teams.size():
-		if i > 0:
-			line.add_child(_label("-", Color.WHITE, 26))
-		var team: int = teams[i]
-		line.add_child(_label("%s %d" % [Players.team_name(team), team_scores[team]], Players.team_color(team), 26))
-	line.add_child(_label(score_word, Color(1, 1, 1, 0.6), 18))
-	return line
-
-
 ## Player node name -> the award titles they won, MVP first.
 func _awards(rows: Array) -> Dictionary:
 	var won: Dictionary = {}
@@ -194,46 +175,49 @@ func _mvp_score(row: Dictionary) -> float:
 
 func _card(row: Dictionary, won: bool, width: float, awards: Array, is_local: bool) -> Control:
 	var color: Color = Players.team_color(row.team)
-	var style: StyleBox = _theme_panel().duplicate()
-	style.set_content_margin_all(CARD_PADDING)
-	if is_local and style is StyleBoxTexture:
-		(style as StyleBoxTexture).modulate_color = LOCAL_CARD_TINT
-	var card := PanelContainer.new()
+	var card := VBoxContainer.new()
 	card.custom_minimum_size.x = width
-	card.add_theme_stylebox_override("panel", style)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 2)
-	card.add_child(column)
+	card.add_theme_constant_override("separation", 2)
 
-	var figure_width: float = width - 2.0 * CARD_PADDING
-	column.add_child(_figure(row.character, won, Vector2(figure_width, minf(figure_width * 1.15, 210.0))))
-	var rule := ColorRect.new()
-	rule.color = color
-	rule.custom_minimum_size.y = TEAM_RULE_HEIGHT
-	column.add_child(rule)
 	var name_label := _label(row.label, color, 20 if width > 150.0 else 16)
 	name_label.add_theme_font_override("font", NameTag.font())
-	column.add_child(_trimmed(name_label))
-	column.add_child(_trimmed(_label(Roster.name_of(row.character), Color(1, 1, 1, 0.6), 13)))
-	if row.bot:
-		column.add_child(_label("Bot", Color(1, 1, 1, 0.4), 12))
+	card.add_child(_trimmed(name_label))
+	card.add_child(_trimmed(_label(Roster.name_of(row.character), Color(1, 1, 1, 0.6), 13)))
+	# Blank for people, so every card's figure and panel line up
+	card.add_child(_label("Bot" if row.bot else "", Color(1, 1, 1, 0.4), 12))
+	card.add_child(_figure(row.character, won, Vector2(width, minf(width * 1.15, 210.0))))
+
+	var style: StyleBox = _theme_panel().duplicate()
+	style.set_content_margin_all(CARD_PADDING)
+	style.content_margin_left = CARD_SIDE_PADDING
+	style.content_margin_right = CARD_SIDE_PADDING
+	if is_local and style is StyleBoxTexture:
+		(style as StyleBoxTexture).modulate_color = LOCAL_CARD_TINT
+	var frame := PanelContainer.new()
+	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", style)
+	card.add_child(frame)
+	var stats := VBoxContainer.new()
+	stats.add_theme_constant_override("separation", 2)
+	frame.add_child(stats)
 
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 0)
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	column.add_child(grid)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stats.add_child(grid)
 	for line: Array in LINES:
 		var caption := _label(line[1], Color(1, 1, 1, 0.7), 14)
 		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(caption)
 		var value := _label(str(row.get(line[0], 0)), Color.WHITE, 14)
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		grid.add_child(value)
 
 	for title: String in awards:
-		column.add_child(_label(("★ " if title == MVP else "") + title, MVP_COLOR if title == MVP else AWARD_COLOR, 15 if title == MVP else 13))
+		stats.add_child(_label(("★ " if title == MVP else "") + title, MVP_COLOR if title == MVP else AWARD_COLOR, 15 if title == MVP else 13))
 	return card
 
 

@@ -24,6 +24,20 @@ const GRIP_NAMES: Dictionary[Weapon3D.Grip, String] = {
 	Weapon3D.Grip.TWO_HANDED: "Two-handed",
 }
 
+## The framed cards held in a player's hand (see CardHand, make_framed_card):
+## blue-bannered for perks, red for consumables, and the back for an empty slot.
+const FRAMED_SIZE := Vector2(180, 252)
+const FRAME_PERK: Texture2D = preload("res://Assets/UI/Cards/card_frame_perk.png")
+const FRAME_ITEM: Texture2D = preload("res://Assets/UI/Cards/card_frame_item.png")
+const CARD_BACK: Texture2D = preload("res://Assets/UI/Cards/card_back.png")
+## Where a frame's banner, open window and the dark face behind it sit, as
+## fractions of the card.
+const FRAME_BANNER := Rect2(0.08, 0.03, 0.84, 0.085)
+const FRAME_WINDOW := Rect2(0.12, 0.15, 0.76, 0.74)
+const FRAME_FACE := Rect2(0.06, 0.1, 0.88, 0.83)
+const FACE_COLOR := Color(0.1, 0.09, 0.085)
+const BANNER_FONT_SIZE := 14
+
 var theme: Theme
 var text_color: Color
 var muted_color: Color
@@ -127,6 +141,65 @@ func add_preview(column: VBoxContainer, model: Node3D) -> Node3D:
 	return spinner
 
 
+## A card from the hand (see CardHand): `frame` over a dark face, `title`
+## in its banner, and a column in its window to fill (face_of).
+func make_framed_card(frame: Texture2D, title: String) -> Control:
+	var card := Control.new()
+	card.custom_minimum_size = FRAMED_SIZE
+	card.size = FRAMED_SIZE
+	var face := ColorRect.new()
+	face.color = FACE_COLOR
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(face, FRAME_FACE)
+	card.add_child(face)
+	var art := TextureRect.new()
+	art.texture = frame
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_SCALE
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.size = FRAMED_SIZE
+	card.add_child(art)
+	var banner: Label = label(title, BANNER_FONT_SIZE, text_color)
+	banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	banner.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	banner.clip_text = true
+	_place(banner, FRAME_BANNER)
+	card.add_child(banner)
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 5)
+	_place(column, FRAME_WINDOW)
+	card.add_child(column)
+	return card
+
+
+## The column in a framed card's window.
+static func face_of(card: Control) -> VBoxContainer:
+	return card.get_child(card.get_child_count() - 1) as VBoxContainer
+
+
+## How wide text in a framed card's window can be.
+static func face_width() -> float:
+	return FRAMED_SIZE.x * FRAME_WINDOW.size.x
+
+
+## The back of a card, for an empty slot.
+func make_card_back() -> Control:
+	var back := TextureRect.new()
+	back.texture = CARD_BACK
+	back.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	back.stretch_mode = TextureRect.STRETCH_SCALE
+	back.custom_minimum_size = FRAMED_SIZE
+	back.size = FRAMED_SIZE
+	return back
+
+
+## Put `control` at `fraction` (of FRAMED_SIZE) on a framed card.
+static func _place(control: Control, fraction: Rect2) -> void:
+	control.position = fraction.position * FRAMED_SIZE
+	control.size = fraction.size * FRAMED_SIZE
+
+
 ## A weapon's name, and how it's held and its heavy attack, under a header
 ## line (e.g. its rarity) in `header_color`.
 func fill_weapon(column: VBoxContainer, scene: PackedScene, header: String, header_color: Color) -> void:
@@ -152,7 +225,7 @@ func fill_throwable(column: VBoxContainer, offer: ShopOffer) -> void:
 	var is_bomb: bool = offer.throwable_kind == Throwable3D.Kind.BOMB
 	column.add_child(label("BOMB" if is_bomb else "FLASK", 16, Altar3D.throwable_color(offer).lightened(0.2)))
 	column.add_child(label(Altar3D.throwable_title(offer), 22, text_color, CARD_TEXT_WIDTH))
-	column.add_child(label(throwable_text(offer), 16, muted_color, CARD_TEXT_WIDTH))
+	column.add_child(label(throwable_text(offer.throwable_kind as Throwable3D.Kind, offer.variant), 16, muted_color, CARD_TEXT_WIDTH))
 
 
 ## A thin colored line across the card.
@@ -164,11 +237,11 @@ func add_rule(column: VBoxContainer, color: Color) -> void:
 	column.add_child(rule)
 
 
-## What a bomb or flask does, in a line.
-static func throwable_text(offer: ShopOffer) -> String:
-	if offer.throwable_kind == Throwable3D.Kind.BOMB:
+## What a bomb or flask (`variant` as in Throwable3D) does, in a line.
+static func throwable_text(kind: Throwable3D.Kind, variant: int) -> String:
+	if kind == Throwable3D.Kind.BOMB:
 		var fuse: String = "Throw it within %ds!" % roundi(Throwable3D.BOMB_FUSE)
-		match offer.variant:
+		match variant:
 			Bomb3D.Type.FIRE:
 				return "Sets the blast on fire. " + fuse
 			Bomb3D.Type.POISON:
@@ -176,7 +249,7 @@ static func throwable_text(offer: ShopOffer) -> String:
 			Bomb3D.Type.ICE:
 				return "Chills the blast. " + fuse
 		return fuse
-	var flask: Dictionary = Potion.large(offer.variant)
+	var flask: Dictionary = Potion.large(variant)
 	if flask.get("allies", false):
 		return "Shatters where it lands, healing your team."
 	return "Shatters where it lands, splashing enemies%s." % (" and leaving a puddle" if flask.has("patch") else "")

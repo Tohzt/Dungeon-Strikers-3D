@@ -1,0 +1,61 @@
+ROYALTY-FREE ASSET LICENSE v1.0
+(Used for every free "Lite" and paid pack from this publisher.)
+
+This is a custom royalty-free license. It is NOT a Creative Commons license
+(not CC0, not CC-BY, not any other CC variant).
+
+"Licensor" means the publisher who sells or distributes this pack.
+"You" means the person or company that bought or downloaded this pack.
+"Assets" means every image, sprite sheet, atlas, metadata file and source file
+included in this pack, in original or modified form.
+
+1. GRANT
+   Upon purchase or download, the Licensor grants You a perpetual, worldwide,
+   non-exclusive, non-transferable, royalty-free license to use, modify and
+   include the Assets in Your own projects, including commercial projects.
+
+2. WHAT YOU MAY DO
+   a) Use the Assets in an unlimited number of games, apps, prototypes, game
+      jams, trailers, store pages and promotional material, commercial or not.
+   b) Modify, recolor, crop, resize, slice and combine the Assets with other work.
+   c) Distribute the Assets as part of a compiled or packaged product (for
+      example a released game), where the Assets are not the main value of the
+      product and cannot be easily extracted and reused as a standalone set.
+   d) Share the Assets with contractors or team members working on Your project,
+      provided they use them only for that project.
+
+3. WHAT YOU MAY NOT DO
+   a) Resell, redistribute, sublicense, share or give away the Assets on their
+      own, as part of another asset pack, template, UI kit, icon set, sprite
+      collection or similar product, whether unchanged or modified, for free or
+      for a fee.
+   b) Use the Assets, in whole or in part, as training, fine-tuning, evaluation
+      or reference data for any machine-learning or artificial-intelligence
+      model or dataset, or feed them into such a system to produce derivative
+      asset collections.
+   c) Transfer or assign this license to anyone else.
+   d) Claim the Assets as Your own original work in a standalone form, or
+      register them as a trademark or logo.
+
+4. ATTRIBUTION
+   Attribution is not required but is always appreciated.
+
+5. ORIGIN OF THE ASSETS
+   The Assets were rendered procedurally by the Licensor's own scripts.
+   No generative image model was used to create them. They were then composed,
+   checked and packaged by the Licensor. Copyright protection may apply to the Assets as a work of
+   authorship. Independently of copyright, the terms of this license are a
+   contract between You and the Licensor, and the restrictions in section 3
+   apply to You in full.
+
+6. TERMINATION
+   This license ends automatically if You breach any of its terms. Projects You
+   released before the breach may remain published, but You must stop any use
+   that breaches section 3.
+
+7. NO WARRANTY
+   The Assets are provided "as is", without warranty of any kind. The Licensor
+   is not liable for any damages arising from the use of the Assets.
+
+Questions about uses not covered here: contact the Licensor through the store
+page where You obtained this pack.

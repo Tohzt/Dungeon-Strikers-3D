@@ -20,11 +20,8 @@ var _visual: Node3D
 var _material: StandardMaterial3D
 var _light: OmniLight3D
 var _time: float = 0.0
-## Names giant weapons and potions it hands out, the same on every machine.
-var _weapons_made: int = 0
+## Names potions it spills, the same on every machine.
 var _potions_made: int = 0
-## Each giant weapon scene's grip, worked out once.
-static var _grips: Dictionary[PackedScene, Weapon3D.Grip] = {}
 
 
 func _ready() -> void:
@@ -98,24 +95,15 @@ func _physics_process(_delta: float) -> void:
 func _grab(player: PlayerClass3D) -> void:
 	is_available = false
 	var luck: float = Global.Game3D.item_luck(player)
-	var fitting: Array[int] = []  # Giant weapons that'd fit a free hand
-	for i in WildItem.GIANT_WEAPONS.size():
-		if player.free_hand_for(_grip_of(WildItem.GIANT_WEAPONS[i])) != null:
-			fitting.append(i)
 	var item: int = WildItem.roll(luck, func(i: int) -> bool:
 		match WildItem.kind(i):
-			WildItem.Kind.WEAPON:
-				return not fitting.is_empty()
-			WildItem.Kind.HELD:
-				return not player.has_stored_item()  # It goes in the item slot
+			WildItem.Kind.WEAPON, WildItem.Kind.HELD:
+				return player.has_free_consumable_slot()  # It goes in a consumable slot
 		return true)
 	# What exactly: which giant weapon, bomb, flask, or potions spilled
 	var weapon_pick: int = -1
-	var is_left: bool = false
-	match WildItem.kind(item):
-		WildItem.Kind.WEAPON:
-			weapon_pick = fitting.pick_random()
-			is_left = player.free_hand_for(_grip_of(WildItem.GIANT_WEAPONS[weapon_pick]))
+	if WildItem.kind(item) == WildItem.Kind.WEAPON:
+		weapon_pick = randi() % WildItem.GIANT_WEAPONS.size()
 	match item:
 		WildItem.BOMB:
 			weapon_pick = randi() % Bomb3D.Type.size()
@@ -125,29 +113,42 @@ func _grab(player: PlayerClass3D) -> void:
 			weapon_pick = 0
 			for i in WildItem.SPILL_COUNT:
 				weapon_pick += Potion.roll_small() << (i * 4)
-	Net.everywhere(_grabbed, String(player.name), item, weapon_pick, is_left)
+	Net.everywhere(_grabbed, String(player.name), item, weapon_pick)
 
 
 ## Every machine: the box pops, and `player_name` gets `item`. Its
 ## `weapon_pick` says which giant weapon, bomb (Bomb3D.Type) or flask
 ## (Potion.LARGE), or for a spill, which potions (Potion.SMALL, 4 bits each).
 @rpc("authority", "call_local", "reliable")
-func _grabbed(player_name: String, item: int, weapon_pick: int, is_left: bool) -> void:
+func _grabbed(player_name: String, item: int, weapon_pick: int) -> void:
 	is_available = false
 	_pop()
 	var player: PlayerClass3D = Global.Game3D.player_named(player_name) if Global.Game3D else null
 	if player:
-		_apply(player, item, weapon_pick, is_left)
+		_apply(player, item, weapon_pick)
 		var got: String = WildItem.title(item)
 		var color: Color = WildItem.color(item)
-		if WildItem.kind(item) == WildItem.Kind.HELD and player.has_stored_item():
-			got = "a " + Throwable3D.title_of(player.stored_item.x as Throwable3D.Kind, player.stored_item.y)
-			color = Throwable3D.color_of(player.stored_item.x as Throwable3D.Kind, player.stored_item.y)
+		var card: Vector2i = _card_of(item, weapon_pick)
+		if card != PlayerClass3D.NO_ITEM:
+			got = "a " + Consumable.title_of(card)
+			color = Consumable.color_of(card)
 		Global.Game3D.scoreboard.announce("%s got %s" % [_label(player), got], color)
 	get_tree().create_timer(respawn_time).timeout.connect(_restock)
 
 
-func _apply(player: PlayerClass3D, item: int, weapon_pick: int, is_left: bool) -> void:
+## The consumable card `item` gives (see Consumable), or NO_ITEM if it isn't one.
+func _card_of(item: int, weapon_pick: int) -> Vector2i:
+	match item:
+		WildItem.BOMB:
+			return Consumable.throwable(Throwable3D.Kind.BOMB, weapon_pick)
+		WildItem.BIG_POTION:
+			return Consumable.throwable(Throwable3D.Kind.FLASK, weapon_pick)
+	if WildItem.kind(item) == WildItem.Kind.WEAPON:
+		return Consumable.giant_weapon(item, weapon_pick)
+	return PlayerClass3D.NO_ITEM
+
+
+func _apply(player: PlayerClass3D, item: int, weapon_pick: int) -> void:
 	var owned: bool = not Net.in_session() or player.is_multiplayer_authority()
 	match WildItem.kind(item):
 		WildItem.Kind.BUFF:
@@ -157,14 +158,8 @@ func _apply(player: PlayerClass3D, item: int, weapon_pick: int, is_left: bool) -
 					if other != perk and other.mods.has(&"size"):
 						player.timed_perks[other] = 0.0  # Wears off next frame
 			player.add_timed_perk(perk, WildItem.seconds(item))
-		WildItem.Kind.WEAPON:
-			_hand_giant_weapon(player, item, weapon_pick, is_left)
-		WildItem.Kind.HELD:
-			match item:
-				WildItem.BOMB:
-					player.store_item(Throwable3D.Kind.BOMB, weapon_pick)
-				WildItem.BIG_POTION:
-					player.store_item(Throwable3D.Kind.FLASK, weapon_pick)
+		WildItem.Kind.WEAPON, WildItem.Kind.HELD:
+			player.store_consumable(_card_of(item, weapon_pick))
 		WildItem.Kind.INSTANT:
 			match item:
 				WildItem.SNACK:
@@ -179,21 +174,6 @@ func _apply(player: PlayerClass3D, item: int, weapon_pick: int, is_left: bool) -
 					_lullaby(player, owned)
 				WildItem.POTION_SPILL:
 					_spill(weapon_pick)
-
-
-func _hand_giant_weapon(player: PlayerClass3D, item: int, pick: int, is_left: bool) -> void:
-	if pick < 0 or pick >= WildItem.GIANT_WEAPONS.size():
-		return
-	_weapons_made += 1
-	var weapon_name: String = "%s_Wild%d" % [name, _weapons_made]
-	var weapon: Weapon3D = WildItem.GIANT_WEAPONS[pick].instantiate()
-	weapon.name = weapon_name
-	Global.Game3D.add_weapon(weapon)
-	weapon.set_rarity(WeaponRarity.Tier.LEGENDARY)
-	weapon.make_giant(WildItem.ITEMS[item].get("size", WildItem.GIANT_WEAPON_SIZE),
-		WildItem.ITEMS[item].get("power", WildItem.GIANT_WEAPON_POWER))
-	weapon.global_position = _visual.global_position
-	weapon.hand_to(player, is_left)
 
 
 ## Small potions (`kinds`, 4 bits each) pop out of the box all around it.
@@ -346,14 +326,6 @@ func _restock() -> void:
 	_visual.show()
 	var tween: Tween = create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(_visual, ^"scale", Vector3.ONE, 0.6)
-
-
-static func _grip_of(scene: PackedScene) -> Weapon3D.Grip:
-	if not _grips.has(scene):
-		var probe: Weapon3D = scene.instantiate()
-		_grips[scene] = probe.grip
-		probe.free()
-	return _grips[scene]
 
 
 func _label(player: PlayerClass3D) -> String:

@@ -96,7 +96,7 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 ## can be bought per restock: the rest lock until the next one.
 @export_range(0, 4) var shop_perk_slots: int = 3
 ## Bombs and big flasks on sale at once (see Throwable3D), put in the
-## buyer's item slot (PlayerClass3D.stored_item). Each is a bomb at bomb_chance, else a
+## buyer's consumable slots (PlayerClass3D.consumables). Each is a bomb at bomb_chance, else a
 ## flask, and no two alike.
 @export_range(0, 4) var shop_throwable_slots: int = 3
 @export_range(0.0, 1.0) var bomb_chance: float = 0.6
@@ -972,7 +972,7 @@ func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
 		ShopOffer.Kind.KIT:
 			return player.can_upgrade_kit()
 		ShopOffer.Kind.THROWABLE:
-			return not player.has_stored_item()  # It goes in the item slot
+			return player.has_free_consumable_slot()  # It goes in a consumable slot
 	return true
 
 
@@ -1119,7 +1119,7 @@ func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, 
 				Vfx.play(&"shatter", player.global_position + Vector3.UP, Vector3.UP, false, 1.0,
 					WeaponRarity.effect_color(player.kit_rarity))
 			ShopOffer.Kind.THROWABLE:
-				player.store_item(offer.throwable_kind as Throwable3D.Kind, offer.variant)
+				player.store_consumable(Consumable.throwable(offer.throwable_kind as Throwable3D.Kind, offer.variant))
 	var next: ShopOffer = _decode_offer(replacement)
 	if next:
 		offers[index] = next

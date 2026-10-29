@@ -140,10 +140,14 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if player.carries_ball():
 		_carry_ball(player)
 		return
-	# Something in the item slot: take it out once there's someone to use it on
-	if player.has_stored_item() and not player.hands_full() \
-			and _item_target(player, game, player.stored_item.x as Throwable3D.Kind, player.stored_item.y, false):
-		use_item = true
+	# A consumable card: a giant weapon at once, a throwable once there's
+	# someone to use it on
+	var card_slot: int = player.first_consumable()
+	if card_slot >= 0 and player.can_use_consumable(card_slot):
+		var card: Vector2i = player.consumables[card_slot]
+		if not Consumable.is_throwable(card) \
+				or _item_target(player, game, card.x as Throwable3D.Kind, card.y, false):
+			use_item = true
 	# Only ever aimed (locked on) for a throw, below
 	if not player.holds_throwable():
 		lock_target = null
