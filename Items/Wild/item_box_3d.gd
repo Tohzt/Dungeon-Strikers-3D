@@ -107,7 +107,7 @@ func _grab(player: PlayerClass3D) -> void:
 			WildItem.Kind.WEAPON:
 				return not fitting.is_empty()
 			WildItem.Kind.HELD:
-				return not player.hands_full()
+				return not player.has_stored_item()  # It goes in the item slot
 		return true)
 	# What exactly: which giant weapon, bomb, flask, or potions spilled
 	var weapon_pick: int = -1
@@ -140,9 +140,9 @@ func _grabbed(player_name: String, item: int, weapon_pick: int, is_left: bool) -
 		_apply(player, item, weapon_pick, is_left)
 		var got: String = WildItem.title(item)
 		var color: Color = WildItem.color(item)
-		if WildItem.kind(item) == WildItem.Kind.HELD and player.holds_throwable():
-			got = "a " + player.held_throwable.title()
-			color = player.held_throwable.color()
+		if WildItem.kind(item) == WildItem.Kind.HELD and player.has_stored_item():
+			got = "a " + Throwable3D.title_of(player.stored_item.x as Throwable3D.Kind, player.stored_item.y)
+			color = Throwable3D.color_of(player.stored_item.x as Throwable3D.Kind, player.stored_item.y)
 		Global.Game3D.scoreboard.announce("%s got %s" % [_label(player), got], color)
 	get_tree().create_timer(respawn_time).timeout.connect(_restock)
 
@@ -162,9 +162,9 @@ func _apply(player: PlayerClass3D, item: int, weapon_pick: int, is_left: bool) -
 		WildItem.Kind.HELD:
 			match item:
 				WildItem.BOMB:
-					Throwable3D.give(player, Throwable3D.Kind.BOMB, weapon_pick)
+					player.store_item(Throwable3D.Kind.BOMB, weapon_pick)
 				WildItem.BIG_POTION:
-					Throwable3D.give(player, Throwable3D.Kind.FLASK, weapon_pick)
+					player.store_item(Throwable3D.Kind.FLASK, weapon_pick)
 		WildItem.Kind.INSTANT:
 			match item:
 				WildItem.SNACK:
@@ -189,7 +189,6 @@ func _hand_giant_weapon(player: PlayerClass3D, item: int, pick: int, is_left: bo
 	var weapon: Weapon3D = WildItem.GIANT_WEAPONS[pick].instantiate()
 	weapon.name = weapon_name
 	Global.Game3D.add_weapon(weapon)
-	weapon.name = weapon_name  # Its _ready renames it after its Properties
 	weapon.set_rarity(WeaponRarity.Tier.LEGENDARY)
 	weapon.make_giant(WildItem.ITEMS[item].get("size", WildItem.GIANT_WEAPON_SIZE),
 		WildItem.ITEMS[item].get("power", WildItem.GIANT_WEAPON_POWER))

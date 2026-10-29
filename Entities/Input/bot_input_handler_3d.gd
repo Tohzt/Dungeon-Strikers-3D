@@ -140,6 +140,10 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 	if player.carries_ball():
 		_carry_ball(player)
 		return
+	# Something in the item slot: take it out once there's someone to use it on
+	if player.has_stored_item() and not player.hands_full() \
+			and _item_target(player, game, player.stored_item.x as Throwable3D.Kind, player.stored_item.y, false):
+		use_item = true
 	# Only ever aimed (locked on) for a throw, below
 	if not player.holds_throwable():
 		lock_target = null
@@ -351,23 +355,7 @@ func _start_throw(player: PlayerClass3D, target: Vector3, dir: Vector3, shot: bo
 ## THROWABLE_RANGE). Returns whether we did.
 func _throw_held_item(player: PlayerClass3D, game: Game3D_Class) -> bool:
 	var item: Throwable3D = player.held_throwable
-	var target: Node3D = null
-	if item.kind == Throwable3D.Kind.FLASK and Potion.large(item.variant).get("allies", false):
-		if player.Entity.hp < player.Entity.hp_max * HEAL_BELOW:
-			target = player
-		else:
-			var mate: PlayerClass3D = player._nearest_teammate()
-			if mate and _flat_dist(player, mate) <= THROWABLE_RANGE and mate.Entity.hp < mate.Entity.hp_max * HEAL_BELOW:
-				target = mate
-			else:
-				# Nobody needs it, but our hands are wanted: drink up anyway
-				var enemy: PlayerClass3D = _nearest_enemy(player, game)
-				if enemy and _flat_dist(player, enemy) < THREAT_RANGE:
-					target = player
-	else:
-		var enemy: PlayerClass3D = _nearest_enemy(player, game)
-		if enemy and _flat_dist(player, enemy) <= THROWABLE_RANGE:
-			target = enemy
+	var target: Node3D = _item_target(player, game, item.kind, item.variant)
 	var panic: bool = item.kind == Throwable3D.Kind.BOMB and item.fuse_left < BOMB_PANIC_FUSE
 	if not target and not panic:
 		return false
@@ -377,6 +365,31 @@ func _throw_held_item(player: PlayerClass3D, game: Game3D_Class) -> bool:
 	_shooting = false
 	_throw_press_left = 0.05
 	return true
+
+
+## Who to use a throwable of `kind` (`variant` as in Throwable3D) on: a
+## healing flask on us or a hurt teammate, anything else on an enemy within
+## THROWABLE_RANGE. Null if there's nobody. Only `in_hand`, a healing flask
+## nobody needs gets drunk anyway when a fight's on (our hands are wanted).
+func _item_target(player: PlayerClass3D, game: Game3D_Class, kind: Throwable3D.Kind, variant: int, in_hand: bool = true) -> Node3D:
+	var target: Node3D = null
+	if kind == Throwable3D.Kind.FLASK and Potion.large(variant).get("allies", false):
+		if player.Entity.hp < player.Entity.hp_max * HEAL_BELOW:
+			target = player
+		else:
+			var mate: PlayerClass3D = player._nearest_teammate()
+			if mate and _flat_dist(player, mate) <= THROWABLE_RANGE and mate.Entity.hp < mate.Entity.hp_max * HEAL_BELOW:
+				target = mate
+			elif in_hand:
+				# Nobody needs it, but our hands are wanted: drink up anyway
+				var enemy: PlayerClass3D = _nearest_enemy(player, game)
+				if enemy and _flat_dist(player, enemy) < THREAT_RANGE:
+					target = player
+	else:
+		var enemy: PlayerClass3D = _nearest_enemy(player, game)
+		if enemy and _flat_dist(player, enemy) <= THROWABLE_RANGE:
+			target = enemy
+	return target
 
 
 ## Nothing solid between us and `point` (walls; players and the ball don't
@@ -549,7 +562,9 @@ func _separation(player: PlayerClass3D) -> Vector3:
 
 ## A tower to claim or knock down, if we're the one on our team nearest it
 ## (so one teammate peels off for it and the rest keep playing): stand in
-## reach of one that's up for grabs, or go hit an enemy one.
+## reach of one that's up for grabs, or go hit an enemy one. An enemy
+## player inside its capture radius gets fought first, since they'd stall
+## the claim (or defend the tower).
 func _tower_job(player: PlayerClass3D) -> bool:
 	var team: int = Combat.team_of(player)
 	for tower: Tower3D in Tower3D.standing(get_tree()):
@@ -557,7 +572,10 @@ func _tower_job(player: PlayerClass3D) -> bool:
 		var attack: bool = tower.state == Tower3D.State.ACTIVE and tower.owner_team != team
 		if not (claim or attack) or not _nearest_teammate_to(player, tower):
 			continue
-		if attack:
+		var intruder: PlayerClass3D = _nearest_enemy_to(player, tower, tower.capture_radius)
+		if intruder:
+			_fight(player, intruder)
+		elif attack:
 			_fight(player, tower)
 		elif _flat_dist(player, tower) > tower.capture_radius * 0.8:
 			var out: Vector3 = player.global_position - tower.global_position
@@ -584,6 +602,20 @@ func _nearest_enemy(player: PlayerClass3D, game: Game3D_Class) -> PlayerClass3D:
 			continue
 		if not best or _flat_dist(player, other) < _flat_dist(player, best):
 			best = other
+	return best
+
+
+## The living enemy of `player` nearest `target`, within `radius` (flat) of it.
+func _nearest_enemy_to(player: PlayerClass3D, target: Node3D, radius: float) -> PlayerClass3D:
+	var best: PlayerClass3D = null
+	var best_dist: float = radius
+	for other: PlayerClass3D in Global.Game3D.players:
+		if other == player or not is_instance_valid(other) or other.is_dead() or Combat.are_teammates(player, other):
+			continue
+		var dist: float = _flat_dist(other, target)
+		if dist <= best_dist:
+			best = other
+			best_dist = dist
 	return best
 
 

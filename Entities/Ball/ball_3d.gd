@@ -90,6 +90,10 @@ func _ready() -> void:
 	
 	# Connect body entered signal
 	body_entered.connect(_on_body_entered)
+	# Weapons already in hands pass through it (see Weapon3D._update_ball_contact)
+	for weapon: Node in get_tree().get_nodes_in_group(Weapon3D.HELD_GROUP):
+		add_collision_exception_with(weapon)
+		(weapon as Weapon3D).add_collision_exception_with(self)
 	_burn_light = OmniLight3D.new()
 	_burn_light.light_color = BURN_COLOR
 	_burn_light.omni_range = 5.0

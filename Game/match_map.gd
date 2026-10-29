@@ -5,38 +5,27 @@ class_name MatchMap extends RefCounted
 ## On the pitch it's what kicks off instead (a ball, or a bomb).
 
 enum Map {
-	ARENA,    ## The open soccer field: goals and altars for up to 4 teams
-	DUNGEON,  ## Two mirrored bases around a central arena; altars, no goals
-	RACE,     ## Up to 4 teams race through a dungeon to an altar (RaceGame3D)
 	PITCH,    ## Soccer with hazards and a penned boss; first to N goals (PitchGame3D)
 }
 
-## In the order the lobby's Map button cycles through them.
-const MAPS: Array[Map] = [Map.PITCH, Map.DUNGEON, Map.ARENA, Map.RACE]
+## In the order the lobby's Map button cycles through them. Only the pitch
+## for now; the lobby hides its Map button while there's just one.
+const MAPS: Array[Map] = [Map.PITCH]
 const SCENES: Dictionary[Map, String] = {
-	Map.ARENA: "res://Game/Maps/Game3D.tscn",
-	Map.DUNGEON: "res://Game/Maps/DungeonArena.tscn",
-	Map.RACE: "res://Game/Maps/RaceDungeon.tscn",
 	Map.PITCH: "res://Game/Maps/Pitch.tscn",
 }
 const NAMES: Dictionary[Map, String] = {
-	Map.ARENA: "Arena",
-	Map.DUNGEON: "Dungeon",
-	Map.RACE: "Race",
 	Map.PITCH: "Pitch",
 }
 ## Most teams each level is laid out for (matches Game3D.max_team_count).
 const MAX_TEAMS: Dictionary[Map, int] = {
-	Map.ARENA: 4,
-	Map.DUNGEON: 2,
-	Map.RACE: 4,
 	Map.PITCH: 2,
 }
 ## Levels with goals to score a ball in.
-const HAS_GOALS: Array[Map] = [Map.ARENA, Map.PITCH]
-## Levels whose bosses drop nothing (they unlock doors, or swallow the
-## ball), so any drop setting fits.
-const NO_DROPS: Array[Map] = [Map.RACE, Map.PITCH]
+const HAS_GOALS: Array[Map] = [Map.PITCH]
+## Levels whose bosses drop nothing (they swallow the ball), so any drop
+## setting fits.
+const NO_DROPS: Array[Map] = [Map.PITCH]
 
 ## Drops the host can pick, in the order the lobby's Ball button cycles.
 ## Each will get its own boss later; for now the one boss drops any of them.
@@ -75,9 +64,9 @@ static func fits(map: Map, team_count: int, drop: BossDrop.Kind) -> bool:
 		and (drop != BossDrop.Kind.BOMB or HAS_GOALS.has(map))
 
 
-## The first map (in MAPS order) that fits, or ARENA if none does.
+## The first map (in MAPS order) that fits, or the first map if none does.
 static func first_fitting(team_count: int, drop: BossDrop.Kind) -> Map:
 	for map: Map in MAPS:
 		if fits(map, team_count, drop):
 			return map
-	return Map.ARENA
+	return MAPS[0] as Map

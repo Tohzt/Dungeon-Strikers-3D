@@ -72,11 +72,20 @@ static func give(player: PlayerClass3D, kind_: Kind, variant_: int) -> Throwable
 
 
 func title() -> String:
-	return Potion.large(variant).title if kind == Kind.FLASK else "%s Bomb" % Bomb3D.NAMES[variant as Bomb3D.Type]
+	return title_of(kind, variant)
 
 
 func color() -> Color:
-	return Potion.large(variant).color if kind == Kind.FLASK else Bomb3D.COLORS[variant as Bomb3D.Type]
+	return color_of(kind, variant)
+
+
+## The name of one of `kind_` (`variant_` as in variant), held or not.
+static func title_of(kind_: Kind, variant_: int) -> String:
+	return Potion.large(variant_).title if kind_ == Kind.FLASK else "%s Bomb" % Bomb3D.NAMES[variant_ as Bomb3D.Type]
+
+
+static func color_of(kind_: Kind, variant_: int) -> Color:
+	return Potion.large(variant_).color if kind_ == Kind.FLASK else Bomb3D.COLORS[variant_ as Bomb3D.Type]
 
 
 func _ready() -> void:

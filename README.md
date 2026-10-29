@@ -38,7 +38,7 @@ Known problems and unfinished work are tracked in `Docs/OPEN_ISSUES_CONTEXT.md`.
 - `Game/`: the match (`game_3d.gd`), map registry (`match_map.gd`), stats
   and editor test tools.
   - `Maps/`: the playable map scenes and their GridMap palettes (`GridMaps/`).
-  - `Modes/`: mode logic (Pitch, Race).
+  - `Modes/`: mode logic (Pitch).
   - `Camera/`, `Level/` (doors, goals, spawns, torches…), `Hazards/`, `Towers/`.
 - `Entities/`: everything that moves on its own.
   - `Player/`: the player. `character_body_3d.gd` is the player itself;
@@ -53,8 +53,6 @@ Known problems and unfinished work are tracked in `Docs/OPEN_ISSUES_CONTEXT.md`.
 - `UI/`: the in-match `HUD/`, `Menus/` (main, pause, character select) and
   shared `Controls/`.
 - `Assets/`: third-party art, audio, VFX, fonts and the UI theme.
-- `Tools/`: `deploy_server.sh` and the dungeon generators in `Dungeon/`.
-  `build_dungeon_arena.gd` overwrites `Game/Maps/DungeonArena.tscn` (see its
-  header for how to run it); it needs the autoloads, so `godot --script`
-  won't work.
+- `Tools/`: `deploy_server.sh` and the GridMap palette generator in
+  `Dungeon/`.
 - `Docs/`: design notes and open issues.

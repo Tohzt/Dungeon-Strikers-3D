@@ -15,6 +15,9 @@ var throw_held: bool = false
 var shoot_held: bool = false
 var interact: bool = false
 var interact_held: bool = false
+## Use Item (G / D-pad Down): take what's in the item slot out into our
+## hands (see PlayerClass3D.stored_item). Stays set until the player acts on it.
+var use_item: bool = false
 # The roll button (Space / A) rolls on press, or slides while sprinting.
 # The controller's dodge button (B) also rolls on a quick tap (on release)
 # and sprints while held; keyboard sprints with Shift.
@@ -107,6 +110,7 @@ func release_all() -> void:
 	look_dir = Vector3.ZERO
 	aim_release_timer = 0.0
 	interact = false
+	use_item = false
 
 
 func _process(delta: float) -> void:
@@ -123,6 +127,8 @@ func _process(delta: float) -> void:
 	# Stays set until the player acts on it
 	if Input.is_action_just_pressed(action("interact")):
 		interact = true
+	if Input.is_action_just_pressed(action("use_item")):
+		use_item = true
 	_handle_input_dodge(delta)
 	_handle_lock_on()
 	_handle_input_look(delta)
@@ -209,8 +215,9 @@ func _get_mouse_aim() -> Vector3:
 # ===== LOCK-ON =====
 
 func _unhandled_input(event: InputEvent) -> void:
-	# The wheel switches target: up = counter-clockwise round us, down = clockwise
-	if lock_target and event is InputEventMouseButton and event.is_action_pressed(action("target_scroll")):
+	# The wheel switches target: up = counter-clockwise round us, down = clockwise.
+	# Only the mouse seat has the wheel (bots and pads have no copy of the action).
+	if lock_target and uses_mouse() and event is InputEventMouseButton and event.is_action_pressed(action("target_scroll")):
 		_cycle_lock(-1 if (event as InputEventMouseButton).button_index == MOUSE_BUTTON_WHEEL_UP else 1)
 
 

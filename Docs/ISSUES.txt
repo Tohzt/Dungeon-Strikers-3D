@@ -1,0 +1,3 @@
+Quick issue list — jot things down as you find them, one per line.
+Agents: fix or triage these; delete a line once it's done. Anything that
+needs more context than a line can move to OPEN_ISSUES_CONTEXT.md.

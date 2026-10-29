@@ -1,7 +1,8 @@
 class_name OffscreenIndicator3D extends CanvasLayer
 ## Points at every boss drop in play (Game3D.balls: the ball, skulls...)
 ## that's off screen: an arrow pinned to the screen edge in its direction,
-## ringed in the colour of the team that last played it.
+## ringed in the colour of the team that last played it. A bomb's marker
+## also shows its fuse countdown.
 
 ## Gap between the arrows and the screen edges, in pixels.
 const EDGE_MARGIN := 48.0
@@ -14,6 +15,10 @@ const ARROW_WIDTH := 12.0
 const BALL_COLOR := Color(1.0, 1.0, 1.0)
 const SKULL_COLOR := Color(0.93, 0.87, 0.7)
 const NO_TEAM_COLOR := Color(0.1, 0.1, 0.1)
+## The bomb's countdown inside its marker.
+const FUSE_FONT_SIZE := 18
+const FUSE_OUTLINE := 5
+const FUSE_URGENT_COLOR := Color(1.0, 0.25, 0.2)
 
 var _canvas: Control
 
@@ -77,3 +82,17 @@ func _draw_arrow(at: Vector2, dir: Vector2, ball: Ball3D, pulse: float) -> void:
 		var eye: Vector2 = Vector2(r * 0.35, -r * 0.1)
 		_canvas.draw_circle(at + eye, r * 0.22, NO_TEAM_COLOR)
 		_canvas.draw_circle(at + Vector2(-eye.x, eye.y), r * 0.22, NO_TEAM_COLOR)
+	elif ball is Bomb3D:
+		_draw_fuse(at, ball as Bomb3D)
+
+
+## The bomb's seconds left, written in the middle of its marker; red once urgent.
+func _draw_fuse(at: Vector2, bomb: Bomb3D) -> void:
+	var font: Font = ThemeDB.fallback_font
+	var text: String = str(ceili(bomb.fuse_left))
+	var color: Color = FUSE_URGENT_COLOR if bomb.fuse_left <= Bomb3D.URGENT_TIME else Color.WHITE
+	var width: float = RADIUS * 4.0
+	# draw_string positions the baseline, so drop it by half the glyph height to centre
+	var baseline: Vector2 = at + Vector2(-width * 0.5, (font.get_ascent(FUSE_FONT_SIZE) - font.get_descent(FUSE_FONT_SIZE)) * 0.5)
+	_canvas.draw_string_outline(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, width, FUSE_FONT_SIZE, FUSE_OUTLINE, NO_TEAM_COLOR)
+	_canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, width, FUSE_FONT_SIZE, color)

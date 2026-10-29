@@ -114,6 +114,8 @@ func _ready() -> void:
 	solo_teams.pressed.connect(_cycle_team_count)
 	for button: Button in [solo_map, lobby_map, online_map]:
 		button.pressed.connect(_cycle_map)
+		# Nothing to pick while there's only the one level
+		button.visible = MatchMap.MAPS.size() > 1
 	for button: Button in [solo_drop, lobby_drop, online_drop]:
 		button.pressed.connect(_cycle_boss_drop)
 	for button: Button in [solo_score, lobby_score, online_score]:

@@ -154,7 +154,6 @@ func _hand_weapon(scene: PackedScene, tier: int, player: PlayerClass3D, is_left:
 	var weapon: Weapon3D = scene.instantiate()
 	weapon.name = weapon_name
 	Global.Game3D.add_weapon(weapon)
-	weapon.name = weapon_name  # Its _ready renames it after its Properties
 	weapon.set_rarity(tier)
 	weapon.global_transform = from
 	weapon.hand_to(player, is_left)

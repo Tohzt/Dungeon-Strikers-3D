@@ -10,7 +10,7 @@ const MAX_SETTLE_FRAMES := 10
 func _ready() -> void:
 	if not navigation_mesh:
 		return
-	# A GridMap filled at runtime (RaceLevel3D's walls) only gets its
+	# A GridMap filled at runtime only gets its
 	# collision a couple of physics frames later, and baking before that
 	# leaves every wall out, so bots walk straight into them. Wait until the
 	# source geometry stops changing.

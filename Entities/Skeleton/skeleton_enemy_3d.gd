@@ -293,7 +293,6 @@ func _arm() -> void:
 			Global.Game3D.add_weapon(weapon)
 		else:
 			get_parent().add_child(weapon)
-		weapon.name = weapon_name  # Its _ready renames it after its Properties
 		weapon.global_position = global_position + Vector3.UP
 		if Net.in_session():
 			weapon.setup_network()  # The server runs it, like the skeleton
@@ -701,6 +700,7 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		Vfx.play_everywhere(&"hit", global_position + Vector3.UP, dir)
 	_knockback = _flat(knockback_velocity) * KNOCKBACK_RATIO
 	velocity.y = maxf(velocity.y, knockback_velocity.y * KNOCKBACK_RATIO)
+	Vfx.damage_number_everywhere(self, Vector3.UP * PlayerClass3D.DAMAGE_NUMBER_HEIGHT, minf(damage, hp), attacker)
 	hp -= damage
 	if hp <= 0.0:
 		_die()
@@ -992,7 +992,8 @@ func _net_phase(new_state: State) -> void:
 @rpc("any_peer", "reliable")
 func _request_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> void:
 	if Net.is_server:
-		receive_hit(dir, damage, knockback_velocity, Global.Game3D.rpc_sender() if Global.Game3D else null)
+		var attacker: PlayerClass3D = Global.Game3D.rpc_sender() if Global.Game3D else null
+		receive_hit(dir, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker)
 
 
 @rpc("any_peer", "reliable")

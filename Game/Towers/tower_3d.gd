@@ -7,8 +7,8 @@ class_name Tower3D extends AnimatableBody3D
 ## them). If another team arrives they drain that color first, then fill
 ## with their own; with both teams there it holds. Once full it's theirs:
 ## it rises to y = 0 and goes to work for them, by its Kind. The enemy can
-## knock it down (any attack lands on it), which earns them a lot (see
-## PitchGame3D.tower_points); its own team can repair it with coins at
+## knock it down (any attack lands on it), which earns them coins (see
+## PitchGame3D.tower_coins); its own team can repair it with coins at
 ## their altar (Altar3D's repair offer).
 ##
 ## Its name floats over it like a player's (NameTag): filled as far as the
@@ -308,6 +308,7 @@ func receive_hit(_dir: Vector3, damage: float, _knockback_velocity: Vector3, att
 	if by_team >= 0:
 		_last_hurt_by = by_team
 	Sfx.play_everywhere(&"hit_wall", global_position + Vector3.UP * 2.0)
+	Vfx.damage_number_everywhere(self, _muzzle() - global_position + Vector3.UP * 1.5, minf(damage, hp), attacker)
 	_set_hp(hp - damage)
 	if hp <= 0.0:
 		Net.everywhere(_fallen, by_team if by_team >= 0 else _last_hurt_by)
@@ -317,7 +318,12 @@ func receive_hit(_dir: Vector3, damage: float, _knockback_velocity: Vector3, att
 @rpc("any_peer", "reliable")
 func _request_hit(damage: float, attacker_name: String) -> void:
 	if Net.is_server and Global.Game3D:
-		receive_hit(Vector3.ZERO, damage, Vector3.ZERO, Global.Game3D.player_named(attacker_name))
+		# Unvetted or unnamed, it's the sender's own hit, so they can't hurt
+		# their own tower.
+		var attacker: PlayerClass3D = Global.Game3D.vetted_attacker(attacker_name)
+		if not attacker:
+			attacker = Global.Game3D.rpc_sender()
+		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), Vector3.ZERO, attacker)
 
 
 ## Server/offline: back up by `amount` HP (an altar repair).
@@ -437,7 +443,8 @@ func _spit(minion_name: String, launch_velocity: Vector3) -> void:
 	minion.name = minion_name
 	minion.team = owner_team
 	minion.max_hp = minion_hp
-	minion.position = global_position + _flat(launch_velocity).normalized() * 4.5 + Vector3.UP * 1.5
+	# Out of the orb: the tower's origin is below the floor once it's up
+	minion.position = _muzzle() + _flat(launch_velocity).normalized() * 2.0
 	get_parent().add_child(minion)
 	minion.launch(launch_velocity)
 	_minions.append(minion)

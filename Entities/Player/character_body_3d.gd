@@ -148,6 +148,13 @@ const BALL_FUMBLE_SPEED := 5.0
 var held_throwable: Throwable3D = null
 ## Names the throwables we're handed, the same on every machine.
 var throwables_made: int = 0
+## The item slot (Mario Kart style): a bomb or flask bought at a shop or
+## found in an item box waits here, as Vector2i(Throwable3D.Kind, variant),
+## until Use Item (G / D-pad Down) takes it out into our hands. NO_ITEM
+## when empty. The same on every machine.
+var stored_item: Vector2i = NO_ITEM
+const NO_ITEM := Vector2i(-1, -1)
+signal stored_item_changed
 
 # ===== TRAILS & ICE =====
 # The ice_trail and fire_trail perk stats (wild items) leave patches behind
@@ -366,6 +373,8 @@ var timed_perks: Dictionary[Perk, float] = {}
 var status: PlayerStatus3D = null
 ## A hit this hard (after perks and armor) gets the bigger hit effect.
 const HARD_HIT_DAMAGE := 25.0
+## Damage numbers (DamageNumber3D) pop up this far over our feet.
+const DAMAGE_NUMBER_HEIGHT := 2.4
 ## How many times we've died this match (knockouts take longer each time).
 var deaths: int = 0
 ## Knocked out rather than gone: still in the level, lying where we fell.
@@ -454,6 +463,7 @@ func _physics_process(delta: float) -> void:
 	if perk_locked:
 		direction = _walk_to_altar()
 		Input_Handler.interact = false
+		Input_Handler.use_item = false
 		Input_Handler.dodge_request_msec = -1
 	else:
 		at_altar = false
@@ -465,6 +475,9 @@ func _physics_process(delta: float) -> void:
 		# Carrying, our hands are full: no taking weapons
 		if not hands_full() and not _grab_nearest_ball() and not _pick_up_nearest_weapon():
 			_take_from_nearest_stand()
+	if Input_Handler.use_item:
+		Input_Handler.use_item = false
+		use_stored_item()
 	_update_carry(delta)
 	_update_throwable()
 	on_ice = GroundPatch3D.effects_on(self)
@@ -716,7 +729,6 @@ func make_kit() -> void:
 		weapon.name = weapon_name
 		weapon.kit_owner = self
 		Global.Game3D.add_weapon(weapon)
-		weapon.name = weapon_name  # Its _ready renames it after its Properties
 		weapon.global_position = global_position + Vector3.UP
 		_apply_kit_rarity(weapon)
 		if Net.in_session():
@@ -1291,7 +1303,7 @@ func on_ball_released(ball: Ball3D) -> void:
 func throw_ball(charge: float) -> void:
 	if not carries_ball():
 		return
-	var dir: Vector3 = _get_aim_direction()
+	var dir: Vector3 = get_aim_direction()
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else global_basis.z
 	var speed: float = BALL_THROW_SPEED * _throw_force_ratio(charge) * perk_stat(&"throw_power")
@@ -1355,7 +1367,7 @@ func _nearest_teammate() -> PlayerClass3D:
 ## Let the ball go at `target` (leading a moving one on a pass or attack),
 ## or along our aim without one.
 func _launch_ball_at(target: Node3D, speed: float, lift: float, shot: Ball3D.Shot = Ball3D.Shot.NONE, damage: float = 0.0) -> void:
-	var dir: Vector3 = _get_aim_direction()
+	var dir: Vector3 = get_aim_direction()
 	if target:
 		dir = target.global_position - global_position
 		if shot != Ball3D.Shot.NONE and target is CharacterBody3D:
@@ -1421,6 +1433,35 @@ func hands_full() -> bool:
 	return carries_ball() or holds_throwable()
 
 
+## Whether our item slot has something in it.
+func has_stored_item() -> bool:
+	return stored_item != NO_ITEM
+
+
+## Every machine: put a throwable (`kind_`, `variant_` as in Throwable3D)
+## in our item slot, replacing whatever was there.
+func store_item(kind_: Throwable3D.Kind, variant_: int) -> void:
+	stored_item = Vector2i(kind_, variant_)
+	stored_item_changed.emit()
+
+
+## Owner: take what's in our item slot out into our hands (a bomb's fuse
+## starts now), if they're free.
+func use_stored_item() -> void:
+	if has_stored_item() and not hands_full() and not is_dead():
+		Net.everywhere(_take_out_item, stored_item.x, stored_item.y)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _take_out_item(kind_: int, variant_: int) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender != 0 and sender != get_multiplayer_authority():
+		return
+	stored_item = NO_ITEM
+	stored_item_changed.emit()
+	Throwable3D.give(self, kind_ as Throwable3D.Kind, variant_)
+
+
 ## Owner: throw what we hold, at what we're locked on to (just far enough
 ## to land on them), or else along our aim, further with more `charge` (0-1).
 func throw_held_item(charge: float) -> void:
@@ -1435,7 +1476,7 @@ func throw_held_item(charge: float) -> void:
 			at += (lock as CharacterBody3D).velocity * 0.4  # Lead them a little
 		launch = Throwable3D.launch_onto(from, at)
 	else:
-		launch = Throwable3D.launch_along(_get_aim_direction(), charge, perk_stat(&"throw_power"))
+		launch = Throwable3D.launch_along(get_aim_direction(), charge, perk_stat(&"throw_power"))
 	held_throwable.throw(launch)
 
 
@@ -1492,7 +1533,7 @@ func strike(arm: PlayerArm3D, step: WeaponComboStep3D = null) -> float:
 	var club: bool = step != null and step.melee  # A ranged weapon swung, not fired
 	var swings: bool = move == null or move.swings
 	if not club and swings:
-		weapon.attack(_get_aim_direction())
+		weapon.attack(get_aim_direction())
 	if not weapon.plays_swipe_animation and not club:
 		arm.shot_time = PlayerArm3D.SHOT_ANIM_DURATION
 		if move:
@@ -1566,7 +1607,7 @@ func _cancel_attacks() -> void:
 
 ## Hop toward the aim at `speed`.
 func _lunge(speed: float) -> void:
-	var dir: Vector3 = _get_aim_direction()
+	var dir: Vector3 = get_aim_direction()
 	dir.y = 0.0
 	if dir.is_zero_approx():
 		return
@@ -1605,7 +1646,7 @@ func _start_move(arm: PlayerArm3D, move: WeaponMove3D, heavy: bool) -> bool:
 ## A move's strike: its waves and action, for real here and for show on
 ## everyone else's machine.
 func _strike_move(arm: PlayerArm3D, move: WeaponMove3D) -> void:
-	var dir: Vector3 = _get_aim_direction()
+	var dir: Vector3 = get_aim_direction()
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else global_basis.z
 	var echo: bool = not move.waves.is_empty() and rolls_echo(arm.move_heavy)
@@ -1700,12 +1741,12 @@ func _throw_force_ratio(charge: float) -> float:
 func _throw_weapon(arm: PlayerArm3D, charge: float = 1.0) -> void:
 	var spin_direction: float = -1.0 if arm.is_left else 1.0
 	var force_multiplier: float = _throw_force_ratio(charge) * perk_stat(&"throw_power")
-	arm.weapon.throw(_get_aim_direction(), -1.0, spin_direction, force_multiplier)
+	arm.weapon.throw(get_aim_direction(), -1.0, spin_direction, force_multiplier)
 	arm.weapon = null
 	arm.play_throw_release()
 
 
-func _get_aim_direction() -> Vector3:
+func get_aim_direction() -> Vector3:
 	if not Input_Handler.look_dir.is_zero_approx():
 		return Input_Handler.look_dir
 	return Vector3(sin(rotation.y), 0, cos(rotation.y))
@@ -1881,6 +1922,7 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		shield.wear()  # Each hit it softens is a use
 	Entity.take_hit(damage, knockback_velocity)
 	_share_iframes(was_in_iframes)
+	Vfx.damage_number_everywhere(self, Vector3.UP * DAMAGE_NUMBER_HEIGHT, hp_before - maxf(Entity.hp, 0.0), attacker)
 	if Global.Game3D:
 		Global.Game3D.record_damage(self, attacker, hp_before - maxf(Entity.hp, 0.0))
 	if not was_in_iframes:
@@ -2446,8 +2488,8 @@ func _share_iframes(was_in_iframes: bool) -> void:
 @rpc("any_peer", "reliable")
 func _net_receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker_name: String, knock_down: float) -> void:
 	if is_multiplayer_authority():
-		var attacker: PlayerClass3D = Global.Game3D.player_named(attacker_name) if Global.Game3D else null
-		receive_hit(dir, damage, knockback_velocity, attacker, knock_down)
+		var attacker: PlayerClass3D = Global.Game3D.vetted_attacker(attacker_name) if Global.Game3D else null
+		receive_hit(dir, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker, knock_down)
 
 
 @rpc("any_peer", "reliable")

@@ -394,6 +394,17 @@ func player_named(player_name: String) -> PlayerClass3D:
 	return get_node_or_null(player_name) as PlayerClass3D if player_name != "" else null
 
 
+## Inside an RPC naming `player_name` as an attacker: that player, if the
+## sender may speak for them (it's their machine, or the server, which runs
+## bots and the shared world). Anyone else gets no credit.
+func vetted_attacker(player_name: String) -> PlayerClass3D:
+	var player: PlayerClass3D = player_named(player_name)
+	var sender: int = multiplayer.get_remote_sender_id()
+	if player and (sender == Net.SERVER_ID or player.get_multiplayer_authority() == sender):
+		return player
+	return null
+
+
 ## An online player left mid-match: remove their player and HUD (their
 ## weapons go back to the server). Every machine does this for itself.
 func _on_net_peers_changed() -> void:

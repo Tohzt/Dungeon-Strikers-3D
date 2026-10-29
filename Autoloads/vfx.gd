@@ -113,6 +113,43 @@ func _net_play(id: StringName, at: Vector3, dir: Vector3, mirror: bool) -> void:
 	play(id, at, dir, mirror)
 
 
+## Pop up how much a hit took (DamageNumber3D) over `target`, `offset` from
+## its origin, following it as it's knocked about. On this machine only, and
+## only if a person here took the hit or dealt it (`attacker`).
+func damage_number(target: Node3D, offset: Vector3, amount: float, attacker: Node3D = null) -> void:
+	if _silent or amount < 0.5 or not target:
+		return
+	if _is_local_person(target) or _is_local_person(attacker):
+		_world().add_child(DamageNumber3D.make(target, offset, amount))
+
+
+## Same, and online also sent to the machines of the players involved (the
+## one hit and the one hitting). Called by whoever decides the hit.
+func damage_number_everywhere(target: Node3D, offset: Vector3, amount: float, attacker: Node3D = null) -> void:
+	if amount < 0.5 or not target:
+		return
+	damage_number(target, offset, amount, attacker)
+	if not Net.match_synced:
+		return
+	var attacker_path: NodePath = attacker.get_path() if attacker else ^""
+	var sent_to: Array[int] = [multiplayer.get_unique_id()]
+	for node: Node3D in [target, attacker]:
+		if node is PlayerClass3D and not sent_to.has(node.get_multiplayer_authority()):
+			sent_to.append(node.get_multiplayer_authority())
+			_net_damage_number.rpc_id(node.get_multiplayer_authority(), target.get_path(), offset, amount, attacker_path)
+
+
+@rpc("any_peer", "unreliable")
+func _net_damage_number(target_path: NodePath, offset: Vector3, amount: float, attacker_path: NodePath) -> void:
+	var attacker: Node3D = get_node_or_null(attacker_path) as Node3D if not attacker_path.is_empty() else null
+	damage_number(get_node_or_null(target_path) as Node3D, offset, amount, attacker)
+
+
+## Whether `node` is a player a person is playing on this machine.
+func _is_local_person(node: Node3D) -> bool:
+	return node is PlayerClass3D and (node as PlayerClass3D).is_local_person()
+
+
 ## Show `id` on `parent`, following it around (its front along the
 ## parent's +Z), played over `duration` seconds (its "main" animation, or a
 ## HELD one's opening, sped up or slowed to fit; 0 = as made). `size` and

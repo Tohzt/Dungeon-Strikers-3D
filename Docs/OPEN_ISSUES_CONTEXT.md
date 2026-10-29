@@ -9,76 +9,28 @@ Code is referenced by file and function rather than line, since lines move.
 
 ---
 
-## 1. Online matches and the server can get stuck
-
-The dedicated server runs one session at a time (`net.gd`), so anything
-that stalls a match also blocks every other player from hosting.
-
-- **Idle connections hold slots forever.** A client that connects but never
-  sends `_request_host`/`_request_join` keeps one of the
-  `MAX_CONNECTIONS` (8) slots. *Fix idea:* on the server, disconnect peers
-  that haven't joined a session within a few seconds of connecting.
-
-## 2. Ball speed values look left over from the 2D version
-
-`Entities/Ball/ball_3d.gd`, top of the file: `max_ball_speed = 600`,
-`min_velocity_for_knockback = 150`, and color thresholds at 30% / 60% of
-the max (180 / 360). Real speeds are about 10–40 m/s (a full throw is an
-impulse of 15 on a 0.5 kg ball ≈ 30 m/s). As a result:
-- the ball never shoves players it hits (`_on_body_entered`), even though
-  `PlayerClass3D.shove` exists for exactly that;
-- the speed coloring barely moves off green;
-- the speed cap never applies.
-
-*Fix idea:* rescale to metres per second (e.g. max ≈ 40, knockback from
-≈ 15) and playtest. This changes gameplay, so tune it by feel.
-
-## 3. Test rooms are switched on in the real map
-
-`Game/Maps/DungeonArena.tscn` saves `testing_mode = true` on its Tools node
-(`GameTools3D`), so the test rooms with a stand for every weapon are built
-in real matches, including on the deployed server. Turn it off unless
-that's intended.
-
-## 4. Clients decide their own hits (only matters for public play)
+## 1. Hit damage is only sanity-capped (only matters for public play)
 
 Damage is decided on the attacker's machine and applied by the victim's
-owner, which keeps combat responsive. The receiving side doesn't check
-what it's sent, so a modified client could cheat:
-- `PlayerClass3D._net_receive_hit` accepts any damage, from any peer, and
-  doesn't check that the sender is the attacker it names (kill credit can
-  be spoofed);
-- `Boss3D._request_hit` accepts any damage (one-shot the boss for its perk
-  hand);
-- `Game3D._request_use_shield` doesn't check the team has a shield left;
-- `Weapon3D._request_equip` has no distance check.
+owner (or the server, for bosses, minions, skeletons and towers), which
+keeps combat responsive. Received hits now go through
+`Combat.vetted_damage` (0 to `MAX_REMOTE_HIT_DAMAGE` × the attacker's
+damage perk stat), attacker credit through `Game3D.vetted_attacker` (the
+sender must own the named player, or be the server), and
+`Weapon3D._decide_equip` checks reach. The damage cap is deliberately
+loose, so a modified client can still hit much harder than its weapon
+allows. Before public matchmaking, consider a tighter cap from the
+attacker's held weapons and perks, and a reach check on hits (thrown
+weapons, arrows and bombs make that harder).
 
-Related race: shields are spent by the victim's machine before the server
-agrees, so two teammates on different machines can both be saved by one
-shield.
-
-Fine for friends joining with a code. Before public matchmaking, add cheap
-server-side checks: clamp damage to what the attacker's weapon and perks
-allow, require the sender to be the named attacker, and check reach.
-
-## 5. Weapon renaming trap (latent)
-
-`Weapon3D._set_props` renames every weapon to `Properties.weapon_name` in
-`_ready`. Weapons are found by node name in RPCs, so two weapons with the
-same name under `Weapons` get an auto-generated name that can differ
-between the server and clients. Stands work around it by renaming after
-`add_child` (`WeaponStand3D._hand_weapon`), and no map places weapons
-directly today, so nothing is broken yet. If weapons are ever placed in a
-map, give them unique names after `_ready`, or drop the rename.
-
-## 6. Animation gaps (from the character-models work)
+## 2. Animation gaps (from the character-models work)
 
 - **Left-hand throws look weak.** `General/Throw` only moves the right arm,
   so the left hand throws with half of the dual-wield chop
   (`PlayerVisual3D.OFFHAND_THROW_CLIP`). Mirroring the throw clip offline
   (Blender) would fix it; Godot can't mirror animations at runtime.
 
-## 7. Carrying the ball (carry meter)
+## 3. Carrying the ball (carry meter)
 
 Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 2026-10-12 with a carry meter in place of the old boost bar:
@@ -90,7 +42,7 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
   reach (needs `CARRY_MIN_TO_GRAB`). Carrying drains it (3s from full);
   Throw charges and throws along the aim; Shoot (E / LT) charges and
   shoots it straight at `Game3D.shot_target` (the goal attacked, or your
-  altar with a skull; bots don't use it yet). Carrying, you can lock on to
+  altar with a skull). Carrying, you can lock on to
   teammates: Shoot then passes (`Ball3D.Shot.PASS`, the first teammate it
   reaches catches it) or, locked on to an enemy, attacks (`Shot.ATTACK`,
   8-20 damage by charge to the first enemy hit); it's tossed forward when the meter empties,
@@ -103,21 +55,17 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 - Still to do: a carry pose, carrying-specific perks (the old "Sure Hands"
   / "Pickpocket"), and a playtest of the meter numbers.
 
-## 8. Unfinished features (from the old TODO list)
+## 4. Unfinished features (from the old TODO list)
 
-- **Damage numbers.** Not built yet (the old unused stub was removed in the
-  2026-10-27 folder cleanup). Hook into `Combat.strike` or the `receive_hit` functions (online, show it on the
-  machine that applies the hit and on the attacker's).
-- **Attack dummy.** A training target for trying weapons (the test rooms
-  from `GameTools3D` would be a natural home).
-- **Launch a sword from the bow.** Fire a held melee weapon as the bow's
-  projectile.
-- **Thrown or dropped weapons keep the wielder's color** for a few seconds,
-  so it's clear whose throw is in the air (thrown weapons already ignore
-  the thrower: see `Weapon3D.thrower`).
+- **Attack dummy.** A training target for trying weapons (`GameTools3D` in
+  `Game/tools.gd` has the old test-room builder, though no map uses it now).
 
-## 9. Playtesting still needed
+## 5. Playtesting still needed
 
+- The item slot (`PlayerClass3D.stored_item`, Use Item = G / D-pad Down,
+  added 2026-10-27): one slot; a full slot greys out shop bombs/flasks and
+  item boxes stop rolling them; it's kept through death; bots take it out
+  once they have a target. Check those calls feel right.
 - Swing feel and time-to-kill since the animated-attack rework (players
   have 250 HP, a sword hit is 40, `kills_to_win` is 5).
 - The per-weapon ball interactions (`WeaponBehavior3D` `ball_*` exports)
@@ -129,7 +77,7 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 
 There are no automated tests, but the game runs headless well:
 
-- `godot --headless --path . res://3D/Game/DungeonArena.tscn --quit-after 300`
+- `godot --headless --path . res://Game/Maps/Pitch.tscn --quit-after 300`
   loads a map and runs 300 frames; any `SCRIPT ERROR` lines mean trouble.
 - After adding a new `class_name`, run `godot --headless --path . --import`
   once so Godot registers it, or scripts that use it fail to parse.

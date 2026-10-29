@@ -22,6 +22,10 @@ const HOMING_TURN_RATE := deg_to_rad(240.0)
 const HOMING_RANGE := 10.0
 const HOMING_CONE := deg_to_rad(60.0)
 static var _homing_shape := SphereShape3D.new()
+## Online, the most one hit passed on from another machine may deal (times
+## the attacker's damage perk stat), so a modified client can't one-shot
+## anything. Well above any real hit; tighten it if it's ever too loose.
+const MAX_REMOTE_HIT_DAMAGE := 300.0
 
 
 ## Physics bodies overlapping `shape` placed at `xform`, minus `exclude`.
@@ -103,6 +107,17 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 	push(body, (dir + Vector3.UP * 0.3) * impulse)
 	return false
 
+
+
+## Damage from a hit another machine sent us, kept to what an attack by
+## `attacker` (or by no one) could deal.
+static func vetted_damage(damage: float, attacker: Node3D) -> float:
+	if is_nan(damage):
+		return 0.0
+	var cap: float = MAX_REMOTE_HIT_DAMAGE
+	if attacker is PlayerClass3D:
+		cap *= maxf(attacker.perk_stat(&"damage"), 1.0)
+	return clampf(damage, 0.0, cap)
 
 ## `dir` (flat) turned toward the nearest enemy of `attacker` ahead of
 ## `from`, by as much as its homing perk stat turns it in `delta` seconds.

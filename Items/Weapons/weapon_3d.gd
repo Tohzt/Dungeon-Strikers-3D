@@ -137,6 +137,8 @@ var swing_time_left: float = 0.0
 var _swing_damage_scale: float = 1.0
 var thrower: Node3D = null  # Who threw it, so it can't hit them mid-flight
 var _hit_this_action: Array[Node] = []
+## The weapons the ball passes through (see _update_ball_contact).
+const HELD_GROUP := &"held_weapons"
 ## Sent flying by a heavy (see WeaponPhantom3D): still in the hand, but
 ## hidden and unable to swing until it comes back.
 var away: bool = false
@@ -181,6 +183,8 @@ const DEFAULT_THROW_SPIN_SPEED: float = 8.0
 
 ## Client: don't ask the server again every frame we're touching the weapon.
 const REQUEST_RETRY_MSEC := 250
+## Server: extra reach allowed on a client's pickup (see _decide_equip).
+const EQUIP_REACH_SLACK := 1.0
 var _next_request_msec: int = 0
 ## Online: whoever simulates it sends where it is, the rest play it back.
 ## Not while held: every machine poses a held weapon from its wielder's hand.
@@ -301,10 +305,10 @@ func _set_props() -> void:
 		queue_free()
 		return
 
-	# Set name from properties
+	# The node keeps the unique name its spawner gave it (RPCs find weapons
+	# by node name); weapon_name is just what it's called.
 	if Properties.weapon_name.is_empty():
 		Properties.weapon_name = "Weapon3D"
-	self.name = Properties.weapon_name
 
 	_update_collisions("on-ground")
 
@@ -494,7 +498,8 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 			Sfx.play_everywhere(&"hit_ball", body.global_position)
 			# Each weapon plays the ball its own way (see WeaponBehavior3D.hit_ball)
 			var travel := Vector3.ZERO if thrown else Vector3(_blade_velocity.x, 0.0, _blade_velocity.z)
-			Behavior.hit_ball(body, dir, travel, knockback, attacker)
+			var ball_dir: Vector3 = dir if thrown else _ball_aim(attacker)
+			Behavior.hit_ball(body, ball_dir, travel, knockback, attacker)
 			continue
 		damage *= power
 		knockback *= power
@@ -509,6 +514,14 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 	# One use per swing or throw, however many it hits
 	if landed:
 		wear_once()
+
+
+## Where a swing sends the ball: the way the wielder aims (or faces), not
+## the angle the blade met it at, so shots go where they're pointed.
+func _ball_aim(attacker: Node3D) -> Vector3:
+	if attacker.has_method(&"get_aim_direction"):
+		return attacker.get_aim_direction()
+	return attacker.global_basis.z
 
 
 ## Half away_dir from the wielder, half along the blade's travel, so a slash
@@ -579,6 +592,7 @@ func equip(new_wielder: Node3D, hand: Node3D = null) -> void:
 	if new_wielder is PhysicsBody3D:
 		add_collision_exception_with(new_wielder)
 		new_wielder.add_collision_exception_with(self)
+	_update_ball_contact()
 
 	# Held, it's posed by the hand (on every machine), not by physics, and
 	# steps after the wielder so its swing checks see where the wielder is now
@@ -638,6 +652,36 @@ func is_holding_pose() -> bool:
 	return hold_clip != &""
 
 
+## Whether the ball passes through this (see _update_ball_contact): held,
+## walking into the ball doesn't bump it about with the blade; a swing
+## still plays it (see _hit_overlapping).
+func _ignores_balls() -> bool:
+	return is_held
+
+
+## Make the ball pass through this or not, per _ignores_balls. Call again
+## whenever that changes. Balls that turn up later catch up in Ball3D._ready.
+func _update_ball_contact() -> void:
+	var ignore: bool = _ignores_balls()
+	if ignore == is_in_group(HELD_GROUP):
+		return
+	if ignore:
+		add_to_group(HELD_GROUP)
+	else:
+		remove_from_group(HELD_GROUP)
+	if not Global.Game3D:
+		return
+	for ball: Ball3D in Global.Game3D.balls:
+		if not is_instance_valid(ball):
+			continue
+		if ignore:
+			add_collision_exception_with(ball)
+			ball.add_collision_exception_with(self)
+		else:
+			remove_collision_exception_with(ball)
+			ball.remove_collision_exception_with(self)
+
+
 ## Off the hand: back to its own physics, if this machine simulates it,
 ## falling until it lands (see _update_landing).
 func _release_from_hand() -> void:
@@ -664,6 +708,7 @@ func unequip() -> void:
 	held_hand = null
 	is_held = false
 	_release_from_hand()
+	_update_ball_contact()
 	_update_collisions("on-ground")
 
 
@@ -716,6 +761,7 @@ func _let_go_thrown(spin_direction: float) -> void:
 	held_hand = null
 	is_held = false
 	_release_from_hand()
+	_update_ball_contact()
 	Sfx.play(&"throw", global_position)
 	is_thrown = true
 	can_pickup = false
@@ -1055,9 +1101,15 @@ func _request_equip(is_left: bool) -> void:
 		_decide_equip(Global.Game3D.rpc_sender(), is_left)
 
 
-## Server: hand this to `player` if it's still free.
+## Server: hand this to `player` if it's still free and in reach (with
+## EQUIP_REACH_SLACK, since the client saw it a little in the past).
 func _decide_equip(player: PlayerClass3D, is_left: bool) -> void:
-	if not wielder and not kit_owner and can_pickup and player and player.can_hold(self, is_left):
+	if not player:
+		return
+	var to: Vector3 = global_position - player.global_position
+	if Vector2(to.x, to.z).length() > PlayerClass3D.WEAPON_REACH + EQUIP_REACH_SLACK:
+		return
+	if not wielder and not kit_owner and can_pickup and player.can_hold(self, is_left):
 		_equipped.rpc(player.name, is_left)
 
 

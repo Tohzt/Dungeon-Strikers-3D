@@ -32,6 +32,9 @@ const MIN_CODE_LENGTH := 4
 const MAX_CODE_LENGTH := 8
 const MAX_PLAYERS := Players.MAX_PLAYERS
 const JOIN_TIMEOUT := 8.0
+## Server: seconds a new connection gets to ask to host or join before it's
+## dropped, so idle or stray connections can't sit on the slots.
+const SERVER_JOIN_TIMEOUT := JOIN_TIMEOUT + 2.0
 const MAIN_MENU := "res://UI/Menus/MainMenu/main_menu.tscn"
 
 ## The droplet. Override with `-- --address=<ip>` to test elsewhere.
@@ -44,7 +47,7 @@ const SERVER_ID := 1
 ## Bump whenever networked code changes shape (RPC arguments, synced
 ## properties, node names), so a game and server that don't match are told
 ## so instead of silently ignoring each other's updates.
-const PROTOCOL_VERSION := 25
+const PROTOCOL_VERSION := 30
 
 var access_code := ""
 ## Whether we lead the session (first in), which lets us start the match.
@@ -82,6 +85,7 @@ var _map_scenes: Dictionary[MatchMap.Map, PackedScene] = {}
 
 
 func _ready() -> void:
+	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
@@ -457,6 +461,17 @@ func _on_server_disconnected() -> void:
 		_end("Lost connection to the server.")
 	elif _request:
 		_fail("Couldn't reach the server.")
+
+
+## Server: drop `id` unless it's in the session by SERVER_JOIN_TIMEOUT.
+func _on_peer_connected(id: int) -> void:
+	if not is_server:
+		return
+	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	await get_tree().create_timer(SERVER_JOIN_TIMEOUT).timeout
+	if multiplayer.multiplayer_peer == peer and not peers.has(id) and multiplayer.get_peers().has(id):
+		print("Peer %d never joined a session; dropped." % id)
+		(peer as ENetMultiplayerPeer).disconnect_peer(id)
 
 
 func _on_peer_disconnected(id: int) -> void:

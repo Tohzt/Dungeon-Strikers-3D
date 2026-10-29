@@ -1017,6 +1017,7 @@ func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, atta
 		_poise_broken = _poise_damage >= poise_max
 	if Global.Game3D:
 		Global.Game3D.record_damage(self, attacker, minf(damage, hp))
+	Vfx.damage_number_everywhere(self, Vector3.UP * HEIGHT, minf(damage, hp), attacker)
 	_set_hp(hp - damage)
 	if hp <= 0.0:
 		var killer: String = String(attacker.name) if attacker is PlayerClass3D else ""
@@ -1386,7 +1387,7 @@ func _net_defeated(killer_name: String) -> void:
 func _request_hit(damage: float, knockback_velocity: Vector3) -> void:
 	if Net.is_server:
 		var attacker: PlayerClass3D = Global.Game3D.rpc_sender()
-		receive_hit(Vector3.ZERO, damage, knockback_velocity, attacker)
+		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker)
 
 
 @rpc("any_peer", "reliable")

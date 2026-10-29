@@ -9,3 +9,6 @@ Steam/*
 
 # Godot editor leftovers
 *.tmp
+
+# Agent instructions (local only)
+CLAUDE.md

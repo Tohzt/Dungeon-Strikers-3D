@@ -24,8 +24,8 @@ class_name PitchGame3D extends Game3D_Class
 ## Partway in, towers (Tower3D) start coming up at random spots on the
 ## field, buried all but their tops. A team claims one by standing around it
 ## until it's filled with their color; it then rises and works for them.
-## Knocking down an enemy tower is worth tower_points goals (or that many
-## points' worth of the enemy base, with bombs) and tower_coins each.
+## Knocking down an enemy tower is worth tower_coins each (never goals or
+## base damage, so the match is only ever won by the ball).
 
 ## Seconds after a goal before the ball drops in for the next kickoff.
 @export var kickoff_delay: float = 3.0
@@ -41,9 +41,6 @@ class_name PitchGame3D extends Game3D_Class
 @export var tower_interval: float = 60.0
 ## Towers on the field at once, claimed or not.
 @export var max_towers: int = 2
-## Goals for knocking down an enemy tower. With bombs, it takes this many
-## points' worth of HP (Bomb3D.BASE_HP_PER_POINT) off their base instead.
-@export var tower_points: int = 2
 ## Coins each for the team that knocks it down.
 @export var tower_coins: int = 25
 ## Towers come up within this far (m) of the middle, along X and Z.
@@ -240,37 +237,17 @@ func _on_tower_fell(by_team: int, tower: Tower3D) -> void:
 	tower.tree_exited.connect(_rebake_navigation)
 	if not Net.decides() or match_over or by_team < 0 or by_team == tower.owner_team:
 		return
-	var owner_team: int = tower.owner_team
-	var new_value: int
-	if bombs:
-		new_value = maxi(base_hp.get(owner_team, 0) - tower_points * Bomb3D.BASE_HP_PER_POINT, 0)
-	else:
-		new_value = scores.get(by_team, 0) + tower_points
-	Net.everywhere(_tower_reward, by_team, owner_team, Tower3D.NAMES[tower.kind], new_value)
+	Net.everywhere(_tower_reward, by_team, tower.owner_team, Tower3D.NAMES[tower.kind])
 	if tower_coins > 0:
 		Net.everywhere(_award_team_coins, by_team, tower_coins, tower.global_position + Vector3.UP * 4.0)
 
 
-## Every machine: `team` knocked down `owner_team`'s tower. `new_value` is
-## their goals now, or with bombs the HP left in the owner's base.
+## Every machine: `team` knocked down `owner_team`'s tower.
 @rpc("authority", "call_local", "reliable")
-func _tower_reward(team: int, owner_team: int, tower_name: String, new_value: int) -> void:
+func _tower_reward(team: int, owner_team: int, tower_name: String) -> void:
 	var color: Color = _team_color(team)
 	scoreboard.call_out("%s TOPPLED!" % tower_name.to_upper(), color)
-	if bombs:
-		base_hp[owner_team] = new_value
-		scoreboard.set_score(owner_team, new_value)
-		scoreboard.announce("The %s toppled the %s' %s! Their base shakes" % [_team_name(team), _team_name(owner_team), tower_name], color)
-		if new_value <= 0 and not match_over:
-			_win(team, "The %s base is destroyed!" % _team_name(owner_team))
-		return
-	scores[team] = new_value
-	if goals_to_win > 0:
-		scoreboard.set_score(team, new_value)
-	scoreboard.announce("The %s toppled the %s' %s! +%d goals" % [_team_name(team), _team_name(owner_team), tower_name, tower_points], color)
-	_refresh_leader()
-	if goals_to_win > 0 and new_value >= goals_to_win and not match_over:
-		_win(team)
+	scoreboard.announce("The %s toppled the %s' %s!" % [_team_name(team), _team_name(owner_team), tower_name], color)
 
 
 # ===== BOSS =====

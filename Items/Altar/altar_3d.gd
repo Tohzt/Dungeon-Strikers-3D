@@ -94,8 +94,8 @@ const NEUTRAL_COLOR := Color(0.85, 0.75, 0.5)
 @export_range(0, 4) var shop_weapon_slots: int = 1
 ## Perk cards in each stock (never relics), each taken on the spot.
 @export_range(0, 4) var shop_perk_slots: int = 2
-## Bombs and big flasks on sale at once (see Throwable3D), handed over
-## straight into the buyer's hands. Each is a bomb at bomb_chance, else a
+## Bombs and big flasks on sale at once (see Throwable3D), put in the
+## buyer's item slot (PlayerClass3D.stored_item). Each is a bomb at bomb_chance, else a
 ## flask, and no two alike.
 @export_range(0, 4) var shop_throwable_slots: int = 3
 @export_range(0.0, 1.0) var bomb_chance: float = 0.6
@@ -954,8 +954,8 @@ func can_afford_any(player: PlayerClass3D) -> bool:
 
 ## Whether `offer` would do `player` any good: not once it's sold, a repair
 ## only when it's our team's altar and one of our towers is hurt, a kit
-## upgrade until their kit's Legendary, a bomb or flask while their hands
-## are free for it.
+## upgrade until their kit's Legendary, a bomb or flask while their item
+## slot is empty.
 func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
 	if offer.sold:
 		return false
@@ -965,7 +965,7 @@ func is_useful_to(player: PlayerClass3D, offer: ShopOffer) -> bool:
 		ShopOffer.Kind.KIT:
 			return player.can_upgrade_kit()
 		ShopOffer.Kind.THROWABLE:
-			return not player.hands_full()
+			return not player.has_stored_item()  # It goes in the item slot
 	return true
 
 
@@ -1111,7 +1111,7 @@ func _sold(player_name: String, index: int, is_left: bool, weapon_name: String, 
 				Vfx.play(&"shatter", player.global_position + Vector3.UP, Vector3.UP, false, 1.0,
 					WeaponRarity.effect_color(player.kit_rarity))
 			ShopOffer.Kind.THROWABLE:
-				Throwable3D.give(player, offer.throwable_kind as Throwable3D.Kind, offer.variant)
+				player.store_item(offer.throwable_kind as Throwable3D.Kind, offer.variant)
 	var next: ShopOffer = _decode_offer(replacement)
 	if next:
 		offers[index] = next

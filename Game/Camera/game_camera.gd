@@ -6,7 +6,7 @@ var can_zoom: bool = true
 @export var fov_sensitivity: float = 5.0
 @export var min_fov: float = 10.0
 @export var max_fov: float = 120.0
-@export var initial_fov: float = 22.0
+@export var initial_fov: float = 25.0
 
 @export var max_camera_offset: float = 10.0  # Maximum distance camera can move from player
 @export var follow_speed: float = 8.0  # Camera follow responsiveness
@@ -435,6 +435,10 @@ func _wall_need(who: Node3D, may_shift: bool) -> Vector2:
 	var exclude: Array[RID] = []
 	if who is CollisionObject3D:
 		exclude.append((who as CollisionObject3D).get_rid())
+	# Goal posts are solid but too thin to hide anyone: never tilt for them
+	for goal: Node in get_tree().get_nodes_in_group("Goal"):
+		if goal is CollisionObject3D:
+			exclude.append((goal as CollisionObject3D).get_rid())
 	var at: Vector3 = who.global_position
 	var view_offset: Vector3 = _view_center - at if _has_view_center else Vector3.ZERO
 	view_offset.y = 0.0

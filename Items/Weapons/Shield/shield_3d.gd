@@ -27,10 +27,16 @@ func is_holding_pose() -> bool:
 	return is_blocking and super()
 
 
+## Raised, it catches the ball, so the ball has to touch it.
+func _ignores_balls() -> bool:
+	return super() and not is_blocking
+
+
 func _set_blocking(value: bool) -> void:
 	if value == is_blocking:
 		return
 	is_blocking = value
+	_update_ball_contact()
 	if Net.match_synced and is_multiplayer_authority():
 		_net_blocking.rpc(value)
 
@@ -39,3 +45,4 @@ func _set_blocking(value: bool) -> void:
 func _net_blocking(value: bool) -> void:
 	if _is_from_owner():
 		is_blocking = value
+		_update_ball_contact()
