@@ -27,7 +27,6 @@ light_move = ExtResource("mv_light")
 heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." unique_id=1501511482 instance=ExtResource("behavior")]
-weapon_name = "Halberd"
 base_damage = 55.0
 knockback_force = 15.0
 ball_power = 1.3

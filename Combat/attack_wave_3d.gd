@@ -303,7 +303,7 @@ func _hit_overlapping() -> void:
 		if body is Ball3D:
 			_hit_ball(body, dir)
 			continue
-		var landed: bool = Combat.strike(body, dir, damage, knockback, spec.pop, -1.0, attacker)
+		var landed: bool = Combat.strike(body, dir, damage, knockback, spec.pop, -1.0, attacker, 0.0, _damage_type())
 		if landed and is_instance_valid(weapon):
 			weapon.wear_once()
 		if landed and not spec.pierce:
@@ -337,8 +337,13 @@ func _burst() -> void:
 		if body is Ball3D:
 			_hit_ball(body, dir)
 			continue
-		if Combat.strike(body, dir, damage, knockback, spec.pop, -1.0, attacker) and is_instance_valid(weapon):
+		if Combat.strike(body, dir, damage, knockback, spec.pop, -1.0, attacker, 0.0, _damage_type()) and is_instance_valid(weapon):
 			weapon.wear_once()
+
+
+## Its weapon's (see Weapon3D.damage_type).
+func _damage_type() -> DamageType.Kind:
+	return weapon.damage_type() if is_instance_valid(weapon) else DamageType.Kind.BLUNT
 
 
 func _can_hit(body: Node3D) -> bool:

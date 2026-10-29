@@ -265,10 +265,6 @@ func character_count() -> int:
 	return Roster.count()
 
 
-func character_name(character: int) -> String:
-	return Roster.name_of(character)
-
-
 ## Seats start on different characters so players don't all look alike.
 ## Not yet fitted to a team (see Roster.for_team).
 func default_character(index: int) -> int:

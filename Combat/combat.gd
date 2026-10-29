@@ -80,7 +80,9 @@ static func touches_wall(world: World3D, shape: Shape3D, xform: Transform3D) -> 
 ## Teammates pass through each other's attacks untouched.
 ## Above 0, `knock_down` knocks a player down if it gets through, for that
 ## many times as long as a slide tackle (1).
-static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0, attacker: Node3D = null, knock_down: float = 0.0) -> bool:
+## `type` is what the attack is made of, for how the hit looks (Vfx.hit).
+static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, pop: float, object_impulse: float = -1.0,
+		attacker: Node3D = null, knock_down: float = 0.0, type: DamageType.Kind = DamageType.Kind.BLUNT) -> bool:
 	if are_teammates(body, attacker):
 		return false
 	dir.y = 0
@@ -98,9 +100,9 @@ static func strike(body: Node3D, dir: Vector3, damage: float, knockback: float, 
 			if body.Entity and body.Entity.hp < body.Entity.hp_max * WOUNDED_HP_RATIO:
 				damage *= attacker.perk_stat(&"damage_vs_wounded")
 	if body is PlayerClass3D:
-		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker, knock_down)
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker, knock_down, type)
 	if body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D or body is Tower3D:
-		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker)
+		return body.receive_hit(dir, damage, dir * knockback + Vector3.UP * pop, attacker, type)
 	if body is Ball3D:
 		body.touched_by(attacker)
 		Sfx.play_everywhere(&"hit_ball", body.global_position)

@@ -1,13 +1,10 @@
-##TODO: Set up an isActive to overwrite multiplayer status
 class_name EntityBehavior3D extends Node
+## A player's health, hit reactions (knockback and the brief invulnerability
+## after a hit) and where they spawn.
 
-# ===== EXPORT VARIABLES =====
-@export_category("Core Components")
-@export var Attack_Origin: Marker3D
-
-@export_category("Spawn & State")
 @export var spawn_pos: Vector3
-@export var is_active: bool = false
+## Seconds of invulnerability after a hit.
+@export var iframes_duration: float = 0.5
 
 @onready var Master := get_parent()
 
@@ -17,20 +14,15 @@ const SPEED: float = 6.5
 # ===== HEALTH SYSTEM =====
 # Base stats
 var strength: int = 0
-var intelligence: int = 0
-var endurance: int = 0
 
 # Max Values
 ## Max HP per point of strength. Players start at 10 strength = 250 HP, so a
 ## sword (40) kills in 7 hits: kills win the match, so fights should end
 ## before the ball has moved on without them.
 const HP_PER_STRENGTH := 25
+## Strength everyone starts with, before their Properties' bonus.
+const BASE_STRENGTH := 10
 var hp_max: float = 1000.0
-var mana_max: float = 100.0
-
-# Costs and Regens
-var mana_cost: float = 0.0
-var mana_cost_default: float = 0.0
 var stat_values: Dictionary = {}
 
 # Stat properties with automatic signal emission
@@ -40,41 +32,15 @@ var hp: float:
 		stat_values["hp"] = value
 		hp_changed.emit(value, hp_max)
 
-var mana: float:
-	get: return stat_values.get("mana", mana_max)
-	set(value): 
-		stat_values["mana"] = value
-		mana_changed.emit(value, mana_max)
-
-# ===== COMBAT & MOVEMENT =====
-var atk_pwr: float = 400.0  
-var def_base: float = 100.0
-
 # ===== STATE VARIABLES =====
-var name_display: String
-var spawn_rot: float = 0.0
 var is_in_iframes: bool = false
-var iframes_duration: float = 0.5
-var has_control: bool = false
 
 # ===== SIGNALS =====
 signal hp_changed(new_hp: float, max_hp: float)
-signal mana_changed(new_mana: float, max_mana: float)
-
-
-# ===== MULTIPLAYER & NETWORKING =====
-##TODO: All Multiplayer/Offline authentication should alter this. 
-func _is_active(TorF: bool) -> void:
-	is_active = TorF
 
 
 func _ready() -> void:
-	_setup_stat_properties()
-
-
-func _setup_stat_properties() -> void:
 	hp = hp_max
-	mana = mana_max
 
 
 # ===== HEALTH SYSTEM FUNCTIONS =====
@@ -126,36 +92,24 @@ func set_color(color: Color = Color.WHITE) -> void:
 		Master.visual.set_team_color(color)
 
 
-func reset(active_status: bool = true) -> void:
-	is_active = active_status
-	has_control = active_status
-	
-	# Set stats from Properties if available
+## Full health (with the stats from the player's Properties) and back to
+## spawn_pos.
+func reset() -> void:
 	if Master is PlayerClass3D and Master.Properties:
-		var props: Resource = Master.Properties
-		strength = props.player_strength + 10
-		intelligence = props.player_intelligence + 10
-		endurance = props.player_endurance + 10
+		var props: PlayerResource = Master.Properties
+		strength = props.player_strength + BASE_STRENGTH
 		set_color(props.player_color)
 	else:
-		# Default values if no Properties
-		strength = 10
-		intelligence = 10
-		endurance = 10
-	
+		strength = BASE_STRENGTH
 	_update_max_stats()
-	
-	# Update current values to match new max values
 	hp = hp_max
-	mana = mana_max
-	
+
 	Master.global_position = spawn_pos
 
 
 ## Max values from base stats and perks.
 func _update_max_stats() -> void:
 	hp_max = float(strength * HP_PER_STRENGTH) * _perk_stat(&"max_hp")
-	mana_max = float(intelligence * 10)  # Scale intelligence to mana
 
 
 ## Perks changed the max values: resize them, keeping HP just as full as

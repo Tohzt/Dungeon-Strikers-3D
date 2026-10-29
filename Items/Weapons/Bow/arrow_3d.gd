@@ -16,6 +16,8 @@ class_name Arrow3D extends RigidBody3D
 @export var damage: float = 20.0
 @export var impact_impulse: float = 6.0
 @export var knockback: float = 10.0  # Shove speed given to a player it hits
+## What its hits are made of, for how they look (see Vfx.hit).
+@export var damage_type: DamageType.Kind = DamageType.Kind.PIERCE
 ## Above 0, hitting the ball turns it to fly the way this was going, at
 ## least this fast (m/s), instead of just shoving it (the staff's bolt).
 @export var ball_redirect_speed: float = 0.0
@@ -223,7 +225,7 @@ func _on_body_entered(body: Node) -> void:
 			body.touched_by(shooter)
 			Sfx.play_everywhere(&"hit_ball", body.global_position)
 		else:
-			Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter)
+			Combat.strike(body, travel_dir, damage, knockback, 1.0, impact_impulse, shooter, 0.0, damage_type)
 	if pierce:
 		return
 	_burst(body)

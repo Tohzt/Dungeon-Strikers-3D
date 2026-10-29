@@ -29,9 +29,14 @@ const EFFECTS: Dictionary[StringName, Array] = {
 	&"claw": ["BattleFX/effects/claw/vfx_blank_claw.tscn", Kind.ONE_SHOT, 0.8, 0.6, Color(1.0, 0.95, 0.85), Color(0.9, 0.5, 0.2)],
 	&"thrust": ["BattleFX/effects/slash/vfx_blank_slash.tscn", Kind.FLASH, 0.9, 1.2, Color(1.0, 1.0, 1.0), Color(0.55, 0.65, 0.8)],
 	&"fire_cast": ["ElementalMagicFX/effects/cast/vfx_fire_cast_01.tscn", Kind.ONE_SHOT, 0.3, 0.2, Color(1.0, 0.8, 0.2), Color(1.0, 0.4, 0.1)],
-	# Something taking a hit (a hard one: see HARD_HIT_DAMAGE), or blocking one
-	&"hit": ["HitFX/effects/hit/vfx_hit_01.tscn", Kind.ONE_SHOT, 0.6, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
-	&"hit_hard": ["HitFX/effects/impact/vfx_impact_01.tscn", Kind.ONE_SHOT, 0.8, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	# Something taking a hit, picked by what it's made of (see HITS)
+	&"hit_star": ["HitFX/effects/hit/vfx_hit_01.tscn", Kind.ONE_SHOT, 0.6, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	&"hit_spark": ["HitFX/effects/hit/vfx_hit_02.tscn", Kind.ONE_SHOT, 0.6, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	&"hit_burst": ["HitFX/effects/impact/vfx_impact_01.tscn", Kind.ONE_SHOT, 0.7, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	&"hit_splash": ["HitFX/effects/impact/vfx_impact_02.tscn", Kind.ONE_SHOT, 0.7, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	&"hit_big_burst": ["HitFX/effects/big_impact/vfx_big_impact_01.tscn", Kind.ONE_SHOT, 0.45, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	&"hit_big_splash": ["HitFX/effects/big_impact/vfx_big_impact_02.tscn", Kind.ONE_SHOT, 0.45, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
+	# Blocking a hit (a skeleton's raised shield)
 	&"block": ["BattleFX/effects/shield/vfx_blank_shield_01.tscn", Kind.FLASH, 0.28, 0.0, Color(0.8, 0.92, 1.0), Color(0.3, 0.55, 1.0)],
 	# A big blast on the ground (Thunderclap, a legendary heavy)
 	&"impact": ["HitFX/effects/big_impact/vfx_big_impact_01.tscn", Kind.ONE_SHOT, 1.0, 0.0, Color(1.0, 1.0, 1.0), Color(1.0, 0.8, 0.4)],
@@ -68,6 +73,32 @@ const EFFECTS: Dictionary[StringName, Array] = {
 	&"lightning_ball": ["ElectricFX/effects/ball/vfx_ball_lightning_01.tscn", Kind.HELD, 0.7, 0.0, Color(1.0, 1.0, 1.0), Color(0.0, 0.84, 1.0)],
 	# A warp's way in and out (stands upright)
 	&"portal": ["PortalVFX/effects/simple/simple_portal_vfx.tscn", Kind.HELD, 1.0, 0.0, Color(0.8, 0.8, 0.8), Color(0.2, 0.2, 0.2), false],
+}
+
+## How a hit of each DamageType looks where it lands: [EFFECTS id, a hard
+## hit's (see HARD_HIT_DAMAGE), color (clear = the effect's own)].
+const HITS: Dictionary[DamageType.Kind, Array] = {
+	DamageType.Kind.BLUNT: [&"hit_burst", &"hit_big_burst", Color.TRANSPARENT],
+	DamageType.Kind.SLASH: [&"hit_spark", &"hit_splash", Color(1.0, 0.92, 0.75)],
+	DamageType.Kind.PIERCE: [&"hit_star", &"hit_spark", Color(0.85, 0.95, 1.0)],
+	DamageType.Kind.BLAST: [&"hit_splash", &"hit_big_splash", Color(1.0, 0.45, 0.15)],
+	DamageType.Kind.ARCANE: [&"hit_star", &"hit_burst", Color(0.75, 0.5, 1.0)],
+	DamageType.Kind.FIRE: [&"hit_splash", &"hit_big_splash", Element.COLORS[Element.Kind.FIRE]],
+	DamageType.Kind.FROST: [&"hit_star", &"hit_burst", Element.COLORS[Element.Kind.FROST]],
+	DamageType.Kind.LIGHTNING: [&"hit_spark", &"hit_big_burst", Element.COLORS[Element.Kind.LIGHTNING]],
+	DamageType.Kind.POISON: [&"hit_splash", &"hit_big_splash", Element.COLORS[Element.Kind.POISON]],
+	DamageType.Kind.VOID: [&"hit_burst", &"hit_big_burst", Element.COLORS[Element.Kind.VOID]],
+}
+## A hit dealing this much or more gets HITS' bigger look.
+const HARD_HIT_DAMAGE := 25.0
+
+## Set on an effect once it's shown, over how its pack made it:
+## id: {property: value}.
+const SETTINGS: Dictionary[StringName, Dictionary] = {
+	# Wisps breaking up a portal's rings (the pack's noise is a flat grey, so
+	# they're smooth). The noise keeps to a narrow band of greys: any wider
+	# and the tunnel washes out.
+	&"portal": {&"noise_texture": preload("res://Assets/VFX/PortalVFX/portal_wisps_noise.tres")},
 }
 
 ## Laid over a body's meshes while it lasts (see PlayerVisual3D.set_status_overlay):
@@ -140,6 +171,26 @@ func play_everywhere(id: StringName, at: Vector3, dir: Vector3 = Vector3.FORWARD
 @rpc("any_peer", "unreliable")
 func _net_play(id: StringName, at: Vector3, dir: Vector3, mirror: bool) -> void:
 	play(id, at, dir, mirror)
+
+
+## Show a hit of `type` landing at `at`, travelling along `dir`, on this
+## machine only: bigger if it dealt `damage` of HARD_HIT_DAMAGE or more.
+func hit(type: DamageType.Kind, at: Vector3, dir: Vector3, damage: float) -> void:
+	var look: Array = HITS[type]
+	play(look[1] if damage >= HARD_HIT_DAMAGE else look[0], at, dir, false, 1.0, look[2])
+
+
+## Same, and online on every other machine too. Called by whoever decides
+## the hit.
+func hit_everywhere(type: DamageType.Kind, at: Vector3, dir: Vector3, damage: float) -> void:
+	hit(type, at, dir, damage)
+	if Net.match_synced:
+		_net_hit.rpc(type, at, dir, damage)
+
+
+@rpc("any_peer", "unreliable")
+func _net_hit(type: int, at: Vector3, dir: Vector3, damage: float) -> void:
+	hit(DamageType.vetted(type), at, dir, damage)
 
 
 ## Pop up how much a hit took (DamageNumber3D) over `target`, `offset` from
@@ -257,6 +308,9 @@ func _spawn(id: StringName, parent: Node, tint: Color = Color.TRANSPARENT) -> No
 		fx.set(&"primary_color", EFFECTS[id][4])
 		if secondary:
 			fx.set(&"secondary_color", EFFECTS[id][5])
+	var settings: Dictionary = SETTINGS.get(id, {})
+	for property: StringName in settings:
+		fx.set(property, settings[property])
 	return fx
 
 

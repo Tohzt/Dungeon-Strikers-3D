@@ -4,7 +4,7 @@ class_name LockOnMarker3D extends Node3D
 ## spinning arrow over its head, in the player's color. Both are real 3D
 ## shapes, so they read from any camera angle (from the top-down one, a
 ## spinning diamond inside a ring). Locked on to a teammate (a pass, see
-## PlayerClass3D.shoot_ball) it's green, turns the other way, and the arrow
+## PlayerCarry3D.shoot) it's green, turns the other way, and the arrow
 ## is round instead.
 ##
 ## Built in code; top_level, so it can live under whatever owns the lock.

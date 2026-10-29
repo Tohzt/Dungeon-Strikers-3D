@@ -674,12 +674,13 @@ func _flat(v: Vector3) -> Vector3:
 
 ## Called by Combat.strike for every attack that lands on it. Online the
 ## server keeps its HP, so other machines pass their hits on to it.
-func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
+func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null,
+		type: DamageType.Kind = DamageType.Kind.BLUNT) -> bool:
 	if is_dead:
 		return false
 	if not Net.decides():
 		if Net.match_synced:
-			_request_hit.rpc_id(Net.SERVER_ID, dir, damage, knockback_velocity)
+			_request_hit.rpc_id(Net.SERVER_ID, dir, damage, knockback_velocity, type)
 		return true
 	var player := attacker as PlayerClass3D
 	if player:
@@ -697,7 +698,7 @@ func receive_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, attac
 		Vfx.play_everywhere(&"block", global_position + Vector3.UP, dir)
 	else:
 		Sfx.play_everywhere(&"hit_player", global_position + Vector3.UP)
-		Vfx.play_everywhere(&"hit", global_position + Vector3.UP, dir)
+		Vfx.hit_everywhere(type, global_position + Vector3.UP, dir, damage)
 	_knockback = _flat(knockback_velocity) * KNOCKBACK_RATIO
 	velocity.y = maxf(velocity.y, knockback_velocity.y * KNOCKBACK_RATIO)
 	Vfx.damage_number_everywhere(self, Vector3.UP * PlayerClass3D.DAMAGE_NUMBER_HEIGHT, minf(damage, hp), attacker)
@@ -990,10 +991,10 @@ func _net_phase(new_state: State) -> void:
 
 ## A client's player hit it; the sender's player gets the credit.
 @rpc("any_peer", "reliable")
-func _request_hit(dir: Vector3, damage: float, knockback_velocity: Vector3) -> void:
+func _request_hit(dir: Vector3, damage: float, knockback_velocity: Vector3, type: int) -> void:
 	if Net.is_server:
 		var attacker: PlayerClass3D = Global.Game3D.rpc_sender() if Global.Game3D else null
-		receive_hit(dir, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker)
+		receive_hit(dir, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker, DamageType.vetted(type))
 
 
 @rpc("any_peer", "reliable")

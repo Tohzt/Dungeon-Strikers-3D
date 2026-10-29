@@ -155,7 +155,7 @@ func _hit_overlapping() -> void:
 			if weapon.Behavior:
 				weapon.Behavior.hit_ball(body, dir, Vector3.ZERO, knockback, wielder)
 			continue
-		if Combat.strike(body, dir, damage, knockback, Weapon3D.HIT_POP, -1.0, wielder):
+		if Combat.strike(body, dir, damage, knockback, Weapon3D.HIT_POP, -1.0, wielder, 0.0, weapon.damage_type()):
 			weapon.wear_once()
 
 

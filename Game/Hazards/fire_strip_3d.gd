@@ -57,7 +57,7 @@ func _physics_process(delta: float) -> void:
 		if body is Ball3D:
 			body._ignite(ball_burn, "")
 		elif body is PlayerClass3D or Combat.is_monster(body):
-			Combat.strike(body, _out_of_strip(body), damage, knockback, pop)
+			Combat.strike(body, _out_of_strip(body), damage, knockback, pop, -1.0, null, 0.0, DamageType.Kind.FIRE)
 
 
 ## The quickest way out: across the strip's short side, away from its middle.

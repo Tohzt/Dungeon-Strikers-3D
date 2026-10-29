@@ -35,7 +35,7 @@ const HEAVY_CHANCE := 0.25
 const SPRINT_DISTANCE := 10.0
 ## Keep this far from teammates so they don't stack up.
 const SPACING := 2.5
-# Carrying the ball (see PlayerClass3D.carry): run it at the goal and shoot
+# Carrying the ball (see PlayerCarry3D): run it at the goal and shoot
 # once there's a clear line within SHOT_RANGE. Before the meter runs dry,
 # pass to a teammate further up the field, or throw it on toward the goal.
 ## Shoot from this close to the net, if nothing's in the way.
@@ -137,7 +137,7 @@ func _think(player: PlayerClass3D, game: Game3D_Class) -> void:
 		_take_perk_soon(player, game)
 
 	# Got the ball: nothing else matters
-	if player.carries_ball():
+	if player.ball_carry.is_carrying():
 		_carry_ball(player)
 		return
 	# A consumable card: a giant weapon at once, a throwable once there's
@@ -246,11 +246,11 @@ func _go_for_ball(player: PlayerClass3D, ball: Ball3D) -> void:
 		else:
 			_escort(player, holder, ball)
 		return
-	if player.carry < PlayerClass3D.CARRY_MIN_TO_GRAB:
+	if player.ball_carry.meter < PlayerCarry3D.MIN_TO_GRAB:
 		_go_hit_ball(player, ball)
 		return
 	_move_target = ball.global_position
-	_want_interact = player.can_grab_ball(ball)
+	_want_interact = player.ball_carry.can_grab(ball)
 
 
 ## A teammate has the ball: clear enemies off them, otherwise get up the
@@ -280,7 +280,7 @@ func _carry_target(player: PlayerClass3D, ball: Ball3D) -> Node3D:
 ## line in range, and before the meter empties (or we're cornered) throw
 ## it on along the way to the goal.
 func _carry_ball(player: PlayerClass3D) -> void:
-	var ball: Ball3D = player.held_ball
+	var ball: Ball3D = player.ball_carry.ball
 	var target: Node3D = _carry_target(player, ball)
 	if not target:
 		return
@@ -290,7 +290,7 @@ func _carry_ball(player: PlayerClass3D) -> void:
 	if _throw_press_left > 0.0:
 		return  # Mid-charge: _steer keeps aiming where we meant to
 	var dist: float = _flat_dist_to(player, aim_at)
-	var seconds_left: float = player.carry / PlayerClass3D.CARRY_DRAIN_PER_SEC
+	var seconds_left: float = player.ball_carry.meter / PlayerCarry3D.DRAIN_PER_SEC
 	var enemy: PlayerClass3D = _nearest_enemy(player, Global.Game3D)
 	# An enemy on top of us and swinging: get rid of it before it's knocked loose
 	var cornered: bool = enemy != null and _flat_dist(player, enemy) < MELEE_RANGE and enemy.is_swinging()
@@ -351,7 +351,7 @@ func _start_throw(player: PlayerClass3D, target: Vector3, dir: Vector3, shot: bo
 	var charge: float = clampf(_flat_dist_to(player, target) * SHOT_CHARGE_PER_METRE, SHOT_MIN_CHARGE, 1.0)
 	var hold: float = charge * PlayerClass3D.THROW_CHARGE_MAX_DURATION
 	# Let go before the meter tosses it for us
-	hold = minf(hold, player.carry / PlayerClass3D.CARRY_DRAIN_PER_SEC - 0.1)
+	hold = minf(hold, player.ball_carry.meter / PlayerCarry3D.DRAIN_PER_SEC - 0.1)
 	_throw_press_left = maxf(hold, 0.05)
 
 
@@ -381,7 +381,7 @@ func _item_target(player: PlayerClass3D, game: Game3D_Class, kind: Throwable3D.K
 		if player.Entity.hp < player.Entity.hp_max * HEAL_BELOW:
 			target = player
 		else:
-			var mate: PlayerClass3D = player._nearest_teammate()
+			var mate: PlayerClass3D = player.nearest_teammate()
 			if mate and _flat_dist(player, mate) <= THROWABLE_RANGE and mate.Entity.hp < mate.Entity.hp_max * HEAL_BELOW:
 				target = mate
 			elif in_hand:

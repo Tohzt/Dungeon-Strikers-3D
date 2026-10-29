@@ -31,8 +31,8 @@ heavy_move = ExtResource("mv_heavy")
 ball_power = 2.5
 ball_lift = 0.05
 ball_exact = true
-weapon_name = "Dagger"
 base_damage = 25.0
+damage_type = 2
 knockback_force = 6.0
 
 [node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]

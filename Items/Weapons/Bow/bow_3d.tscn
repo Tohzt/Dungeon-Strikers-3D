@@ -32,8 +32,8 @@ heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." unique_id=1417607145 instance=ExtResource("2_behavior")]
 base_damage = 20.0
+damage_type = 0
 knockback_force = 8.0
-weapon_name = "Bow"
 
 [node name="WeaponProperties" parent="." unique_id=937272670 instance=ExtResource("3_properties")]
 weapon_name = "Bow"

@@ -539,7 +539,7 @@ func _update_arm(is_left: bool, delta: float) -> void:
 	var action: int = roundi(arm[0 if is_left else 2])
 	var phase: float = arm[1 if is_left else 3]
 	var clip_is_left: bool = is_left
-	if is_left and action == PlayerClass3D.ArmAction.REST and _holds_two_handed():
+	if is_left and action == PlayerClass3D.ArmAction.REST and player.holds_two_handed():
 		action = roundi(arm[2])
 		phase = arm[3]
 		clip_is_left = false
@@ -623,11 +623,6 @@ func _update_torso(delta: float) -> void:
 			node.animation = _torso_clip
 		tree.set(&"parameters/torso_seek/seek_request", want[1])
 	tree.set(&"parameters/torso/blend_amount", _torso_weight)
-
-
-func _holds_two_handed() -> bool:
-	var weapon: Weapon3D = player.held_weapon_right
-	return weapon != null and weapon.grip == Weapon3D.Grip.TWO_HANDED
 
 
 ## The clip an arm plays for `action`, given what's in that hand. A combo

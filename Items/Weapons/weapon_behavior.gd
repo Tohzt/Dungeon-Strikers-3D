@@ -1,12 +1,11 @@
 class_name WeaponBehavior3D extends Node
-
-## Core behavior script for 3D weapons, similar to EntityBehavior3D for entities.
-## Concrete weapons can extend this class or override its virtual methods.
+## How hard a weapon hits players and the ball (see Weapon3D.Behavior).
 
 @export_category("Core")
-@export var weapon_name: String = ""
 @export var base_damage: float = 40.0  # Per hit (players have 250 HP); thrown hits do a bit more
 @export var knockback_force: float = 10.0  # Shove speed given to whoever gets hit
+## What its hits are made of, for how they look (see Vfx.hit).
+@export var damage_type: DamageType.Kind = DamageType.Kind.SLASH
 
 @export_category("Ball")
 ## What this weapon does to the ball when it hits it (swung or thrown), so
@@ -23,47 +22,6 @@ class_name WeaponBehavior3D extends Node
 @export var ball_curve: float = 0.0
 ## Seconds the ball burns after this hits it (see Ball3D.ignite).
 @export var ball_ignite_time: float = 0.0
-
-@export_category("Owner & Attach")
-@export var attach_bone_name: String = ""  # Optional: name of hand/attach point if using skeletons
-
-var Master: Node3D
-var wielder: Node3D = null
-
-
-func _ready() -> void:
-	# Cache owning weapon (RigidBody3D or scene root)
-	Master = get_parent() as Node3D
-	if Master and weapon_name.is_empty():
-		weapon_name = Master.name
-
-
-## Called when the weapon is equipped by a wielder (player, enemy, etc.)
-## Override in child scripts for weapon-specific behavior.
-func equip(new_wielder: Node3D) -> void:
-	wielder = new_wielder
-
-
-## Called when the weapon is unequipped / dropped.
-func unequip() -> void:
-	wielder = null
-
-
-## Called when an attack is initiated while this weapon is equipped.
-func on_attack_started() -> void:
-	pass
-
-
-## Called when an attack ends (swing finished, input released, etc).
-func on_attack_ended() -> void:
-	pass
-
-
-## Called when this weapon successfully hits a target.
-## You can apply damage/knockback here or just emit events.
-func on_hit(_target: Node3D) -> void:
-	pass
-
 
 ## Utility: get world damage value (base + any dynamic mods you add later)
 func get_damage() -> float:

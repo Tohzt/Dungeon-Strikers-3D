@@ -169,7 +169,7 @@ static func _shock(patch: GroundPatch3D, source: Node3D, hit: Dictionary) -> voi
 	if hit.is_empty():
 		Sfx.play(&"spell_impact", at)
 		CameraShake.add(CameraShake.MEDIUM, at)
-	_hurt_around(patch, at, patch.radius, SHOCK_DAMAGE, SHOCK_KNOCKBACK, SHOCK_POP, SHOCK_KNOCK_DOWN, source, hit)
+	_hurt_around(patch, at, patch.radius, SHOCK_DAMAGE, SHOCK_KNOCKBACK, SHOCK_POP, SHOCK_KNOCK_DOWN, DamageType.Kind.LIGHTNING, source, hit)
 
 
 static func _shocked_lately(patch: GroundPatch3D) -> bool:
@@ -188,7 +188,7 @@ static func _explode(node: Node3D, at: Vector3, reach: float, source: Node3D, hi
 	Vfx.play(&"smoke", at, Vector3.FORWARD, false, reach, Element.COLORS[Element.Kind.POISON])
 	Sfx.play(&"fireball", at)
 	CameraShake.add(CameraShake.HEAVY, at)
-	_hurt_around(node, at, reach, BLAST_DAMAGE, BLAST_KNOCKBACK, BLAST_POP, BLAST_KNOCK_DOWN, source, hit)
+	_hurt_around(node, at, reach, BLAST_DAMAGE, BLAST_KNOCKBACK, BLAST_POP, BLAST_KNOCK_DOWN, DamageType.Kind.BLAST, source, hit)
 
 
 static func _steam(at: Vector3, reach: float) -> void:
@@ -201,7 +201,7 @@ static func _steam(at: Vector3, reach: float) -> void:
 ## deciding, everything else. Whoever's behind it (`source`, a player) is
 ## blamed by the enemies it hurts.
 static func _hurt_around(node: Node3D, at: Vector3, reach: float, damage: float, knockback: float, pop: float,
-		knock_down: float, source: Node3D, hit: Dictionary) -> void:
+		knock_down: float, type: DamageType.Kind, source: Node3D, hit: Dictionary) -> void:
 	if not node.is_inside_tree():
 		return
 	var shape := CylinderShape3D.new()
@@ -213,7 +213,7 @@ static func _hurt_around(node: Node3D, at: Vector3, reach: float, damage: float,
 		if not (body._is_local() if body is PlayerClass3D else Net.decides()):
 			continue
 		hit[body] = true
-		var landed: bool = Combat.strike(body, body.global_position - at, damage, knockback, pop, -1.0, null, knock_down)
+		var landed: bool = Combat.strike(body, body.global_position - at, damage, knockback, pop, -1.0, null, knock_down, type)
 		if landed and body is PlayerClass3D and source is PlayerClass3D and source != body \
 				and not Combat.are_teammates(body, source):
 			body.blame(source)

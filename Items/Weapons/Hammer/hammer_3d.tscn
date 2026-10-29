@@ -29,8 +29,8 @@ heavy_move = ExtResource("mv_heavy")
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 ball_power = 0.6
 ball_lift = 1.2
-weapon_name = "Hammer"
 base_damage = 45.0
+damage_type = 0
 knockback_force = 20.0
 
 [node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]

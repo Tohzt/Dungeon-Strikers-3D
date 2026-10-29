@@ -61,9 +61,10 @@ enum Phase {
 @export var spawn_distance: float = 8.0
 ## Gap between teammates' starting spots.
 @export var spawn_spacing: float = 6.0
-## How far out in front of their own goal a team starts (when the level has
-## no SpawnPoint3D for it).
-@export var goal_spawn_distance: float = 8.0
+## How far out of their own goal's portal a team appears (when the level
+## has no SpawnPoint3D for it), before walking the rest of the way out
+## (see spawn_exit).
+@export var goal_spawn_distance: float = 0.6
 ## The level's background loop (an Sfx.AMBIENCES id). Empty = none.
 @export var ambience: StringName = &""
 ## Music between boss fights (an Sfx.MUSIC id). Empty = none.
@@ -124,8 +125,8 @@ enum Phase {
 @onready var scoreboard: Scoreboard3D = $Scoreboard
 @onready var perks: PerkDirector = $Perks
 @onready var boss_health_bar: BossHealthBar3D = $BossHealthBar
-@onready var pause_menu: CanvasLayer = $PauseMenu
-@onready var game_camera: Camera3D = $Camera3D
+@onready var pause_menu: PauseMenu = $PauseMenu
+@onready var game_camera: GameCamera3D = $Camera3D
 ## The painted soccer field, in levels that have one.
 ## Browsing a shop altar (see Altar3D.shop), for players on this machine.
 var shop_menu: ShopMenu3D = null
@@ -293,22 +294,22 @@ func _spawn_player(slot: PlayerSlot, peer_id: int = 0) -> void:
 
 
 ## Where `slot` starts (and respawns): its team's SpawnPoint3D if the level
-## has one, else just in front of the goal it defends, else
-## spawn_distance out towards its team's side. Teammates spread out from there.
+## has one, else in the portal of the goal it defends (walking out of it,
+## see spawn_exit), else spawn_distance out towards its team's side.
+## Teammates spread out from there.
 func _spawn_position(slot: PlayerSlot) -> Vector3:
 	var side: Vector3 = TEAM_SIDES[slot.team % TEAM_SIDES.size()]
 	var center: Vector3 = side * spawn_distance
 	var across: Vector3 = side.cross(Vector3.UP)
-	var goal: Goal3D = _goal_of_team(slot.team)
+	var spacing: float = spawn_spacing
+	var goal: Goal3D = _spawn_goal(slot)
 	var spawn_point: SpawnPoint3D = _spawn_point_of_team(slot.team)
 	if spawn_point:
 		center = spawn_point.global_position
 		across = spawn_point.global_basis.x.normalized()
 	elif goal:
-		var goal_pos: Vector3 = Vector3(goal.global_position.x, 0.0, goal.global_position.z)
-		var inward: Vector3 = -goal_pos.normalized() if goal_pos.length() > 0.01 else -side
-		center = goal_pos + inward * goal_spawn_distance
-		across = inward.cross(Vector3.UP)
+		center = Vector3(goal.global_position.x, 0.0, goal.global_position.z) + goal.facing() * goal_spawn_distance
+		across = goal.across()
 	# Teammates stand side by side, in seat order
 	var teammates: Array[int] = []
 	for other: PlayerSlot in match_slots:
@@ -316,7 +317,24 @@ func _spawn_position(slot: PlayerSlot) -> Vector3:
 			teammates.append(other.index)
 	teammates.sort()
 	var rank: int = maxi(teammates.find(slot.index), 0)
-	return center + across * (rank - (teammates.size() - 1) / 2.0) * spawn_spacing + Vector3.UP
+	if goal:
+		spacing = minf(spacing, Goal3D.MOUTH_SIZE.x / teammates.size())  # All within the portal
+	return center + across * (rank - (teammates.size() - 1) / 2.0) * spacing + Vector3.UP
+
+
+## Which way `slot` walks out of its goal's portal when it spawns there
+## (see _spawn_position), or zero if it doesn't spawn in one.
+func spawn_exit(slot: PlayerSlot) -> Vector3:
+	var goal: Goal3D = _spawn_goal(slot)
+	return goal.facing() if goal else Vector3.ZERO
+
+
+## The goal `slot` spawns in: its team's, unless the level gives the team a
+## SpawnPoint3D.
+func _spawn_goal(slot: PlayerSlot) -> Goal3D:
+	if _spawn_point_of_team(slot.team):
+		return null
+	return _goal_of_team(slot.team)
 
 
 func _spawn_point_of_team(team: int) -> SpawnPoint3D:
@@ -879,7 +897,7 @@ func goal_to_attack(player: PlayerClass3D) -> Goal3D:
 
 
 ## Where `player` takes `ball`: the net they attack, or their altar with a
-## skull (see PlayerClass3D.shoot_ball). Null when there's neither.
+## skull (see PlayerCarry3D.shoot). Null when there's neither.
 func shot_target(player: PlayerClass3D, ball: Ball3D) -> Node3D:
 	if ball is Skull3D:
 		return altar_of_team(_team_of(player))

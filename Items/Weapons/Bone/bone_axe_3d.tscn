@@ -27,7 +27,6 @@ light_move = ExtResource("mv_light")
 heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
-weapon_name = "Bone Axe"
 base_damage = 50.0
 knockback_force = 11.0
 ball_power = 1.1

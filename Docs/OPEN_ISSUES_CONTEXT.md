@@ -23,6 +23,22 @@ allows. Before public matchmaking, consider a tighter cap from the
 attacker's held weapons and perks, and a reach check on hits (thrown
 weapons, arrows and bombs make that harder).
 
+Other requests the server (or the receiving owner) takes on trust, found in
+a review on 2026-10-29:
+- `PlayerStatus3D._net_apply` checks neither the sender nor `seconds`, so
+  anyone can put any status on anyone for as long as they like (its
+  neighbours `_net_start` / `_net_stop` do check the sender).
+- `PlayerClass3D._use_consumable` uses the card the sender names rather
+  than the one in that slot, and `Consumable._weapon_item` isn't clamped
+  (a bad variant indexes `WildItem.ITEMS` out of range).
+- No distance check on the server for `Pickup3D._ask_server` (which also
+  skips `_can_take`), `WeaponStand3D._decide_take` (which also lets the
+  dead take) or `Chest3D._request_open`. Shops are fine
+  (`Altar3D.can_shop`).
+- `Game3D._report_damage` trusts the attacker name and amount (match stats
+  only), and `_request_death` trusts `killer_name` (team kills already get
+  no credit).
+
 ## 2. Animation gaps (from the character-models work)
 
 - **Left-hand throws look weak.** `General/Throw` only moves the right arm,
@@ -38,8 +54,8 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
   (grab cooldown, reach slack). A held ball has no collision, so it can't
   be carried into a net: it has to be thrown in. A skull can be walked
   onto the altar.
-- `PlayerClass3D.carry` (blue HUD bar, 0-100): Interact grabs a ball in
-  reach (needs `CARRY_MIN_TO_GRAB`). Carrying drains it (3s from full);
+- `PlayerCarry3D` (`PlayerClass3D.ball_carry`; its meter is the blue HUD
+  bar, 0-100): Interact grabs a ball in reach (needs `MIN_TO_GRAB`). Carrying drains it (3s from full);
   Throw charges and throws along the aim; Shoot (E / LT) charges and
   shoots it straight at `Game3D.shot_target` (the goal attacked, or your
   altar with a skull). Carrying, you can lock on to
@@ -88,12 +104,6 @@ Carrying was shelved on 2026-10-07 (last in `a0959a5`) and came back on
 
 From 18 headless 4v4 bot matches of 15 minutes on Pitch (bombs, Score to
 Win 5, so 500 base HP):
-- **Bomb matches rarely end.** Only 1 of 18 was won in 15 minutes. Each
-  match saw 2-6 bombs scored and 4-13 go off out on the field. Bots carry
-  a bomb like a ball and pay no attention to its fuse
-  (`BotInputHandler3D._carry_ball`): they could shoot or throw it on from
-  further out when it's nearly out. Worth checking whether people
-  find the pace too slow too, or whether it's just the bots.
 - **A rare non-finite vector.** About 1 match in 18 logged "Vector3 cannot
   be normalized, the elements must be finite" twice, right after a bomb
   went off on the field. No node was left with a NaN position or velocity
@@ -111,9 +121,11 @@ There are no automated tests, but the game runs headless well:
 - After adding a new `class_name`, run `godot --headless --path . --import`
   once so Godot registers it, or scripts that use it fail to parse.
 - A small temporary scene that seats bots (`Players.add_bot()`) and then
-  changes to a map, run with `--fixed-fps 60`, gives a repeatable bot
-  match: compare counts like kills and swing frames before and after a
-  change. With `seed()` set, the same code gives identical results.
+  changes to a map, run with `--fixed-fps 60`, gives a bot match to
+  compare counts like kills and swing frames before and after a change.
+  It isn't exactly repeatable, even with `seed()` set (as of 2026-10-29
+  two runs of the same code drift apart within a minute), so compare a
+  few runs each rather than one against one.
 - `res://Tools/Bench/bot_bench.tscn` is that bot match, ready made: it
   prints frame times, draw calls, triangles, node count and the score as it
   goes, and lists hitches (frames over 50ms) at the end. Windowed it

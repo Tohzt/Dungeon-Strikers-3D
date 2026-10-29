@@ -4,7 +4,7 @@ class_name Ball3D extends RigidBody3D
 ## Every machine pins a held ball to its holder itself, so carrying looks
 ## smooth for everyone.
 
-## Who carries the ball, if anyone (see PlayerClass3D.carry). Set on every
+## Who carries the ball, if anyone (see PlayerCarry3D). Set on every
 ## machine.
 var holder: PlayerClass3D = null
 var _free_collision_layer: int = 0
@@ -17,7 +17,7 @@ var _grab_cooldown: float = 0.0
 ## (and the server saw the player) a little in the past.
 const GRAB_REACH_SLACK := 1.0
 
-## What a launch (see PlayerClass3D.shoot_ball) was meant as: a pass, which
+## What a launch (see PlayerCarry3D.shoot) was meant as: a pass, which
 ## the first of the passer's teammates it reaches catches, or an attack,
 ## which hurts the first enemy it hits. Server/offline, until it's caught,
 ## hits something or SHOT_TIME runs out.
@@ -310,7 +310,7 @@ func grab(player: PlayerClass3D) -> void:
 		last_team = player.slot.team
 		last_player = String(player.name)
 	_motion.clear()  # Play back from the release, not before the grab
-	player.on_ball_grabbed(self)
+	player.ball_carry.on_grabbed(self)
 	_curve_left = 0.0
 	_free_collision_layer = collision_layer
 	_free_collision_mask = collision_mask
@@ -327,7 +327,7 @@ func release(launch: Vector3) -> void:
 	if not holder:
 		return
 	if is_instance_valid(holder):
-		holder.on_ball_released(self)
+		holder.ball_carry.on_released(self)
 	holder = null
 	collision_layer = _free_collision_layer
 	collision_mask = _free_collision_mask
@@ -362,7 +362,7 @@ func _request_grab() -> void:
 func _decide_grab(player: PlayerClass3D) -> void:
 	if holder or _grab_cooldown > 0.0:
 		return
-	if player and player.can_grab_ball(self, PlayerClass3D.BALL_REACH + GRAB_REACH_SLACK):
+	if player and player.ball_carry.can_grab(self, PlayerCarry3D.REACH + GRAB_REACH_SLACK):
 		_grabbed.rpc(player.name)
 
 
@@ -426,7 +426,7 @@ func _shot_reached(body: Node) -> bool:
 	if not by or body == by:
 		return false
 	if _shot == Shot.PASS:
-		if body is PlayerClass3D and Combat.are_teammates(body, by) and body.can_grab_ball(self, INF):
+		if body is PlayerClass3D and Combat.are_teammates(body, by) and body.ball_carry.can_grab(self, INF):
 			_shot = Shot.NONE
 			_caught_by.call_deferred(body)  # Not mid-collision: grabbing freezes the body
 			return true
@@ -438,7 +438,7 @@ func _shot_reached(body: Node) -> bool:
 
 
 func _caught_by(player: PlayerClass3D) -> void:
-	if holder or not is_instance_valid(player) or not player.can_grab_ball(self, INF):
+	if holder or not is_instance_valid(player) or not player.ball_carry.can_grab(self, INF):
 		return
 	if Net.match_synced:
 		_grabbed.rpc(player.name)
@@ -548,7 +548,7 @@ func _burn_on_hit(player: PlayerClass3D) -> void:
 	if now - _burned_msec.get(String(player.name), -BURN_HIT_COOLDOWN_MSEC) < BURN_HIT_COOLDOWN_MSEC:
 		return
 	_burned_msec[String(player.name)] = now
-	Combat.strike(player, linear_velocity, BURN_HIT_DAMAGE, BURN_HIT_KNOCKBACK, 1.0, 0.0, _igniter())
+	Combat.strike(player, linear_velocity, BURN_HIT_DAMAGE, BURN_HIT_KNOCKBACK, 1.0, 0.0, _igniter(), 0.0, DamageType.Kind.FIRE)
 
 
 func _igniter() -> PlayerClass3D:

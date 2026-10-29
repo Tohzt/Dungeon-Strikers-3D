@@ -295,12 +295,13 @@ func _claimed(team: int) -> void:
 ## Called by Combat.strike for every attack that lands on it. Only a tower
 ## that's up can be hurt. Online the server keeps its health, so other
 ## machines pass their hits on.
-func receive_hit(_dir: Vector3, damage: float, _knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
+func receive_hit(dir: Vector3, damage: float, _knockback_velocity: Vector3, attacker: Node3D = null,
+		type: DamageType.Kind = DamageType.Kind.BLUNT) -> bool:
 	if state != State.ACTIVE and state != State.RISING:
 		return false
 	if not Net.decides():
 		if Net.match_synced:
-			_request_hit.rpc_id(Net.SERVER_ID, damage, String(attacker.name) if attacker is PlayerClass3D else "")
+			_request_hit.rpc_id(Net.SERVER_ID, damage, String(attacker.name) if attacker is PlayerClass3D else "", type)
 		return true
 	var by_team: int = Combat.team_of(attacker)
 	if by_team == owner_team:
@@ -308,6 +309,7 @@ func receive_hit(_dir: Vector3, damage: float, _knockback_velocity: Vector3, att
 	if by_team >= 0:
 		_last_hurt_by = by_team
 	Sfx.play_everywhere(&"hit_wall", global_position + Vector3.UP * 2.0)
+	Vfx.hit_everywhere(type, global_position + Vector3.UP * 2.0, dir, damage)
 	Vfx.damage_number_everywhere(self, _muzzle() - global_position + Vector3.UP * 1.5, minf(damage, hp), attacker)
 	_set_hp(hp - damage)
 	if hp <= 0.0:
@@ -316,14 +318,14 @@ func receive_hit(_dir: Vector3, damage: float, _knockback_velocity: Vector3, att
 
 
 @rpc("any_peer", "reliable")
-func _request_hit(damage: float, attacker_name: String) -> void:
+func _request_hit(damage: float, attacker_name: String, type: int) -> void:
 	if Net.is_server and Global.Game3D:
 		# Unvetted or unnamed, it's the sender's own hit, so they can't hurt
 		# their own tower.
 		var attacker: PlayerClass3D = Global.Game3D.vetted_attacker(attacker_name)
 		if not attacker:
 			attacker = Global.Game3D.rpc_sender()
-		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), Vector3.ZERO, attacker)
+		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), Vector3.ZERO, attacker, DamageType.vetted(type))
 
 
 ## Server/offline: back up by `amount` HP (an altar repair).

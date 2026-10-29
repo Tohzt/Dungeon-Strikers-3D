@@ -26,7 +26,6 @@ light_move = ExtResource("mv_light")
 heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." unique_id=98890566 instance=ExtResource("behavior")]
-weapon_name = "Scimitar"
 base_damage = 45.0
 ball_power = 1.1
 ball_lift = 0.4

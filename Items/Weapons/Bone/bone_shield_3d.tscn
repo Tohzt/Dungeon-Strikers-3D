@@ -27,8 +27,8 @@ hold_offset = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.18)
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
 ball_lift = 0.2
 base_damage = 10.0
+damage_type = 0
 knockback_force = 14.0
-weapon_name = "Bone Shield"
 
 [node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]
 weapon_name = "Bone Shield"

@@ -31,8 +31,8 @@ swing_clip = &"CombatRanged/Ranged_Magic_Shoot"
 heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("2_behavior")]
-weapon_name = "Bone Staff"
 base_damage = 18.0
+damage_type = 4
 knockback_force = 8.0
 
 [node name="WeaponProperties" parent="." instance=ExtResource("3_properties")]

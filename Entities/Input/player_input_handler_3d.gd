@@ -8,7 +8,7 @@ var look_dir: Vector3 = Vector3.ZERO
 ## held and goes off on release, and Throw (Q / Y) charges a throw of the
 ## weapon in hand (or the ball we carry), and Shoot (E / LT) charges a shot
 ## of the carried ball at the goal. Carrying the ball, light throws it and
-## heavy passes it (see PlayerClass3D.pass_ball). Bots press them too.
+## heavy passes it (see PlayerCarry3D.pass_to_teammate). Bots press them too.
 var light_held: bool = false
 var heavy_held: bool = false
 var throw_held: bool = false
@@ -49,7 +49,7 @@ var camera: Camera3D = null
 # where the right stick / the player points); the mouse wheel, or flicking
 # the right stick toward another target, switches. Tab toggles it too, but
 # locks on to whatever's nearest. While carrying the ball, teammates can be
-# locked on to as well (to pass to; see PlayerClass3D.shoot_ball).
+# locked on to as well (to pass to; see PlayerCarry3D.shoot).
 ## What we're locked on to, if anything. Only people lock on (not bots).
 var lock_target: Node3D = null
 const LOCK_RANGE := 20.0
@@ -280,7 +280,7 @@ func _can_lock(node: Node3D, max_range: float) -> bool:
 	if not is_instance_valid(node) or node == Master or (Master as PlayerClass3D).is_dead():
 		return false
 	if node is PlayerClass3D and (node.is_dead() \
-			or (Combat.are_teammates(node, Master) and not (Master as PlayerClass3D).carries_ball())):
+			or (Combat.are_teammates(node, Master) and not (Master as PlayerClass3D).ball_carry.is_carrying())):
 		return false
 	if node is SkeletonEnemy3D and node.is_dead:
 		return false

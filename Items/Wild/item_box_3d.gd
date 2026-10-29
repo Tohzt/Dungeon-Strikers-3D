@@ -311,7 +311,7 @@ func _thunderclap(player: PlayerClass3D, owned: bool) -> void:
 		away.y = 0.0
 		if away.length() <= WildItem.THUNDERCLAP_RADIUS:
 			Combat.strike(body, away, WildItem.THUNDERCLAP_DAMAGE, WildItem.THUNDERCLAP_KNOCKBACK,
-				WildItem.THUNDERCLAP_POP, -1.0, player)
+				WildItem.THUNDERCLAP_POP, -1.0, player, 0.0, DamageType.Kind.LIGHTNING)
 
 
 func _pop() -> void:

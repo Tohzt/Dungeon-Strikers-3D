@@ -121,7 +121,8 @@ func _hit_all() -> void:
 		var flat := Vector3(offset.x, 0.0, offset.z)
 		if flat.length() > radius:
 			continue
-		if Combat.strike(player, flat, damage, knockback, pop, -1.0, credit, SlimeElement.knock_down(element)):
+		if Combat.strike(player, flat, damage, knockback, pop, -1.0, credit, SlimeElement.knock_down(element),
+				DamageType.of_element(Element.of_slime(element))):
 			SlimeElement.afflict(player, element)
 
 

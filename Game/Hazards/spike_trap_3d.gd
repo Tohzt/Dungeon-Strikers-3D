@@ -97,7 +97,7 @@ func _skewer() -> void:
 		if body is Ball3D:
 			Combat.push(body, Vector3.UP * ball_pop + away.normalized() * 1.5)
 		elif body is PlayerClass3D or Combat.is_monster(body):
-			Combat.strike(body, away, damage, knockback, pop)
+			Combat.strike(body, away, damage, knockback, pop, -1.0, null, 0.0, DamageType.Kind.PIERCE)
 
 
 func _build() -> void:

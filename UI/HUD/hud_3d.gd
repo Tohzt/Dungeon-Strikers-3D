@@ -7,7 +7,7 @@ class_name HUD3D extends CanvasLayer
 @onready var panel:       PanelContainer = $Panel
 ## The green bar: the player's health.
 @onready var health_bar:  ProgressBar    = $Panel/Row/Bars/HealthBar
-## The purple bar: the player's carry meter (see PlayerClass3D.carry).
+## The purple bar: the player's carry meter (see PlayerCarry3D).
 @onready var carry_bar:   ProgressBar    = $Panel/Row/Bars/CarryBar
 
 ## Gap between the HUD panel and the screen edges.
@@ -102,8 +102,8 @@ func _connect_signals(eb: Node) -> void:
 	if not eb:
 		return
 	eb.hp_changed.connect(_on_hp_changed)
-	player.carry_changed.connect(_on_carry_changed)
-	_on_carry_changed(player.carry, PlayerClass3D.CARRY_MAX)
+	player.ball_carry.changed.connect(_on_carry_changed)
+	_on_carry_changed(player.ball_carry.meter, PlayerCarry3D.MAX)
 
 	# Get initial values immediately after connecting
 	_on_hp_changed(eb.hp, eb.hp_max)

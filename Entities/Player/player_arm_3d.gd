@@ -59,7 +59,7 @@ class Press:
 
 var is_left: bool
 ## What this hand holds (a two-handed weapon is the right arm's; see
-## PlayerClass3D._holds_two_handed).
+## PlayerClass3D.holds_two_handed).
 var weapon: Weapon3D = null
 
 # The current swing: time left out of swing_duration, and the phase its

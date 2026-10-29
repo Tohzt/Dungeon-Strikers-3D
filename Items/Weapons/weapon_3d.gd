@@ -506,7 +506,7 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 		if final_use:
 			damage *= FINAL_DAMAGE_MULTIPLIER
 			knockback *= FINAL_KNOCKBACK_MULTIPLIER
-		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker) and thrown:
+		if Combat.strike(body, dir, damage, knockback, HIT_POP, -1.0, attacker, 0.0, damage_type()) and thrown:
 			linear_velocity *= THROWN_SLOWDOWN_ON_HIT
 		landed = landed or body is PlayerClass3D or body is Boss3D or body is SlimeMinion3D or body is SkeletonEnemy3D or body is Tower3D
 	if contact:
@@ -514,6 +514,11 @@ func _hit_overlapping(attacker: Node3D, damage_multiplier: float, thrown: bool) 
 	# One use per swing or throw, however many it hits
 	if landed:
 		wear_once()
+
+
+## What its hits are made of (see WeaponBehavior3D.damage_type).
+func damage_type() -> DamageType.Kind:
+	return Behavior.damage_type if Behavior else DamageType.Kind.BLUNT
 
 
 ## Where a swing sends the ball: the way the wielder aims (or faces), not
@@ -601,9 +606,6 @@ func equip(new_wielder: Node3D, hand: Node3D = null) -> void:
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	follow_hand()
-
-	if Behavior:
-		Behavior.equip(new_wielder)
 
 
 ## Held: sit in the hand, wherever its bone is now. The wielder calls this
@@ -696,8 +698,6 @@ func _release_from_hand() -> void:
 ## High-level API: called when the weapon is dropped/unequipped.
 func unequip() -> void:
 	set_charged(false)
-	if Behavior:
-		Behavior.unequip()
 
 	if wielder is PhysicsBody3D:
 		remove_collision_exception_with(wielder)
@@ -749,8 +749,6 @@ func _let_go_thrown(spin_direction: float) -> void:
 	_hit_this_action.clear()
 	_worn_this_action = false
 
-	if Behavior:
-		Behavior.unequip()
 
 	if wielder is PhysicsBody3D:
 		remove_collision_exception_with(wielder)
@@ -919,7 +917,7 @@ static func burst(world: World3D, origin: Vector3, radius: float, damage: float,
 	for body: Node3D in Combat.overlaps(world, sphere, Transform3D(Basis(), origin), exclude):
 		if _on_team_of(body, breaker) or (body is Weapon3D and breaker and body.wielder == breaker):
 			continue
-		Combat.strike(body, body.global_position - origin, damage, knockback, HIT_POP, -1.0, breaker)
+		Combat.strike(body, body.global_position - origin, damage, knockback, HIT_POP, -1.0, breaker, 0.0, DamageType.Kind.BLAST)
 
 
 static func _on_team_of(body: Node3D, breaker: Node3D) -> bool:

@@ -10,7 +10,8 @@ class_name Bomb3D extends Ball3D
 ## gives it back with some fuse added (see Boss3D._net_swallow).
 ##
 ## The fuse burns on every machine; only the one simulating the bomb
-## (server/offline) sets it off.
+## (server/offline) sets it off, and online it sends what's left every
+## FUSE_SYNC_TIME so the countdowns agree.
 
 enum Type {
 	FIRE,    ## Hits the base harder; sets players on fire in the open
@@ -44,6 +45,10 @@ const BOSS_FUSE_BONUS := 10.0
 const MIN_RELEASE_FUSE := 12.0
 ## The countdown over it turns urgent (and the bomb flickers hard) from here.
 const URGENT_TIME := 5.0
+## Online, seconds between the server's fuse updates. Each machine starts
+## burning it when its own opening camera move ends, which isn't quite at
+## the same moment everywhere.
+const FUSE_SYNC_TIME := 1.0
 
 ## Going off in the open: everyone within BLAST_RADIUS is hit, hardest (and
 ## knocked down longest, as a multiple of a slide tackle's) at the middle.
@@ -66,6 +71,7 @@ var type: Type = Type.FIRE
 ## Seconds until it goes off.
 var fuse_left: float = FUSE_TIME
 var _went_off: bool = false
+var _fuse_sync_left: float = FUSE_SYNC_TIME
 @onready var _model: BombModel3D = $Model
 var _countdown: Label3D
 var _sizzle: AudioStreamPlayer3D = null
@@ -115,6 +121,22 @@ func _physics_process(delta: float) -> void:
 	if Net.decides() and fuse_left <= 0.0 and not _went_off and Global.Game3D:
 		_went_off = true
 		Global.Game3D.bomb_fuse_out(self)
+	_send_fuse(delta)
+
+
+## Server: every FUSE_SYNC_TIME, tell everyone how much fuse is left.
+func _send_fuse(delta: float) -> void:
+	if not (Net.is_server and Net.match_synced):
+		return
+	_fuse_sync_left -= delta
+	if _fuse_sync_left <= 0.0:
+		_fuse_sync_left = FUSE_SYNC_TIME
+		_net_fuse.rpc(fuse_left)
+
+
+@rpc("authority", "unreliable_ordered")
+func _net_fuse(left: float) -> void:
+	fuse_left = left
 
 
 ## Server/offline: a bomb of `type` goes off at `origin`, hitting everyone
@@ -129,7 +151,7 @@ static func blast(world: World3D, origin: Vector3, blast_type: Type, exclude: Ar
 		var closeness: float = 1.0 - clampf(Vector2(away.x, away.z).length() / BLAST_RADIUS, 0.0, 1.0)
 		Combat.strike(body, away, lerpf(BLAST_EDGE_DAMAGE, BLAST_DAMAGE, closeness),
 			lerpf(BLAST_EDGE_KNOCKBACK, BLAST_KNOCKBACK, closeness), BLAST_POP, -1.0, attacker,
-			lerpf(BLAST_EDGE_KNOCKDOWN, BLAST_KNOCKDOWN, closeness))
+			lerpf(BLAST_EDGE_KNOCKDOWN, BLAST_KNOCKDOWN, closeness), DamageType.of_element(Element.of_bomb(blast_type)))
 		if body is PlayerClass3D and not Combat.are_teammates(body, attacker):
 			afflict(body, blast_type, FIELD_EFFECT_TIME, true)
 

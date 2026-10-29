@@ -111,7 +111,7 @@ func _hit_all() -> void:
 		if body is Tower3D or (body is Weapon3D and body.wielder):
 			continue  # Towers don't fight each other; a held weapon goes with its wielder
 		var out: Vector3 = body.global_position - global_position
-		Combat.strike(body, out, damage, knockback, pop, -1.0, credit, knock_down)
+		Combat.strike(body, out, damage, knockback, pop, -1.0, credit, knock_down, DamageType.Kind.LIGHTNING)
 
 
 func _flat_cylinder(reach: float, material: StandardMaterial3D) -> MeshInstance3D:

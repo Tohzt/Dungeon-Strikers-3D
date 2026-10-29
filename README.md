@@ -46,14 +46,16 @@ Known problems and unfinished work are tracked in `Docs/OPEN_ISSUES_CONTEXT.md`.
   - `Camera/`, `Level/` (doors, goals, spawns, torches…), `Hazards/`, `Towers/`.
 - `Entities/`: everything that moves on its own.
   - `Player/`: the player. `character_body_3d.gd` is the player itself;
-    `player_arm_3d.gd` holds each arm's state and `player_visual_3d.gd`
-    drives the model and animations. Also the roster, names and seat data.
+    `player_arm_3d.gd` holds each arm's state, `player_carry_3d.gd` the
+    carry meter and the ball we carry, and `player_visual_3d.gd` drives the
+    model and animations. Also the roster, names and seat data.
   - `Ball/`, `SlimeBoss/` (and its minions), `Skeleton/`, and `Input/`
     (player and bot input handlers).
 - `Items/`: weapons (`Weapons/`: base scripts, `Moves/`, then one folder per
   weapon kind), altars/shops, chests, weapon stands, boss drops, coins,
   potions, throwables, consumable cards (`Consumables/`) and other pickups.
-- `Combat/`: hits, attack waves and elements. `Perks/`: rogue-lite perks.
+- `Combat/`: hits, attack waves, elements and damage types (each hit
+  carries one, which picks its effect in `Vfx.HITS`). `Perks/`: rogue-lite perks.
 - `UI/`: the in-match `HUD/`, `Menus/` (main, pause, character select, Codex), `Cards/` (the item cards the shop, Codex and the in-match card hand share) and
   shared `Controls/`.
 - `Assets/`: third-party art, audio, VFX, fonts and the UI theme.

@@ -1,5 +1,5 @@
 class_name CameraShake
-## Screen shake for the GameCamera. Anything can add() trauma; the camera
+## Screen shake for the GameCamera3D. Anything can add() trauma; the camera
 ## calls apply() each
 ## frame, which shakes it by trauma squared (so small knocks stay subtle and
 ## big ones kick) and lets the trauma drain away.

@@ -1,4 +1,4 @@
-extends CanvasLayer
+class_name PauseMenu extends CanvasLayer
 ## In-match pause overlay. Start (controller) or Esc (keyboard) toggles it;
 ## B also resumes. Runs while the tree is paused (process_mode = Always).
 ##

@@ -1,4 +1,7 @@
-extends Camera3D
+class_name GameCamera3D extends Camera3D
+## The match camera: follows the local players from above, frames them all
+## (and the ball), and widens to show a goal when play gets near one.
+
 @export var target: Node3D
 var is_active: bool = false
 var can_zoom: bool = true

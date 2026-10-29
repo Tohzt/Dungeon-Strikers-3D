@@ -1,5 +1,5 @@
 @tool
-extends EditorScript
+class_name DungeonMeshLibraryGenerator extends EditorScript
 ## Rebuilds the dungeon GridMap palettes from res://Assets/BetterDungeon/glb/:
 ##
 ## - dungeon_mesh_library.res   Walls, pillars, stairs, scaffolds. 4m grid,

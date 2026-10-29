@@ -13,9 +13,8 @@ const SKELETONS := 1
 
 ## Each character: name, side, body model, and kit as [main hand, off hand]
 ## (null = nothing there; a two-handed weapon fills both). For the character
-## select lineup (see CharacterStage3D): kit_name, a flourish clip played
-## when the character is picked out, and the ready clip it loops after. Paths, loaded
-## when needed: preloading weapon scenes here would load them while their
+## select lineup (see CharacterStage3D): kit_name, and a flourish clip
+## played when the character is picked out. Paths, loaded when needed: preloading weapon scenes here would load them while their
 ## own scripts (which use PlayerClass3D, which uses this) are still loading.
 const CHARACTERS: Array[Dictionary] = [
 	{
@@ -23,70 +22,70 @@ const CHARACTERS: Array[Dictionary] = [
 		"model": "res://Assets/Characters/Adventurers/Knight.glb",
 		"kit": ["res://Items/Weapons/Sword/sword_3d.tscn", "res://Items/Weapons/Shield/shield_3d.tscn"],
 		"kit_name": "Sword & Shield",
-		"flourish": &"CombatMelee/Melee_1H_Attack_Slice_Diagonal", "ready": &"CombatMelee/Melee_Blocking",
+		"flourish": &"CombatMelee/Melee_1H_Attack_Slice_Diagonal",
 	},
 	{
 		"name": "Barbarian", "side": HUMANS,
 		"model": "res://Assets/Characters/Adventurers/Barbarian.glb",
 		"kit": ["res://Items/Weapons/Axe/greataxe_3d.tscn", null],
 		"kit_name": "Greataxe",
-		"flourish": &"CombatMelee/Melee_2H_Attack_Spin", "ready": &"CombatMelee/Melee_2H_Idle",
+		"flourish": &"CombatMelee/Melee_2H_Attack_Spin",
 	},
 	{
 		"name": "Mage", "side": HUMANS,
 		"model": "res://Assets/Characters/Adventurers/Mage.glb",
 		"kit": ["res://Items/Weapons/Staff/wand_3d.tscn", null],
 		"kit_name": "Wand",
-		"flourish": &"CombatRanged/Ranged_Magic_Spellcasting", "ready": &"General/Idle_B",
+		"flourish": &"CombatRanged/Ranged_Magic_Spellcasting",
 	},
 	{
 		"name": "Rogue", "side": HUMANS,
 		"model": "res://Assets/Characters/Adventurers/Rogue.glb",
 		"kit": ["res://Items/Weapons/Dagger/dagger_3d.tscn", "res://Items/Weapons/Dagger/dagger_3d.tscn"],
 		"kit_name": "Twin Daggers",
-		"flourish": &"CombatMelee/Melee_Dualwield_Attack_Slice", "ready": &"CombatMelee/Melee_Unarmed_Idle",
+		"flourish": &"CombatMelee/Melee_Dualwield_Attack_Slice",
 	},
 	{
 		"name": "Ranger", "side": HUMANS,
 		"model": "res://Assets/Characters/Adventurers/Ranger.glb",
 		"kit": ["res://Items/Weapons/Bow/bow_3d.tscn", null],
 		"kit_name": "Bow",
-		"flourish": &"CombatRanged/Ranged_Bow_Release", "ready": &"CombatRanged/Ranged_Bow_Idle",
+		"flourish": &"CombatRanged/Ranged_Bow_Release",
 	},
 	{
 		"name": "Hooded Rogue", "side": HUMANS,
 		"model": "res://Assets/Characters/Adventurers/Rogue_Hooded.glb",
 		"kit": ["res://Items/Weapons/Sword/rapier_3d.tscn", "res://Items/Weapons/Dagger/dagger_3d.tscn"],
 		"kit_name": "Rapier & Dagger",
-		"flourish": &"CombatMelee/Melee_1H_Attack_Stab", "ready": &"General/Idle_B",
+		"flourish": &"CombatMelee/Melee_1H_Attack_Stab",
 	},
 	{
 		"name": "Skeleton Warrior", "side": SKELETONS,
 		"model": "res://Assets/Skeleton/Characters/Skeleton_Warrior.glb",
 		"kit": ["res://Items/Weapons/Bone/bone_blade_3d.tscn", "res://Items/Weapons/Bone/bone_shield_3d.tscn"],
 		"kit_name": "Bone Blade & Shield",
-		"flourish": &"Special/Skeletons_Taunt", "ready": &"CombatMelee/Melee_Blocking",
+		"flourish": &"Special/Skeletons_Taunt",
 	},
 	{
 		"name": "Skeleton Minion", "side": SKELETONS,
 		"model": "res://Assets/Skeleton/Characters/Skeleton_Minion.glb",
 		"kit": ["res://Items/Weapons/Bone/bone_axe_3d.tscn", null],
 		"kit_name": "Bone Axe",
-		"flourish": &"Special/Skeletons_Awaken_Standing", "ready": &"Special/Skeletons_Idle",
+		"flourish": &"Special/Skeletons_Awaken_Standing",
 	},
 	{
 		"name": "Skeleton Archer", "side": SKELETONS,
 		"model": "res://Assets/Skeleton/Characters/Skeleton_Rogue.glb",
 		"kit": ["res://Items/Weapons/Bow/bow_3d.tscn", null],
 		"kit_name": "Bow",
-		"flourish": &"Special/Skeletons_Taunt_Longer", "ready": &"CombatRanged/Ranged_Bow_Idle",
+		"flourish": &"Special/Skeletons_Taunt_Longer",
 	},
 	{
 		"name": "Skeleton Mage", "side": SKELETONS,
 		"model": "res://Assets/Skeleton/Characters/Skeleton_Mage.glb",
 		"kit": ["res://Items/Weapons/Bone/bone_staff_3d.tscn", null],
 		"kit_name": "Bone Staff",
-		"flourish": &"CombatRanged/Ranged_Magic_Summon", "ready": &"Special/Skeletons_Idle",
+		"flourish": &"CombatRanged/Ranged_Magic_Summon",
 	},
 ]
 
@@ -111,10 +110,6 @@ static func kit_name_of(character: int) -> String:
 ## Clips ("Library/Clip", see CharacterStage3D) for the select screen.
 static func flourish_of(character: int) -> StringName:
 	return _entry(character).flourish
-
-
-static func ready_clip_of(character: int) -> StringName:
-	return _entry(character).ready
 
 
 static func side_of(character: int) -> int:

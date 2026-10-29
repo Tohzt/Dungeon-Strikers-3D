@@ -840,7 +840,8 @@ func _frost_nova() -> void:
 		var dist: float = _flat(offset).length()
 		if dist > nova_radius:
 			continue
-		if Combat.strike(player, _flat(offset), nova_damage, stomp_knockback * 0.4, 2.0):
+		if Combat.strike(player, _flat(offset), nova_damage, stomp_knockback * 0.4, 2.0, -1.0, null, 0.0,
+				DamageType.of_element(Element.of_slime(element))):
 			SlimeElement.afflict(player, element, 2.0 if dist < nova_freeze_radius else 1.0)
 
 
@@ -998,16 +999,17 @@ func _net_swallow(ball_name: String, bomb_type: int, fuse: float) -> void:
 ## Called by Combat.strike for every attack that lands on the boss.
 ## `attacker` gets the kill if this hit finishes it. Online the server keeps
 ## the HP, so other machines pass their hits on to it.
-func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
+func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null,
+		type: DamageType.Kind = DamageType.Kind.BLUNT) -> bool:
 	if is_defeated:
 		return false
 	wake()
 	if not Net.decides():
 		if Net.match_synced:
-			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
+			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity, type)
 		return true
 	Sfx.play_everywhere(&"hit_slime", global_position)
-	Vfx.play_everywhere(&"hit", global_position, knockback_velocity)  # Its dir is lost when passed to the server
+	Vfx.hit_everywhere(type, global_position, knockback_velocity, damage)  # Its dir is lost when passed to the server
 	receive_impulse(knockback_velocity * HIT_SHOVE_RATIO)
 	if state == State.STAGGERED:
 		damage *= staggered_damage_multiplier
@@ -1384,10 +1386,10 @@ func _net_defeated(killer_name: String) -> void:
 
 ## A client's player hit the boss; the sender's player gets the credit.
 @rpc("any_peer", "reliable")
-func _request_hit(damage: float, knockback_velocity: Vector3) -> void:
+func _request_hit(damage: float, knockback_velocity: Vector3, type: int) -> void:
 	if Net.is_server:
 		var attacker: PlayerClass3D = Global.Game3D.rpc_sender()
-		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker)
+		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker, DamageType.vetted(type))
 
 
 @rpc("any_peer", "reliable")

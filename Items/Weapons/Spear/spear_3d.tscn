@@ -28,8 +28,8 @@ light_move = ExtResource("mv_light")
 heavy_move = ExtResource("mv_heavy")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
-weapon_name = "Spear"
 base_damage = 45.0
+damage_type = 2
 knockback_force = 12.0
 ball_power = 2.0
 ball_lift = 0.1

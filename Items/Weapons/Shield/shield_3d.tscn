@@ -27,8 +27,8 @@ hold_offset = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0.18)
 [node name="WeaponBehavior" parent="." unique_id=1505864104 instance=ExtResource("2_37nig")]
 ball_lift = 0.2
 base_damage = 10.0
+damage_type = 0
 knockback_force = 14.0
-weapon_name = "Shield"
 
 [node name="WeaponProperties" parent="." unique_id=716835754 instance=ExtResource("4_rf7fj")]
 weapon_name = "Shield"

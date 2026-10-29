@@ -285,15 +285,16 @@ func _sting(player: PlayerClass3D) -> void:
 
 ## Called by Combat.strike for every attack that lands on it. Online the
 ## server keeps the HP, so other machines pass their hits on to it.
-func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null) -> bool:
+func receive_hit(_dir: Vector3, damage: float, knockback_velocity: Vector3, attacker: Node3D = null,
+		type: DamageType.Kind = DamageType.Kind.BLUNT) -> bool:
 	if is_dead:
 		return false
 	if not Net.decides():
 		if Net.match_synced:
-			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity)
+			_request_hit.rpc_id(Net.SERVER_ID, damage, knockback_velocity, type)
 		return true
 	Sfx.play_everywhere(&"hit_slime", global_position)
-	Vfx.play_everywhere(&"hit", global_position, knockback_velocity)  # Its dir is lost when passed to the server
+	Vfx.hit_everywhere(type, global_position, knockback_velocity, damage)  # Its dir is lost when passed to the server
 	_knockback = _flat(knockback_velocity) * HIT_KNOCKBACK_RATIO
 	velocity.y = max(velocity.y, knockback_velocity.y * HIT_KNOCKBACK_RATIO)
 	Vfx.damage_number_everywhere(self, Vector3.UP * (HEIGHT + 0.5), minf(damage, hp), attacker)
@@ -457,7 +458,7 @@ func _net_die() -> void:
 
 
 @rpc("any_peer", "reliable")
-func _request_hit(damage: float, knockback_velocity: Vector3) -> void:
+func _request_hit(damage: float, knockback_velocity: Vector3, type: int) -> void:
 	if Net.is_server:
 		var attacker: PlayerClass3D = Global.Game3D.rpc_sender() if Global.Game3D else null
-		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker)
+		receive_hit(Vector3.ZERO, Combat.vetted_damage(damage, attacker), knockback_velocity, attacker, DamageType.vetted(type))

@@ -2,13 +2,6 @@
 
 [ext_resource type="Script" path="res://Game/Level/goal.gd" id="1_goal"]
 
-[sub_resource type="BoxMesh" id="BoxMesh_p6jv2"]
-size = Vector3(0.6, 3.5, 6.5)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_p6jv2"]
-transparency = 1
-albedo_color = Color(1, 1, 1, 0.21176471)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_s44vy"]
 size = Vector3(0.6, 3.5, 6.5)
 
@@ -38,11 +31,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0, 0)
 collision_layer = 0
 collision_mask = 4
 monitorable = false
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Net" unique_id=35485319]
-mesh = SubResource("BoxMesh_p6jv2")
-skeleton = NodePath("../..")
-surface_material_override/0 = SubResource("StandardMaterial3D_p6jv2")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Net" unique_id=188109054]
 shape = SubResource("BoxShape3D_s44vy")

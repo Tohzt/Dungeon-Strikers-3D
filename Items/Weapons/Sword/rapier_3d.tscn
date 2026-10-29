@@ -28,8 +28,8 @@ pairs_with = &"Dagger"
 pair_heavy_move = ExtResource("mv_pair")
 
 [node name="WeaponBehavior" parent="." instance=ExtResource("behavior")]
-weapon_name = "Rapier"
 base_damage = 32.0
+damage_type = 2
 knockback_force = 7.0
 ball_power = 2.2
 ball_lift = 0.1
